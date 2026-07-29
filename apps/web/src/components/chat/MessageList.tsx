@@ -57,7 +57,6 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
           <MessageBubble key={message.id} message={message} />
         ))}
 
-        {/* Loading indicator */}
         {isLoading && (
           <div className="flex w-full gap-3 px-4 py-3">
             <Avatar size="sm" className="mt-0.5 shrink-0">

@@ -19,7 +19,6 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
       if (!trimmed || disabled) return;
       onSend(trimmed);
       setValue("");
-      // Reset textarea height
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
