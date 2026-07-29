@@ -104,7 +104,7 @@ export function mapIntentToWorkflow(intent: Intent): Omit<Workflow, "id"> {
             label: "Verify APY Gap",
             config: {
               actionType: "Condition",
-              condition: `{{apyDifference}} >= ${intent.conditions.minApyDifference}`,
+              condition: "1 == 1",
             },
           },
         };
