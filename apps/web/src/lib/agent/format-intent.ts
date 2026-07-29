@@ -99,3 +99,9 @@ export function formatIntentResponse(intent: Intent): string {
 
   return lines.join("\n");
 }
+
+export function formatSimulationSummary(intent: Intent, gas: string): string {
+  const base = formatIntentResponse(intent);
+  const cleanBase = base.split("\n⏳")[0].split("\n⚡")[0];
+  return `${cleanBase}\n• **Estimated Gas:** \`${gas}\`\n\nDo you want me to execute this? (Reply **yes** to confirm, **no** to cancel)`;
+}
