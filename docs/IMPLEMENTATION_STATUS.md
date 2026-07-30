@@ -23,6 +23,45 @@ Status: implemented.
   authorization checks.
 - API integration/contract/security tests and worker idempotency/retry tests.
 
+## MVP contracts and local chain
+
+Status: implemented and locally validated.
+
+- Minimal unaudited, value-free Foundry package with an ERC-1967 Arcadia market proxy,
+  role-protected oracle setter, timestamp oracle fixtures, and independent freshness
+  postcondition.
+- Deterministic deployment/seed/drift/correction scripts restricted to Anvil `31337`
+  and Base Sepolia `84532`, including missing-role simulation and post-write
+  verification-failure scenarios.
+- Generated server-only ABIs, selectors, and public deployment registry consumed by the
+  backend exact-request encoder and worker chain reader.
+- Receipt-aware finality, canonical block checks, reorg detection, unknown-outcome
+  reconciliation lock, fresh independent verification, and explicit forward
+  correction without rollback claims.
+- Unit, 512-run fuzz, 128-run/8,192-call invariant, deployment, drift, and correction
+  tests plus a checked gas snapshot.
+
+## Contracts and affected workspace validation — July 30, 2026
+
+- `pnpm format:check` — passed for Prettier and `forge fmt`.
+- `forge lint` and `forge build --deny warnings` — passed with no diagnostics.
+- `forge test` — 15 passed: 6 unit, 2 fuzz campaigns at 512 runs each, 2 stateful
+  invariants at 128 runs/8,192 calls each, 2 deployment, and 3 lifecycle tests.
+- `forge test --gas-report` and `forge snapshot --check` — passed; `setOracle` median
+  measured at 9,634 gas in the report.
+- Full Anvil script lifecycle — passed: deploy, seed, drift, missing-role simulation,
+  exact restore, stale verification failure, and forward freshness correction.
+- Base Sepolia deployment script with chain ID `84532` — passed without broadcast; no
+  signer or live deployment is claimed.
+- `pnpm lint`, `pnpm check-types`, and `pnpm build` — all 9 runnable workspace tasks
+  passed.
+- `pnpm test` — 49 tests passed across Foundry, backend, API, worker, mock transport,
+  and web suites.
+- Focused API integration/contract/security and worker idempotency/retry gates — passed.
+- JSON-RPC worker tests — 4 passed for unknown receipts, finality, reorg detection, and
+  canonical fresh verification.
+- `pnpm audit --prod` — no known vulnerabilities.
+
 ## Backend validation evidence — July 30, 2026
 
 - `pnpm format:check` — passed.
@@ -87,7 +126,7 @@ Status: implemented.
 
 ## Deferred by phase boundary
 
-- Foundry contracts, live chain observation, and testnet deployment.
-- Provider-specific acceptance testing against actual KeeperHub and RPC accounts.
+- Live Base Sepolia deployment and provider acceptance against actual RPC/KeeperHub
+  accounts.
 - External identity token issuance/revocation and Safe/governance signing adapters.
 - Optional schema-validated investigation assistant.

@@ -67,14 +67,21 @@ export const chainObservationSchema = z.object({
   blockHash: bytes32Schema,
   contract: evmAddressSchema,
   oracle: evmAddressSchema,
+  oracleUpdatedAt: z.number().int().nonnegative(),
+  fresh: z.boolean(),
+  canonical: z.boolean(),
   observedAt: z.string().datetime(),
 });
 
 export const verificationResultSchema = z.object({
   verified: z.boolean(),
   oracle: evmAddressSchema,
+  oracleUpdatedAt: z.number().int().nonnegative(),
+  fresh: z.boolean(),
   blockNumber: z.number().int().positive(),
+  blockHash: bytes32Schema,
   confirmations: z.number().int().nonnegative(),
+  canonical: z.boolean(),
   providerCorrelationId: z.string().min(1),
 });
 
@@ -95,6 +102,7 @@ export interface ChainReader {
   verifyOracle(
     request: TransactionRequest,
     minimumConfirmations: number,
+    transactionHash?: string,
   ): Promise<z.input<typeof verificationResultSchema>>;
 }
 

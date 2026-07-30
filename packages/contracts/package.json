@@ -1,0 +1,28 @@
+{
+  "name": "@aether/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "exports": {
+    "./server": {
+      "types": "./artifacts/server/index.d.ts",
+      "default": "./artifacts/server/index.js"
+    }
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.6.1"
+  },
+  "scripts": {
+    "deps": "forge soldeer update",
+    "build": "forge build && node scripts/generate-artifacts.mjs",
+    "lint": "forge fmt --check && forge lint && forge build --deny warnings",
+    "format": "forge fmt",
+    "format:check": "forge fmt --check",
+    "check-types": "forge build --deny warnings",
+    "test": "forge test --force",
+    "test:gas": "forge test --force --gas-report",
+    "snapshot": "forge snapshot --force",
+    "snapshot:check": "forge snapshot --force --check",
+    "artifacts": "node scripts/generate-artifacts.mjs"
+  }
+}

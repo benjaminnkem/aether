@@ -10,6 +10,13 @@
     "AETHER_PROVIDER_MODE",
     "AETHER_RPC_URL",
     "AETHER_ORACLE_READ_CALLDATA",
+    "AETHER_CONTRACT_ADMIN_ADDRESS",
+    "AETHER_DRIFT_ACTOR_ADDRESS",
+    "AETHER_EXECUTOR_ADDRESS",
+    "AETHER_FIXTURE_ADMIN_ADDRESS",
+    "AETHER_MAX_ORACLE_AGE",
+    "AETHER_RECORD_DEPLOYMENT",
+    "AETHER_UNPRIVILEGED_ADDRESS",
     "AETHER_WEB_ORIGINS",
     "GITHUB_READ_TOKEN",
     "KEEPERHUB_API_TOKEN",
@@ -24,7 +31,14 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**"]
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "!.next/dev/**",
+        "artifacts/server/**",
+        "dist/**",
+        "out/**"
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -33,7 +47,7 @@
       "dependsOn": ["^check-types"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["build", "^build"]
     },
     "dev": {
       "cache": false,

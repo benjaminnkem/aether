@@ -227,11 +227,38 @@ export class ExecutionProcessor {
     if (execution.status === "verified" || execution.status === "partial") {
       return execution;
     }
-    const verification = verificationResultSchema.parse(
-      await this.chainReader.verifyOracle(execution.request, 12),
-    );
+    let verification;
+    try {
+      verification = verificationResultSchema.parse(
+        await this.chainReader.verifyOracle(
+          execution.request,
+          12,
+          execution.transactionHash,
+        ),
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        [
+          "UnknownReceiptOutcomeError",
+          "FinalityPendingError",
+          "ReorgDetectedError",
+        ].includes(error.name)
+      ) {
+        await this.store.update(
+          job,
+          { status: "reconciling", retryLocked: true },
+          "execution.verification_reconciliation_required",
+        );
+        await this.store.enqueue("execution.reconcile", job);
+      }
+      throw error;
+    }
     if (
       verification.verified &&
+      verification.fresh &&
+      verification.canonical &&
+      verification.confirmations >= 12 &&
       verification.oracle.toLowerCase() ===
         execution.request.desiredOracle.toLowerCase()
     ) {

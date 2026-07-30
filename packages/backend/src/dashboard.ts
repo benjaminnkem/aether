@@ -5,6 +5,7 @@ import type {
   Scenario,
 } from "@aether/shared";
 import { ExecutionSafety } from "./safety";
+import { buildSetOracleTransactionRequest } from "./contract-artifacts";
 import type { PolicyEnvelope, TransactionRequest } from "./contracts";
 import type { BoundApproval } from "./contracts";
 
@@ -28,15 +29,12 @@ const market = "0x7D4A3AfF7c4C51B1726a91c738ACb6F227127C3f";
 const txHash =
   "0x7f92cdd4b9c61bb4729083f6c2db11a4d535acc05372a8cc66dd1e485944ac12";
 
-export const mvpOperationRequest: TransactionRequest = {
-  chainId: 84532,
-  target: market,
-  functionSignature: "setOracle(address)",
-  calldata:
-    "0x7c423f540000000000000000000000002c8a7e78b8d6909a2171b8449a3c1b8d64f44311",
-  valueWei: "0",
-  desiredOracle: approvedOracle,
-};
+export const mvpOperationRequest: TransactionRequest =
+  buildSetOracleTransactionRequest({
+    chainId: 84532,
+    market,
+    desiredOracle: approvedOracle,
+  });
 export const mvpPlanHash = ExecutionSafety.planHash(
   mvpOperationRequest,
   "dsv-active",

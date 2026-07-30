@@ -11,6 +11,8 @@ apps/web -> @aether/sdk -> apps/api -> MongoDB replica set
                                   apps/worker -> BullMQ/Redis
                                          |
                           RPC / simulation / KeeperHub / GitHub adapters
+                                         |
+                 ArcadiaMarket ERC-1967 proxy + timestamp oracle fixtures
 ```
 
 `apps/api` is a NestJS HTTP service. It preserves the browser contract, exposes
@@ -35,3 +37,20 @@ transport, not canonical state.
 
 The retained MVP is deliberately one organization and one protocol, but every
 protocol-scoped record, query, event, and job retains both tenant identifiers.
+
+`packages/contracts` contains only the chain fixture needed to prove this lifecycle.
+`ArcadiaMarket` holds an oracle pointer behind an ERC-1967 proxy, requires
+`ORACLE_ADMIN_ROLE` for `setOracle(address)`, rejects non-contract oracle addresses,
+and exposes `oracleStatus()` with the source timestamp and freshness result.
+`MockOracle` is timestamp-only and has no price, custody, governance, or token logic.
+
+Foundry generates the ABI, selectors, and deployment registry into
+`packages/contracts/artifacts/server`. Only the server-side backend package imports
+that export. The browser contract remains `packages/shared` and `packages/sdk`, so
+mock/API switching still requires no component changes.
+
+Live verification is receipt-aware and block-pinned. It confirms the receipt is
+canonical after the configured finality threshold, rereads `oracleStatus()` at a
+specific block, and requires the desired address plus freshness. A missing receipt is
+an unknown outcome, not permission to resubmit. A confirmed pointer write with a stale
+source becomes partial and requires a new forward-correction operation.

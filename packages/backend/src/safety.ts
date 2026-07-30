@@ -7,6 +7,7 @@ import {
   type BoundApproval,
 } from "./contracts";
 import { stableHash } from "./security";
+import { encodeSetOracleCalldata } from "./contract-artifacts";
 
 export interface SafetyInput {
   request: TransactionRequest;
@@ -61,6 +62,15 @@ export class ExecutionSafety {
       throw new SafetyViolation(
         "FUNCTION_NOT_ALLOWED",
         "Function is not allowlisted.",
+      );
+    }
+    if (
+      request.calldata.toLowerCase() !==
+      encodeSetOracleCalldata(request.desiredOracle)
+    ) {
+      throw new SafetyViolation(
+        "CALLDATA_MISMATCH",
+        "Calldata must encode the exact approved setOracle(address) request.",
       );
     }
     if (BigInt(request.valueWei) > BigInt(policy.maximumValueWei)) {

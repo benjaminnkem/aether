@@ -13,6 +13,13 @@ simulation binding, threshold, and expiry. The worker persists execution intent 
 provider correlation before the external submit. Duplicate jobs read durable state.
 Unknown outcomes take a retry lock and can only advance through reconciliation.
 
+The backend obtains `setOracle(address)` and `oracleStatus()` selectors from generated
+Foundry artifacts and independently re-encodes the desired oracle before authorization.
+The fixture supports only chain IDs `31337` and `84532`. The proxy implementation is
+initializer-locked, initialization grants explicit admin/executor/drift-fixture roles,
+and oracle targets must have deployed code. The role-enabled drift actor exists only
+to produce an out-of-policy fixture state.
+
 Every provider response is parsed with Zod before use. An LLM has no authority or
 signing boundary in this phase. No private key is accepted or stored. Protocol setup
 rejects credential-, secret-, token-, mnemonic-, signature-, and private-key-shaped
@@ -30,3 +37,9 @@ secret, and MongoDB transactions require a replica set.
 Current MVP limitation: authentication uses a locally verified JWT boundary rather
 than a selected external identity provider. Production deployments must integrate
 token issuance and revocation at that boundary.
+
+The contracts are unaudited test fixtures, custody no value, and are prohibited from
+mainnet or production protocol use. Deployment scripts contain no signing material.
+ABIs and public addresses are server-side artifacts; credentials and signing material
+must remain in an operator keystore, hardware wallet, or secret manager and never
+appear in browser variables, fixtures, screenshots, or logs.

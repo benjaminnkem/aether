@@ -19,13 +19,32 @@ pnpm --filter @aether/worker test:idempotency
 pnpm --filter @aether/worker test:retry
 ```
 
+Focused contract gates:
+
+```bash
+pnpm --filter @aether/contracts format:check
+pnpm --filter @aether/contracts lint
+pnpm --filter @aether/contracts test
+pnpm --filter @aether/contracts test:gas
+pnpm --filter @aether/contracts snapshot:check
+```
+
+The Foundry suite includes unit tests for initialization, roles, emitted evidence,
+contract-address validation, and freshness; 512-case fuzz campaigns for freshness
+boundaries and authorized oracle selection; stateful invariants for oracle code and
+role isolation; deployment/proxy-slot tests; and lifecycle tests for drift, exact
+correction, missing-role simulation, post-write verification failure, and forward
+correction.
+
 Backend unit tests cover canonical safety authorization and redaction. API integration
 tests boot a real Nest HTTP application with the in-memory test repository and exercise
 auth, roles, tenancy, validation, scenario state, and approval. Contract tests parse
 responses with the browser Zod schemas and inspect OpenAPI paths. Worker tests prove
 provider correlation is persisted before submit, duplicates do not resubmit unknown
 outcomes, provider timeouts enter reconciliation, and failed verification creates a
-forward correction.
+forward correction. JSON-RPC tests additionally cover finality thresholds, canonical
+receipt hashes, reorg-aware reads, unknown receipts, and fresh independent
+postconditions.
 
 Production startup is smoke-tested from compiled output. Mongo/Redis end-to-end
 infrastructure testing requires the local replica set and Redis from `compose.yaml`;

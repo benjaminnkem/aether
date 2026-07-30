@@ -30,6 +30,19 @@ pnpm --filter @aether/api dev
 pnpm --filter @aether/worker dev
 ```
 
+Build and test the chain fixture:
+
+```bash
+pnpm --filter @aether/contracts build
+pnpm --filter @aether/contracts test
+```
+
+For a local lifecycle, start Anvil with chain ID `31337`, deploy with an unlocked
+development account, then run the seed/drift/correction scripts from
+`docs/OPERATIONS.md`. Base Sepolia (`84532`) is the sole supported testnet. Testnet
+broadcasting requires an operator-supplied Foundry keystore or hardware wallet and RPC
+URL; no key variable is defined by this repository.
+
 The default server provider mode is deterministic mock mode; it still uses real
 MongoDB, outbox, Redis, queues, authorization, and verification state transitions.
 Live provider mode additionally requires the server-only variables in

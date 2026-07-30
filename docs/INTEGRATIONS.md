@@ -10,8 +10,16 @@ submission, and verifies the oracle through the chain reader. KeeperHub is execu
 transport, not an authority boundary.
 
 The JSON-RPC adapter performs block-pinned `eth_call` observations and validates RPC
-envelopes, block identity, address encoding, and verification results. The MVP permits
-only the configured test-chain `setOracle(address)` correction with zero value.
+envelopes, chain identity, block identity, ABI tuple encoding, receipt status,
+confirmations, canonical receipt hashes, and verification results. It calls the
+generated `oracleStatus()` selector and requires both the desired address and a fresh
+source after finality. The MVP permits only the configured test-chain
+`setOracle(address)` correction with zero value.
+
+Foundry produces `ArcadiaMarket` and `MockOracle` ABIs, method identifiers, and public
+deployment data in the `@aether/contracts/server` export. The safety package consumes
+this artifact to build and validate exact calldata. This export is intentionally not
+referenced by any browser package.
 
 The GitHub adapter is read-only and resolves release provenance to a 40-character
 commit SHA. Its optional token is server-only. Safe/governance remains authority

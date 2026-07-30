@@ -1,5 +1,6 @@
 import {
   ExecutionSafety,
+  encodeSetOracleCalldata,
   type ChainReader,
   type DurableJob,
   type KeeperHubProvider,
@@ -23,8 +24,9 @@ const request = {
   chainId: 84532,
   target: "0x7D4A3AfF7c4C51B1726a91c738ACb6F227127C3f",
   functionSignature: "setOracle(address)" as const,
-  calldata:
-    "0x7c423f540000000000000000000000002c8a7e78b8d6909a2171b8449a3c1b8d64f44311",
+  calldata: encodeSetOracleCalldata(
+    "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311",
+  ),
   valueWei: "0",
   desiredOracle: "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311",
 };
@@ -134,8 +136,12 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
       verifyOracle: vi.fn(async () => ({
         verified: true,
         oracle: request.desiredOracle,
+        oracleUpdatedAt: 1_800_000_000,
+        fresh: true,
         blockNumber: 17_924_130,
+        blockHash: `0x${"8".repeat(64)}`,
         confirmations: 12,
+        canonical: true,
         providerCorrelationId: "rpc-verify",
       })),
     };
@@ -208,8 +214,12 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
     chainReader.verifyOracle = vi.fn(async () => ({
       verified: false,
       oracle: "0x91A6D4bF5c0A8dF0E9F12D78771133796a33B741",
+      oracleUpdatedAt: 1_799_000_000,
+      fresh: false,
       blockNumber: 17_924_130,
+      blockHash: `0x${"8".repeat(64)}`,
       confirmations: 12,
+      canonical: true,
       providerCorrelationId: "rpc-verify",
     }));
     const processor = new ExecutionProcessor(
@@ -222,5 +232,31 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
     expect(result.status).toBe("partial");
     expect(result.correctionOperationId).toBe("correction-exec-kh-8314");
     expect(result.retryLocked).toBe(true);
+  });
+
+  it("routes an unknown receipt back to reconciliation without resubmitting", async () => {
+    store.execution = {
+      ...store.execution,
+      status: "confirmed",
+      providerCorrelationId: "provider-correlation",
+      transactionHash: `0x${"7".repeat(64)}`,
+    };
+    const unknownReceipt = new Error("receipt unavailable");
+    unknownReceipt.name = "UnknownReceiptOutcomeError";
+    chainReader.verifyOracle = vi.fn(async () => {
+      throw unknownReceipt;
+    });
+    const processor = new ExecutionProcessor(
+      store,
+      keeperHub,
+      chainReader,
+      simulator,
+    );
+
+    await expect(processor.verify(job)).rejects.toBe(unknownReceipt);
+    expect(store.execution.status).toBe("reconciling");
+    expect(store.execution.retryLocked).toBe(true);
+    expect(store.enqueued).toContain("execution.reconcile");
+    expect(submit).not.toHaveBeenCalled();
   });
 });

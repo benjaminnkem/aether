@@ -7,8 +7,8 @@ history.
 
 ## Quick Start
 
-Requirements: Node.js 20.9+, pnpm 10.15.1, MongoDB configured as a replica set,
-and Redis 7+.
+Requirements: Node.js 20.9+, pnpm 10.15.1, Foundry 1.7+, MongoDB configured as a
+replica set, and Redis 7+.
 
 ```bash
 pnpm install
@@ -40,6 +40,8 @@ deterministic SDK transport and MSW implements the same HTTP paths.
 - `apps/web` — Next.js 16 App Router marketing and product UI.
 - `apps/api` — NestJS HTTP API, MongoDB persistence, Swagger, authorization, and SSE.
 - `apps/worker` — standalone NestJS BullMQ worker and provider adapters.
+- `packages/contracts` — unaudited, value-free Foundry fixtures and lifecycle scripts
+  for local Anvil and Base Sepolia.
 - `packages/backend` — server-only schemas, deterministic safety checks, queue contracts,
   Mongoose models, hashing, and redaction.
 - `packages/ui` — original Aether accessible component library.
@@ -62,6 +64,9 @@ pnpm test
 pnpm test:e2e
 pnpm build
 ```
+
+Contract-specific commands, including local deployment, drift, correction, and gas
+snapshot checks, are documented in `docs/TESTING.md` and `docs/OPERATIONS.md`.
 
 Backend-specific focused gates are documented in `docs/TESTING.md`. See
 `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/IMPLEMENTATION_STATUS.md`.

@@ -2,7 +2,9 @@
 
 1. The requested `11_ENVIRONMENT_AND_SETUP.md` and `12_MCP_SKILLS_AND_CODEX_CONFIG.md` do not exist in this repository. Phase 1 follows the mode switches in `docs/02_AETHER_SYSTEM_ARCHITECTURE.md`: browser data mode is `mock|api`, while server/provider modes remain future backend concerns.
 2. Authentication is represented as complete frontend flows without selecting a live identity provider. This preserves the provider boundary for the backend phase.
-3. Base Sepolia and Ethereum Sepolia provide realistic frontend network context; no live RPC is called.
+3. Base Sepolia remains the single supported MVP testnet. This phase performed a
+   deterministic no-broadcast deployment dry run; no testnet RPC or signer was
+   available, so no testnet deployment is claimed.
 4. KeeperHub wording describes an integration and never implies endorsement. All current execution data is deterministic mock evidence.
 5. MSW state is browser-memory state and resets on full worker restart. Onboarding progression persists locally; canonical server records remain React Query owned.
 6. The seven authenticated areas use a validated catch-all App Router boundary. Known legacy paths redirect to retained context; unrelated removed paths return not found.
@@ -27,8 +29,17 @@
     `POST /workflows`, `POST /simulations`, and correlation lookup. Deployment must map
     or replace this adapter if the provider contract differs; deterministic safety is
     upstream and unchanged.
-16. The configured oracle getter calldata is deployment-specific and supplied by
-    `AETHER_ORACLE_READ_CALLDATA`. The MVP only generates `setOracle(address)` writes.
+16. `oracleStatus()` is the fixture read contract. Its generated selector is the live
+    adapter default; `AETHER_ORACLE_READ_CALLDATA` is retained only as an explicit
+    server-side override. The MVP only generates `setOracle(address)` writes.
 17. JWT issuance/revocation is an external authentication boundary. This phase verifies
     signed issuer/audience/tenant claims and deliberately does not add a team or identity
     administration module.
+18. The actor used to create “unauthorized oracle drift” holds the fixture's explicit
+    oracle-admin role so the chain write is possible; unauthorized describes divergence
+    from approved desired state, not an access-control bypass.
+19. `MockOracle` freshness is a timestamp-only invariant. It intentionally does not
+    model prices, feeds, token economics, or production oracle behavior.
+20. The checked-in local deployment addresses are deterministic for a fresh default
+    Anvil chain and are public fixture data. A new Anvil state must rerun deployment and
+    artifact generation before live backend use.
