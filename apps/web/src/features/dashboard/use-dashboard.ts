@@ -9,10 +9,24 @@ export function useDashboard() {
   const protocolId = useUiStore((state) => state.protocolId);
   const queryClient = useQueryClient();
   const key = queryKeys.dashboard(organizationId, protocolId);
-  const query = useQuery({ queryKey: key, queryFn: () => aetherClient.getDashboard(organizationId, protocolId) });
-  const update = (data: Awaited<ReturnType<typeof aetherClient.getDashboard>>) => queryClient.setQueryData(key, data);
-  const scenario = useMutation({ mutationFn: aetherClient.setScenario.bind(aetherClient), onSuccess: update });
-  const advance = useMutation({ mutationFn: aetherClient.advanceLifecycle.bind(aetherClient), onSuccess: update });
-  const approval = useMutation({ mutationFn: aetherClient.approveOperation.bind(aetherClient), onSuccess: update });
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => aetherClient.getDashboard(organizationId, protocolId),
+  });
+  const update = (
+    data: Awaited<ReturnType<typeof aetherClient.getDashboard>>,
+  ) => queryClient.setQueryData(key, data);
+  const scenario = useMutation({
+    mutationFn: aetherClient.setScenario.bind(aetherClient),
+    onSuccess: update,
+  });
+  const advance = useMutation({
+    mutationFn: aetherClient.advanceLifecycle.bind(aetherClient),
+    onSuccess: update,
+  });
+  const approval = useMutation({
+    mutationFn: aetherClient.approveOperation.bind(aetherClient),
+    onSuccess: update,
+  });
   return { ...query, scenario, advance, approval, organizationId, protocolId };
 }

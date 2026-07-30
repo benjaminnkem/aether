@@ -7,12 +7,26 @@ export default function HeroField() {
   const mount = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const target = mount.current;
-    if (!target || window.matchMedia("(prefers-reduced-motion: reduce)").matches || window.innerWidth < 720) return;
+    if (
+      !target ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      window.innerWidth < 720
+    )
+      return;
     let frame = 0;
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(52, target.clientWidth / target.clientHeight, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(
+      52,
+      target.clientWidth / target.clientHeight,
+      0.1,
+      100,
+    );
     camera.position.z = 12;
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, powerPreference: "low-power" });
+    const renderer = new THREE.WebGLRenderer({
+      alpha: true,
+      antialias: false,
+      powerPreference: "low-power",
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setSize(target.clientWidth, target.clientHeight);
     target.appendChild(renderer.domElement);
@@ -20,12 +34,18 @@ export default function HeroField() {
     const positions = new Float32Array(count * 3);
     for (let index = 0; index < count; index += 1) {
       positions[index * 3] = (Math.sin(index * 91.17) * 0.5 + 0.5) * 18 - 9;
-      positions[index * 3 + 1] = (Math.sin(index * 47.73) * 0.5 + 0.5) * 9 - 4.5;
+      positions[index * 3 + 1] =
+        (Math.sin(index * 47.73) * 0.5 + 0.5) * 9 - 4.5;
       positions[index * 3 + 2] = (Math.sin(index * 13.41) * 0.5 + 0.5) * 4 - 2;
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    const material = new THREE.PointsMaterial({ color: 0x8a8f98, size: 0.055, transparent: true, opacity: 0.62 });
+    const material = new THREE.PointsMaterial({
+      color: 0x8a8f98,
+      size: 0.055,
+      transparent: true,
+      opacity: 0.62,
+    });
     const points = new THREE.Points(geometry, material);
     scene.add(points);
     const alignmentGeometry = new THREE.SphereGeometry(0.08, 12, 12);

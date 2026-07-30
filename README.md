@@ -1,159 +1,54 @@
-# Turborepo starter
+# Aether
 
-This Turborepo starter is maintained by the Turborepo core team.
+Aether is a desired-state control plane for smart-contract protocols. Phase 1 is a complete frontend-first implementation: public product site, authentication and onboarding, the full operations dashboard, a typed browser SDK, deterministic MSW scenarios, realtime-shaped state transitions, and accessibility/responsive fallbacks.
 
-## Using this example
+## Quick Start
 
-Run the following command:
+Requirements: Node.js 20.9+ and pnpm 10.15.1.
 
-```sh
-npx create-turbo@latest
+```bash
+pnpm install
+cp apps/web/.env.example apps/web/.env.local
+pnpm --filter @aether/web dev
 ```
 
-## What's inside?
+Open `http://localhost:3000`. Mock mode requires no credentials.
 
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```env
+NEXT_PUBLIC_AETHER_DATA_MODE=mock
+NEXT_PUBLIC_AETHER_API_URL=/v1
 ```
 
-Without global `turbo`, use your package manager:
+The future API switch is:
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+```env
+NEXT_PUBLIC_AETHER_DATA_MODE=api
+NEXT_PUBLIC_AETHER_API_URL=http://localhost:4000/v1
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Components never branch on this mode. They use `@aether/sdk`; mock mode installs a
+deterministic SDK transport and MSW implements the same HTTP paths.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+## Workspace
 
-```sh
-turbo build --filter=docs
+- `apps/web` — Next.js 16 App Router marketing and product UI.
+- `packages/ui` — original Aether accessible component library.
+- `packages/shared` — browser-safe Zod schemas and domain types.
+- `packages/sdk` — typed Axios client and realtime contract.
+- `packages/mock-data` — deterministic scenarios and MSW handlers.
+- `packages/eslint-config`, `packages/typescript-config` — shared quality configuration.
+
+Backend, worker, contracts, and live provider adapters are intentionally not implemented in Phase 1.
+
+## Quality Commands
+
+```bash
+pnpm format:check
+pnpm lint
+pnpm check-types
+pnpm test
+pnpm test:e2e
+pnpm build
 ```
 
-Without global `turbo`:
-
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+See `docs/FRONTEND_ROUTES.md`, `docs/MOCK_SCENARIOS.md`, and `docs/IMPLEMENTATION_STATUS.md`.

@@ -29,6 +29,13 @@ export const useUiStore = create<UiState>()(
       setDemoOpen: (demoOpen) => set({ demoOpen }),
       setOnboardingStep: (onboardingStep) => set({ onboardingStep }),
     }),
-    { name: "aether-ui", partialize: ({ organizationId, protocolId, onboardingStep }) => ({ organizationId, protocolId, onboardingStep }) },
+    {
+      name: "aether-ui",
+      partialize: ({ organizationId, protocolId, onboardingStep }) => ({
+        organizationId,
+        protocolId,
+        onboardingStep,
+      }),
+    },
   ),
 );

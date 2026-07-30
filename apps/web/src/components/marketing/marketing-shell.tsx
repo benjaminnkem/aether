@@ -11,15 +11,23 @@ const HeroField = dynamic(() => import("./hero-field"), { ssr: false });
 
 export function MarketingShell({ children }: { children: ReactNode }) {
   useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     if (reduced || window.innerWidth < 900) return;
     let cleanup = () => {};
     void import("lenis").then(({ default: Lenis }) => {
       const lenis = new Lenis({ duration: 1.05, smoothWheel: true });
       let frame = 0;
-      const raf = (time: number) => { lenis.raf(time); frame = requestAnimationFrame(raf); };
+      const raf = (time: number) => {
+        lenis.raf(time);
+        frame = requestAnimationFrame(raf);
+      };
       frame = requestAnimationFrame(raf);
-      cleanup = () => { cancelAnimationFrame(frame); lenis.destroy(); };
+      cleanup = () => {
+        cancelAnimationFrame(frame);
+        lenis.destroy();
+      };
     });
     return () => cleanup();
   }, []);
@@ -27,11 +35,33 @@ export function MarketingShell({ children }: { children: ReactNode }) {
     <div className="marketing">
       <header className="marketing-nav">
         <nav className="marketing-nav__inner" aria-label="Main navigation">
-          <Link href="/" aria-label="Aether home"><Image src="/brand/aether-lockup.svg" alt="Aether" width={142} height={28} priority /></Link>
+          <Link href="/" aria-label="Aether home">
+            <Image
+              src="/brand/aether-lockup.svg"
+              alt="Aether"
+              width={170}
+              height={32}
+              style={{ width: 170, height: 32 }}
+              priority
+            />
+          </Link>
           <div className="marketing-nav__links">
-            <Link href="/product">Product</Link><Link href="/security">Security</Link><Link href="/how-it-works">How it works</Link><Link href="/docs">Docs</Link>
-            <Link className="secondary-cta" href="/login">Sign in</Link>
-            <Button variant="primary" size="sm" onClick={() => { window.location.href = "/app/overview"; }}>Try the demo <ArrowRight2 size={13} /></Button>
+            <Link href="/product">Product</Link>
+            <Link href="/security">Security</Link>
+            <Link href="/how-it-works">How it works</Link>
+            <Link href="/docs">Docs</Link>
+            <Link className="secondary-cta" href="/login">
+              Sign in
+            </Link>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                window.location.href = "/app/overview";
+              }}
+            >
+              Try the demo <ArrowRight2 size={13} />
+            </Button>
           </div>
         </nav>
       </header>
@@ -41,17 +71,34 @@ export function MarketingShell({ children }: { children: ReactNode }) {
   );
 }
 
-export function HeroBackground() { return <HeroField />; }
+export function HeroBackground() {
+  return <HeroField />;
+}
 
 export function Footer() {
   return (
     <footer className="marketing-footer">
       <div className="marketing-container marketing-footer__row">
-        <Image src="/brand/aether-lockup.svg" alt="Aether" width={142} height={28} />
-        <div className="integration-strip"><Link href="/product">Product</Link><Link href="/security">Security</Link><Link href="/docs">Guide</Link><Link href="/login">Sign in</Link></div>
-        <span className="a-status a-status--success"><i /> Mock systems operational</span>
+        <Image
+          src="/brand/aether-lockup.svg"
+          alt="Aether"
+          width={170}
+          height={32}
+          style={{ width: 170, height: 32 }}
+        />
+        <div className="integration-strip">
+          <Link href="/product">Product</Link>
+          <Link href="/security">Security</Link>
+          <Link href="/docs">Guide</Link>
+          <Link href="/login">Sign in</Link>
+        </div>
+        <span className="a-status a-status--success">
+          <i /> Mock systems operational
+        </span>
       </div>
-      <div className="footer-word" aria-hidden="true">AETHER</div>
+      <div className="footer-word" aria-hidden="true">
+        AETHER
+      </div>
     </footer>
   );
 }

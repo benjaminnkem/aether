@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-export const severitySchema = z.enum(["critical", "high", "medium", "low", "info"]);
+export const severitySchema = z.enum([
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "info",
+]);
 export const statusSchema = z.enum([
   "healthy",
   "open",

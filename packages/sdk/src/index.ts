@@ -8,8 +8,17 @@ import {
   type Scenario,
 } from "@aether/shared";
 
+export interface AetherTransport {
+  getDashboard(organizationId: string, protocolId: string): Promise<Dashboard>;
+  setScenario(scenario: Scenario): Promise<Dashboard>;
+  advanceLifecycle(): Promise<Dashboard>;
+  approveOperation(decision: "approve" | "reject"): Promise<Dashboard>;
+  validateDesiredState(input: DesiredState): Promise<DesiredState>;
+}
+
 export class AetherClient {
   private readonly http: AxiosInstance;
+  private transport?: AetherTransport;
 
   constructor(baseURL = "/v1") {
     this.http = axios.create({
@@ -19,7 +28,19 @@ export class AetherClient {
     });
   }
 
-  async getDashboard(organizationId: string, protocolId = "arcadia"): Promise<Dashboard> {
+  setTransport(transport?: AetherTransport) {
+    this.transport = transport;
+  }
+
+  async getDashboard(
+    organizationId: string,
+    protocolId = "arcadia",
+  ): Promise<Dashboard> {
+    if (this.transport) {
+      return dashboardSchema.parse(
+        await this.transport.getDashboard(organizationId, protocolId),
+      );
+    }
     const response = await this.http.get("/dashboard", {
       params: { organizationId, protocolId },
     });
@@ -27,24 +48,43 @@ export class AetherClient {
   }
 
   async setScenario(scenario: Scenario): Promise<Dashboard> {
+    const parsed = scenarioSchema.parse(scenario);
+    if (this.transport) {
+      return dashboardSchema.parse(await this.transport.setScenario(parsed));
+    }
     const response = await this.http.post("/demo/scenario", {
-      scenario: scenarioSchema.parse(scenario),
+      scenario: parsed,
     });
     return dashboardSchema.parse(response.data);
   }
 
   async advanceLifecycle(): Promise<Dashboard> {
+    if (this.transport) {
+      return dashboardSchema.parse(await this.transport.advanceLifecycle());
+    }
     const response = await this.http.post("/demo/advance");
     return dashboardSchema.parse(response.data);
   }
 
   async approveOperation(decision: "approve" | "reject"): Promise<Dashboard> {
-    const response = await this.http.post("/operations/op-oracle/approval", { decision });
+    if (this.transport) {
+      return dashboardSchema.parse(
+        await this.transport.approveOperation(decision),
+      );
+    }
+    const response = await this.http.post("/operations/op-oracle/approval", {
+      decision,
+    });
     return dashboardSchema.parse(response.data);
   }
 
   async validateDesiredState(input: DesiredState): Promise<DesiredState> {
     const parsed = desiredStateSchema.parse(input);
+    if (this.transport) {
+      return desiredStateSchema.parse(
+        await this.transport.validateDesiredState(parsed),
+      );
+    }
     const response = await this.http.post("/desired-state/validate", parsed);
     return desiredStateSchema.parse(response.data);
   }

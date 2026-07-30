@@ -6,7 +6,9 @@ import { aetherClient } from "@aether/sdk";
 
 describe("desired state editor", () => {
   it("validates form values through the shared schema and SDK", async () => {
-    vi.spyOn(aetherClient, "validateDesiredState").mockImplementation(async (value) => value);
+    vi.spyOn(aetherClient, "validateDesiredState").mockImplementation(
+      async (value) => value,
+    );
     const user = userEvent.setup();
     render(<DesiredStateEditor />);
     await user.click(screen.getByRole("button", { name: "Validate draft" }));

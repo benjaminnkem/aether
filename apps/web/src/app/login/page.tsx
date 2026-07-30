@@ -1,2 +1,4 @@
 import { AuthPage } from "@/components/auth/auth-page";
-export default function Page() { return <AuthPage kind="login" />; }
+export default function Page() {
+  return <AuthPage kind="login" />;
+}
