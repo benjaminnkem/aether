@@ -1,10 +1,11 @@
 {
-  "name": "@aether/ui",
+  "name": "@aether/mock-data",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.tsx"
+    ".": "./src/index.ts",
+    "./browser": "./src/browser.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
@@ -13,22 +14,12 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "1.1.23",
-    "@radix-ui/react-dropdown-menu": "2.1.24",
-    "@radix-ui/react-tabs": "1.1.21",
-    "@radix-ui/react-tooltip": "1.2.16",
-    "clsx": "2.1.1",
-    "iconsax-react": "0.0.8",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "tailwind-merge": "3.6.0"
+    "@aether/shared": "workspace:*",
+    "msw": "2.15.0"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^22.15.3",
-    "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3",
     "eslint": "^9.39.1",
     "typescript": "5.9.2",
     "vitest": "4.1.10"
