@@ -146,13 +146,17 @@ export default function HomePage() {
           Icon: ShieldSecurity,
         },
       ].map(({ eyebrow, title, copy, Icon }, index) => (
-        <section className="marketing-section" key={eyebrow}>
+        <section
+          className="marketing-section"
+          id={index === 0 ? "product" : index === 2 ? "security" : undefined}
+          key={eyebrow}
+        >
           <div className="marketing-container marketing-grid">
             <div className="marketing-copy">
               <div className="eyebrow">{eyebrow}</div>
               <h3>{title}</h3>
               <p>{copy}</p>
-              <Link href="/product">
+              <Link href="/app/overview">
                 <Button variant="ghost">
                   Explore the product <ArrowRight2 size={14} />
                 </Button>

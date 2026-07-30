@@ -11,9 +11,9 @@ describe("onboarding", () => {
     const { unmount } = render(<Onboarding />);
     expect(screen.getByText("Set up organization.")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText("Set up protocol source.")).toBeVisible();
+    expect(screen.getByText("Set up protocol.")).toBeVisible();
     unmount();
     render(<Onboarding />);
-    expect(screen.getByText("Set up protocol source.")).toBeVisible();
+    expect(screen.getByText("Set up protocol.")).toBeVisible();
   });
 });

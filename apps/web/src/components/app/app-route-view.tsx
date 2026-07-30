@@ -30,80 +30,53 @@ import {
   EmptyState,
   Field,
   Input,
-  PermissionState,
   Select,
   Status,
+  TabContent,
+  Tabs,
   Timeline,
   ToastRegion,
 } from "@aether/ui";
 import { AppShell } from "./app-shell";
 import { useDashboard } from "@/features/dashboard/use-dashboard";
-import { Onboarding } from "@/features/onboarding/onboarding";
 
 const OperationGraph = dynamic(
   () => import("@/features/operations/operation-graph"),
   {
     ssr: false,
-    loading: () => <div className="a-empty">Loading operation graph…</div>,
+    loading: () => <div className="a-skeleton" style={{ height: 360 }} />,
   },
 );
+
 const DesiredStateEditor = dynamic(
   () => import("@/features/desired-state/desired-state-editor"),
   {
     ssr: false,
-    loading: () => <div className="a-skeleton" style={{ height: 420 }} />,
+    loading: () => <div className="a-skeleton" style={{ height: 520 }} />,
   },
 );
 
-const descriptions: Record<string, string> = {
+const descriptions = {
   overview:
-    "Fresh protocol posture, open risk, active operations, and evidence-backed activity.",
-  protocols:
-    "Every protocol environment in Arcadia Labs, with alignment and observation freshness.",
-  "protocol-detail":
-    "Operational identity, deployment posture, governance authority, and connected resources.",
+    "Current protocol health, active risk, and the shortest path to investigation.",
+  "protocol-setup":
+    "The networks, contracts, provenance, and execution adapter Aether observes.",
   "desired-state":
-    "Versioned approved intent with form/YAML parity, provenance, semantic diff, and impact preview.",
-  deployments:
-    "Chain health, release parity, executor funding, provider freshness, and scan coverage.",
-  contracts:
-    "Typed contract resources, proxy metadata, ABI provenance, ownership, and current health.",
+    "Versioned approved intent, deterministic safety rules, and human-readable units.",
   drift:
-    "Differences between approved intent and observed state, classified with explicit evidence.",
-  incidents:
-    "Related critical findings grouped by root cause, blast radius, and correction status.",
+    "Evidence-backed differences between approved intent and observed onchain state.",
   operations:
-    "Immutable plans from investigation through policy, simulation, approval, execution, and verification.",
-  approvals:
-    "Risk-prioritized decisions bound to exact plan revisions, simulations, and expiry.",
-  invariants:
-    "Deterministic safety conditions evaluated during observation, planning, execution, and verification.",
-  policies:
-    "Versioned deterministic rules for targets, functions, values, chains, approvals, and rollout safety.",
-  "keeperhub-runs":
-    "Simulation, workflow, and direct-action evidence from the configured execution adapter.",
+    "An immutable correction plan from evidence through approval and verification.",
+  executions:
+    "KeeperHub workflow evidence with transaction, retry, and reconciliation safety.",
   "audit-log":
-    "Append-only attribution across intent, approvals, provider requests, transactions, and verification.",
-  integrations:
-    "Provider health, permissions, mode, and last successful interaction—never secret values.",
-  team: "Members, protocol roles, invitations, and minimum-scope service accounts.",
-  notifications:
-    "Operational alerts routed by severity, protocol, environment, and event type.",
-  general:
-    "Organization identity, timezone, retention, and operational defaults.",
-  security:
-    "Session controls, stronger authentication, device visibility, and privileged action protection.",
-  "api-keys":
-    "Scoped API keys with one-time reveal and visible rotation activity.",
-  execution:
-    "Execution mode, approval posture, canary rules, and the explicit mainnet lock.",
-};
+    "Append-only attribution across scans, plans, approvals, execution, and verification.",
+} as const;
 
 function routeKey(slug: string[]) {
-  if (slug[0] === "protocols" && slug[1] === "new") return "new";
-  if (slug[0] === "protocols" && slug.length === 2) return "protocol-detail";
-  return slug.at(-1) ?? "overview";
+  return slug[0] ?? "overview";
 }
+
 function tone(severity?: string) {
   return severity === "critical" || severity === "high"
     ? "danger"
@@ -114,166 +87,135 @@ function tone(severity?: string) {
 
 export function AppRouteView({ slug }: { slug: string[] }) {
   const key = routeKey(slug);
-  if (key === "new") return <Onboarding />;
-  return <AppPage route={key} />;
+  return <AppPage route={key} resourceId={slug[1]} />;
 }
 
-function AppPage({ route }: { route: string }) {
-  const { data, isLoading, isError, refetch, approval, advance } =
-    useDashboard();
-  const [modal, setModal] = useState(false);
-  const [drawerRecord, setDrawerRecord] = useState<AetherRecord | null>(null);
-  const [step, setStep] = useState<OperationStep | null>(null);
-  const [toast, setToast] = useState<string>();
-  const title =
-    routeTitles[route] ??
-    (route === "protocol-detail" ? "Arcadia Markets" : "Overview");
-  const records =
-    data?.records[route] ??
-    (route === "protocol-detail" ? data?.records.protocols : []);
-  const readOnly = data?.organization.role === "viewer";
-  const primaryLabel =
-    route === "drift"
-      ? "Run investigation"
-      : route === "approvals"
-        ? "Review highest risk"
-        : route === "desired-state"
-          ? "Activate version"
-          : route === "keeperhub-runs"
-            ? "Reconcile run"
-            : route === "audit-log"
-              ? "Export log"
-              : route === "notifications"
-                ? "New rule"
-                : route.startsWith("api")
-                  ? "Create key"
-                  : `Add ${title.replace(" settings", "").replace(/s$/, "").toLowerCase()}`;
-  const onPrimary = () => {
-    if (readOnly) return;
-    setModal(true);
-  };
-  if (isLoading)
+function AppPage({
+  route,
+  resourceId,
+}: {
+  route: string;
+  resourceId?: string;
+}) {
+  const dashboard = useDashboard();
+  const title = routeTitles[route] ?? "Aether";
+
+  if (dashboard.isLoading) {
     return (
       <AppShell title={title}>
-        <div className="a-skeleton" style={{ height: 34, width: 230 }} />
-        <div className="metric-grid" style={{ marginTop: 30 }}>
+        <PageHeader
+          title={title}
+          description={
+            route in descriptions
+              ? descriptions[route as keyof typeof descriptions]
+              : ""
+          }
+        />
+        <div className="metric-grid">
           {[1, 2, 3, 4].map((item) => (
-            <div className="a-card metric-card" key={item}>
-              <span className="a-skeleton" style={{ height: 80 }} />
-            </div>
+            <div className="a-skeleton" style={{ height: 116 }} key={item} />
           ))}
         </div>
       </AppShell>
     );
-  if (isError || !data)
+  }
+
+  if (dashboard.isError || !dashboard.data) {
     return (
       <AppShell title={title}>
         <EmptyState
           title="Dashboard data is unavailable"
           description="The typed mock API did not return a valid response. Retry without losing the current organization context."
           action={
-            <Button variant="primary" onClick={() => void refetch()}>
-              Retry request
+            <Button onClick={() => void dashboard.refetch()}>
+              <Refresh size={14} /> Retry
             </Button>
           }
         />
       </AppShell>
     );
+  }
+
+  const data = dashboard.data;
   return (
     <AppShell title={title}>
-      <div className="context-strip">
-        <span>
-          <i /> Observed 18 seconds ago
-        </span>
-        <span>Base Sepolia · block 17,924,118</span>
-        <Badge tone="info">MOCK MODE</Badge>
-        {data.realtime !== "connected" ? (
-          <Status status={data.realtime} />
-        ) : null}
-      </div>
-      <div className="page-header">
-        <div>
-          <h1>{title}</h1>
-          <p>{descriptions[route] ?? descriptions.overview}</p>
-        </div>
-        <div className="page-actions">
-          <Button onClick={() => void refetch()}>
-            <Refresh size={14} /> Refresh
-          </Button>
-          <Button variant="primary" disabled={readOnly} onClick={onPrimary}>
-            <Add size={14} />
-            {primaryLabel}
-          </Button>
-        </div>
-      </div>
-      {readOnly ? (
-        <div style={{ marginBottom: 16 }}>
-          <PermissionState action="change protocol state" />
-        </div>
-      ) : null}
-      {route === "overview" ? (
-        <Overview data={data} onRecord={setDrawerRecord} />
-      ) : route === "desired-state" ? (
-        <DesiredState />
-      ) : route === "operations" ? (
-        <Operations
+      {route === "overview" ? <Overview data={data} /> : null}
+      {route === "protocol-setup" ? <ProtocolSetup data={data} /> : null}
+      {route === "desired-state" ? <DesiredState data={data} /> : null}
+      {route === "drift" ? <Drift data={data} /> : null}
+      {route === "operations" ? (
+        <OperationDetail
           data={data}
-          onStep={setStep}
-          onApproval={() => setModal(true)}
-          onAdvance={() => advance.mutate()}
+          resourceId={resourceId}
+          approve={(decision) => dashboard.approval.mutate(decision)}
         />
-      ) : route === "protocol-detail" ? (
-        <ProtocolDetail data={data} />
-      ) : ["general", "security", "api-keys", "execution"].includes(route) ? (
-        <Settings route={route} />
-      ) : (
-        <RecordPage
-          route={route}
-          records={records ?? []}
-          onRecord={setDrawerRecord}
+      ) : null}
+      {route === "executions" ? (
+        <ExecutionDetail
+          data={data}
+          resourceId={resourceId}
+          advance={() => dashboard.advance.mutate()}
+          advancing={dashboard.advance.isPending}
         />
-      )}
-      <ActionModal
-        open={modal}
-        onOpenChange={setModal}
-        route={route}
-        readOnly={readOnly}
-        onApprove={(decision) =>
-          approval.mutate(decision, {
-            onSuccess: () => {
-              setModal(false);
-              setToast(
-                decision === "approve"
-                  ? "Approval recorded on immutable plan hash."
-                  : "Operation rejected and prior approvals invalidated.",
-              );
-              window.setTimeout(() => setToast(undefined), 2800);
-            },
-          })
-        }
-      />
-      <DetailDrawer
-        record={drawerRecord}
-        onOpenChange={(open) => !open && setDrawerRecord(null)}
-        route={route}
-      />
-      <StepDrawer step={step} onOpenChange={(open) => !open && setStep(null)} />
-      <ToastRegion message={toast} />
+      ) : null}
+      {route === "audit-log" ? <AuditLog data={data} /> : null}
     </AppShell>
+  );
+}
+
+function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description: string;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <header className="page-header">
+      <div>
+        <h1>{title}</h1>
+        <p>{description}</p>
+      </div>
+      {actions ? <div className="page-actions">{actions}</div> : null}
+    </header>
   );
 }
 
 function Overview({
   data,
-  onRecord,
 }: {
-  data: NonNullable<ReturnType<typeof useDashboard>["data"]>;
-  onRecord: (record: AetherRecord) => void;
+  data: ReturnType<typeof useDashboard>["data"] & {};
 }) {
   const protocol = data.protocols[0]!;
+  const drift = data.records.drift ?? [];
+  const operations = data.records.operations ?? [];
+  const executions = data.records.executions ?? [];
   return (
     <>
-      <div className="metric-grid">
+      <PageHeader
+        title="Overview"
+        description={descriptions.overview}
+        actions={
+          <Link href="/app/drift">
+            <Button variant={drift.length ? "primary" : "secondary"}>
+              Review drift <ArrowRight2 size={14} />
+            </Button>
+          </Link>
+        }
+      />
+      <div className="context-strip">
+        <span>
+          <i /> {protocol.name}
+        </span>
+        <Badge>{protocol.environment}</Badge>
+        <Status status={protocol.status} />
+        <span>
+          Observed {new Date(protocol.lastScanAt).toLocaleTimeString()}
+        </span>
+      </div>
+      <section className="metric-grid" aria-label="Protocol metrics">
         {data.metrics.map((metric) => (
           <Card className="metric-card" key={metric.label}>
             <span className="metric-card__label">{metric.label}</span>
@@ -284,743 +226,854 @@ function Overview({
             ) : null}
           </Card>
         ))}
-      </div>
+      </section>
       <div className="dashboard-grid">
-        <div className="panel-stack">
-          <Card className="panel">
-            <div className="panel__head">
-              <h2>Desired / observed alignment</h2>
-              <Status status={protocol.status} />
-            </div>
-            <div className="panel__body health-ring">
-              <div
-                className="health-ring__visual"
-                style={{ "--health": protocol.health } as React.CSSProperties}
-              >
-                <strong>{protocol.health}</strong>
-              </div>
-              <div>
-                <h3>
-                  {protocol.health > 90
-                    ? "Protocol is aligned"
-                    : "Critical drift requires attention"}
-                </h3>
-                <p>
-                  {protocol.health > 90
-                    ? "All 39 typed desired-state resources match recent complete observations. Blocking invariants pass across three deployments."
-                    : "OracleAdapter on Base differs from approved state. One blocking allowlist invariant and oracle freshness check fail."}
-                </p>
-                <Link href="/app/protocols/arcadia/drift">
-                  <Button size="sm">
-                    Review drift <ArrowRight2 size={13} />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </Card>
-          <Card className="panel">
-            <div className="panel__head">
-              <h2>Active operation</h2>
+        <Panel
+          title={drift.length ? "Critical drift" : "Protocol aligned"}
+          action={<Link href="/app/drift">Open drift</Link>}
+        >
+          {drift.length ? (
+            <RecordList records={drift} />
+          ) : (
+            <EmptyState
+              title="No active drift"
+              description="The latest independent observation matches desired state v2.4.2."
+            />
+          )}
+        </Panel>
+        <Panel
+          title="Active operation"
+          action={
+            <Link href={`/app/operations/${data.operation.id}`}>
+              Inspect plan
+            </Link>
+          }
+        >
+          <div className="operation-header">
+            <div>
               <Status status={data.operation.status} />
+              <h3>{data.operation.title}</h3>
+              <p>{data.operation.summary}</p>
             </div>
-            <div className="panel__body">
-              <Timeline
-                items={data.operation.steps.slice(0, 5).map((item) => ({
-                  title: item.label,
-                  detail: item.detail,
-                  status: item.status,
-                }))}
-              />
+            <Badge tone={tone(data.operation.risk)}>
+              {data.operation.risk} risk
+            </Badge>
+          </div>
+          <RecordList records={operations} />
+        </Panel>
+        <Panel
+          title="KeeperHub execution"
+          action={
+            <Link href={`/app/executions/${data.execution.id}`}>
+              Open execution
+            </Link>
+          }
+        >
+          <RecordList records={executions} />
+        </Panel>
+        <Panel title="Network health">
+          <RecordList records={data.records.networks ?? []} />
+        </Panel>
+      </div>
+    </>
+  );
+}
+
+function ProtocolSetup({
+  data,
+}: {
+  data: ReturnType<typeof useDashboard>["data"] & {};
+}) {
+  const [tab, setTab] = useState("general");
+  const [dialog, setDialog] = useState<"network" | "contract" | null>(null);
+  const [toast, setToast] = useState<string>();
+  const protocol = data.protocols[0]!;
+  const tabs = [
+    { value: "general", label: "General" },
+    { value: "networks", label: "Networks" },
+    { value: "contracts", label: "Contracts" },
+    { value: "github", label: "GitHub" },
+    { value: "keeperhub", label: "KeeperHub" },
+  ];
+  return (
+    <>
+      <PageHeader
+        title="Protocol Setup"
+        description={descriptions["protocol-setup"]}
+      />
+      <Tabs value={tab} onValueChange={setTab} tabs={tabs}>
+        <TabContent value="general">
+          <div className="settings-form a-card">
+            <div className="form-row">
+              <Field label="Protocol name">
+                <Input defaultValue={protocol.name} />
+              </Field>
+              <Field label="Environment">
+                <Select defaultValue={protocol.environment}>
+                  <option>Testnet</option>
+                  <option>Production</option>
+                </Select>
+              </Field>
             </div>
-          </Card>
+            <Field label="Governance authority">
+              <Input defaultValue={protocol.governance} />
+            </Field>
+            <Button
+              variant="primary"
+              onClick={() => setToast("Protocol settings saved in mock mode.")}
+            >
+              Save settings
+            </Button>
+          </div>
+        </TabContent>
+        <TabContent value="networks">
+          <SetupTable
+            title="Observed networks"
+            records={data.records.networks ?? []}
+            actionLabel="Add network"
+            onAction={() => setDialog("network")}
+          />
+        </TabContent>
+        <TabContent value="contracts">
+          <SetupTable
+            title="Observed contracts"
+            records={data.records.contracts ?? []}
+            actionLabel="Add contract"
+            onAction={() => setDialog("contract")}
+          />
+        </TabContent>
+        <TabContent value="github">
+          <ConnectionPanel
+            title="GitHub release provenance"
+            description="Aether reads release and pull-request metadata. It never receives repository write permission in the MVP."
+            record={(data.records.connections ?? [])[0]}
+          />
+        </TabContent>
+        <TabContent value="keeperhub">
+          <ConnectionPanel
+            title="KeeperHub execution adapter"
+            description="KeeperHub is the configured third-party execution path. Aether independently controls policy, approvals, and post-execution verification."
+            record={(data.records.connections ?? [])[1]}
+          />
+        </TabContent>
+      </Tabs>
+      <Dialog
+        open={dialog !== null}
+        onOpenChange={(open) => !open && setDialog(null)}
+        title={`Add ${dialog ?? "resource"}`}
+        description="This frontend-only action demonstrates the typed setup boundary."
+      >
+        <div className="form-stack">
+          <Field label="Display name">
+            <Input
+              placeholder={
+                dialog === "network" ? "Base Sepolia" : "OracleAdapter"
+              }
+            />
+          </Field>
+          <Field label={dialog === "network" ? "Chain ID" : "Contract address"}>
+            <Input placeholder={dialog === "network" ? "84532" : "0x…"} />
+          </Field>
+          <Button
+            variant="primary"
+            onClick={() => {
+              setDialog(null);
+              setToast(`${dialog} validated in mock mode.`);
+            }}
+          >
+            Validate and add
+          </Button>
+        </div>
+      </Dialog>
+      <ToastRegion message={toast} />
+    </>
+  );
+}
+
+function SetupTable({
+  title,
+  records,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  records: AetherRecord[];
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <Panel
+      title={title}
+      action={
+        <Button size="sm" onClick={onAction}>
+          <Add size={14} /> {actionLabel}
+        </Button>
+      }
+    >
+      <DataTable
+        caption={title}
+        columns={["Resource", "Status", "Value", "Details"]}
+        rows={records.map((item) => ({
+          id: item.id,
+          Resource: (
+            <>
+              <div className="record-title">{item.title}</div>
+              <div className="record-subtitle">{item.subtitle}</div>
+            </>
+          ),
+          Status: <Status status={item.status} />,
+          Value: item.value,
+          Details: item.meta,
+        }))}
+      />
+      <ResponsiveCards records={records} />
+    </Panel>
+  );
+}
+
+function ConnectionPanel({
+  title,
+  description,
+  record: connection,
+}: {
+  title: string;
+  description: string;
+  record?: AetherRecord;
+}) {
+  return (
+    <div className="settings-form a-card">
+      <div className="panel__head">
+        <div>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        <Status status={connection?.status ?? "healthy"} />
+      </div>
+      <Field label="Connection">
+        <Input readOnly value={connection?.subtitle ?? "Not configured"} />
+      </Field>
+      <div className="a-callout">
+        <ShieldTick size={18} />
+        <div>
+          <strong>Least privilege</strong>
+          <p>{connection?.meta}</p>
+        </div>
+      </div>
+      <Button>Test mock connection</Button>
+    </div>
+  );
+}
+
+function DesiredState({
+  data,
+}: {
+  data: ReturnType<typeof useDashboard>["data"] & {};
+}) {
+  return (
+    <>
+      <PageHeader
+        title="Desired State"
+        description={descriptions["desired-state"]}
+        actions={<Badge tone="success">v2.4.2 active</Badge>}
+      />
+      <div className="dashboard-grid">
+        <div>
+          <DesiredStateEditor />
         </div>
         <div className="panel-stack">
-          <Card className="panel">
-            <div className="panel__head">
-              <h2>Critical findings</h2>
-              <Link href="/app/protocols/arcadia/drift">View all</Link>
-            </div>
-            {data.records.drift!.length ? (
-              <div className="panel__body">
-                {data.records.drift!.map((record) => (
-                  <button
-                    className="command-item"
-                    key={record.id}
-                    onClick={() => onRecord(record)}
-                  >
-                    <Warning2 size={17} color="#eb5757" />
-                    <span style={{ margin: 0 }}>
-                      <strong className="record-title">{record.title}</strong>
-                      <span
-                        className="record-subtitle"
-                        style={{ display: "block" }}
-                      >
-                        {record.subtitle}
-                      </span>
-                    </span>
-                    <Badge tone="danger">{record.severity}</Badge>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="No active drift"
-                description="Recent complete observations match all 39 desired-state resources."
-              />
-            )}
-          </Card>
-          <Card className="panel">
-            <div className="panel__head">
-              <h2>Deployment parity</h2>
-              <Badge tone="success">3 chains</Badge>
-            </div>
-            <div className="panel__body">
-              <Timeline
-                items={data.records.deployments!.map((item) => ({
-                  title: item.title,
-                  detail: `${item.value} · ${item.meta}`,
-                  status: item.status,
-                }))}
-              />
-            </div>
-          </Card>
+          <Panel title="Active version">
+            <RecordList
+              records={[
+                {
+                  id: "v242",
+                  title: "v2.4.2",
+                  subtitle: "GitHub PR #482 · Mina Chen",
+                  status: "healthy",
+                  value: "Active",
+                  meta: "Manifest hash 0x81b2…8d02",
+                  timestamp: data.protocols[0]!.lastScanAt,
+                },
+              ]}
+            />
+          </Panel>
+          <Panel title="Safety policy">
+            <Timeline
+              items={[
+                {
+                  title: "Approved targets only",
+                  detail: "Three registered contracts",
+                  status: "healthy",
+                },
+                {
+                  title: "Approval threshold",
+                  detail: "One owner for critical correction",
+                  status: "healthy",
+                },
+                {
+                  title: "Independent verification",
+                  detail: "Required after every write",
+                  status: "healthy",
+                },
+              ]}
+            />
+          </Panel>
+          <Panel title="Version history">
+            <Timeline
+              items={[
+                {
+                  title: "v2.4.2 activated",
+                  detail: "Oracle heartbeat reduced to 30 minutes",
+                  status: "healthy",
+                },
+                {
+                  title: "v2.4.1 superseded",
+                  detail: "Active for 18 days",
+                  status: "resolved",
+                },
+              ]}
+            />
+          </Panel>
         </div>
       </div>
     </>
   );
 }
 
-function DesiredState() {
-  return (
-    <div className="dashboard-grid">
-      <div>
-        <DesiredStateEditor />
-      </div>
-      <div className="panel-stack">
-        <Card className="panel">
-          <div className="panel__head">
-            <h2>Version provenance</h2>
-            <Badge tone="success">Active</Badge>
-          </div>
-          <div className="panel__body">
-            <Timeline
-              items={[
-                {
-                  title: "v2.4.1 activated",
-                  detail: "GitHub PR #482 · Mina Chen",
-                  status: "resolved",
-                },
-                {
-                  title: "Policy approved",
-                  detail: "2-of-3 security review",
-                  status: "resolved",
-                },
-                {
-                  title: "Impact preview",
-                  detail: "0 new drift · 1 expected resolution",
-                  status: "healthy",
-                },
-              ]}
-            />
-          </div>
-        </Card>
-        <Card className="panel">
-          <div className="panel__head">
-            <h2>Chain overrides</h2>
-          </div>
-          <div className="panel__body">
-            <CodeBlock
-              code={
-                "ethereum:\n  heartbeat: 1800\nbase:\n  heartbeat: 900\narbitrum:\n  heartbeat: 1200"
-              }
-            />
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function Operations({
-  data,
-  onStep,
-  onApproval,
-  onAdvance,
-}: {
-  data: NonNullable<ReturnType<typeof useDashboard>["data"]>;
-  onStep: (step: OperationStep) => void;
-  onApproval: () => void;
-  onAdvance: () => void;
-}) {
-  return (
-    <Card className="panel">
-      <div className="operation-header">
-        <div>
-          <h3>{data.operation.title}</h3>
-          <p>
-            Immutable plan v2 ·{" "}
-            <span className="mono">{data.operation.planHash}</span>
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Status status={data.operation.status} />
-          {data.operation.status === "awaiting_approval" ? (
-            <Button variant="primary" size="sm" onClick={onApproval}>
-              Review approval
-            </Button>
-          ) : data.scenario === "unauthorized-oracle" &&
-            data.operation.status !== "resolved" ? (
-            <Button variant="primary" size="sm" onClick={onAdvance}>
-              Advance mock run
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      <div className="operation-graph-wrap">
-        <OperationGraph steps={data.operation.steps} onSelect={onStep} />
-      </div>
-      <div className="operation-stepper">
-        <Timeline
-          items={data.operation.steps.map((item) => ({
-            title: item.label,
-            detail: item.detail,
-            status: item.status,
-          }))}
-        />
-      </div>
-      <div
-        className="panel__body"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-          gap: 10,
-        }}
-      >
-        <Card className="metric-card">
-          <span className="metric-card__label">Policy evaluation</span>
-          <strong className="metric-card__value" style={{ fontSize: 18 }}>
-            Allowed with approvals
-          </strong>
-          <span className="metric-card__detail">
-            Target and selector allowlisted · 2 reviewers
-          </span>
-        </Card>
-        <Card className="metric-card">
-          <span className="metric-card__label">Exact simulation</span>
-          <strong className="metric-card__value" style={{ fontSize: 18 }}>
-            182,440 gas
-          </strong>
-          <span className="metric-card__detail">
-            No storage collisions · all preconditions pass
-          </span>
-        </Card>
-        <Card className="metric-card">
-          <span className="metric-card__label">Verification</span>
-          <strong className="metric-card__value" style={{ fontSize: 18 }}>
-            {data.operation.status === "resolved" ? "Converged" : "Pending"}
-          </strong>
-          <span className="metric-card__detail">
-            Independent RPC · storage + event + freshness
-          </span>
-        </Card>
-      </div>
-    </Card>
-  );
-}
-
-function ProtocolDetail({
+function Drift({
   data,
 }: {
-  data: NonNullable<ReturnType<typeof useDashboard>["data"]>;
+  data: ReturnType<typeof useDashboard>["data"] & {};
 }) {
-  const protocol = data.protocols[0]!;
-  return (
-    <div className="panel-stack">
-      <Card className="panel">
-        <div className="panel__body">
-          <div className="health-ring">
-            <div
-              className="health-ring__visual"
-              style={{ "--health": protocol.health } as React.CSSProperties}
-            >
-              <strong>{protocol.health}</strong>
-            </div>
-            <div>
-              <div className="eyebrow">Production · v2.4.1</div>
-              <h3>Arcadia Markets</h3>
-              <p>
-                Repository {protocol.repository} · governance{" "}
-                {protocol.governance} · last observed block 17,924,118.
-              </p>
-              <div className="integration-strip">
-                <span>Base</span>
-                <span>Ethereum</span>
-                <span>Arbitrum</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-      <div className="metric-grid">
-        {[
-          ["Deployments", "3", "Release parity confirmed"],
-          ["Contracts", "39", "13 monitored resources"],
-          ["Open drift", String(protocol.openDrift), "Critical and expected"],
-          ["Operations", "1", "Canary verification"],
-        ].map(([label, value, detail]) => (
-          <Card className="metric-card" key={label}>
-            <span className="metric-card__label">{label}</span>
-            <strong className="metric-card__value">{value}</strong>
-            <span className="metric-card__detail">{detail}</span>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RecordPage({
-  route,
-  records,
-  onRecord,
-}: {
-  route: string;
-  records: AetherRecord[];
-  onRecord: (record: AetherRecord) => void;
-}) {
-  const emptyCopy =
-    route === "drift"
-      ? [
-          "No drift matches this view",
-          "Complete observations align with approved desired state.",
-        ]
-      : [
-          "No records yet",
-          `Aether will show ${route.replaceAll("-", " ")} here when available.`,
-        ];
-  const tableRows = useMemo(
+  const [selected, setSelected] = useState<AetherRecord>();
+  const [query, setQuery] = useState("");
+  const [severity, setSeverity] = useState("all");
+  const drift = useMemo(
     () =>
-      records.map((record) => ({
-        id: record.id,
-        Resource: (
-          <div>
-            <div className="record-title">{record.title}</div>
-            <div className="record-subtitle">{record.subtitle}</div>
-          </div>
-        ),
-        Status: <Status status={record.status} />,
-        Severity: record.severity ? (
-          <Badge tone={tone(record.severity)}>{record.severity}</Badge>
-        ) : (
-          <span className="record-meta">—</span>
-        ),
-        Value: <span className="record-value">{record.value ?? "—"}</span>,
-        Evidence: <span className="record-meta">{record.meta ?? "—"}</span>,
-      })),
-    [records],
+      (data.records.drift ?? []).filter(
+        (item) =>
+          (severity === "all" || item.severity === severity) &&
+          `${item.title} ${item.subtitle}`
+            .toLowerCase()
+            .includes(query.toLowerCase()),
+      ),
+    [data.records.drift, query, severity],
   );
   return (
-    <Card className="panel">
-      <div className="panel__head">
-        <h2>{route.replaceAll("-", " ")}</h2>
-        <span className="record-meta">{records.length} records</span>
-      </div>
-      <div className="panel__body" style={{ paddingBottom: 0 }}>
-        <div className="filters">
-          <Input
-            placeholder={`Filter ${route.replaceAll("-", " ")}…`}
-            aria-label={`Filter ${route}`}
-          />
-          <Select aria-label="Filter status" defaultValue="all">
-            <option value="all">All statuses</option>
-            <option>Open</option>
-            <option>Healthy</option>
-            <option>Failed</option>
-          </Select>
-          <Button size="sm">
-            <Filter size={13} /> Filters
+    <>
+      <PageHeader
+        title="Drift"
+        description={descriptions.drift}
+        actions={
+          <Button>
+            <Refresh size={14} /> Run observation scan
           </Button>
-        </div>
-      </div>
-      {records.length ? (
-        <>
-          <div className="desktop-table">
-            <DataTable
-              caption={`${route} records`}
-              columns={["Resource", "Status", "Severity", "Value", "Evidence"]}
-              rows={tableRows}
-              onRowClick={(index) => onRecord(records[index]!)}
-            />
-          </div>
-          <div className="responsive-cards">
-            {records.map((record) => (
-              <button
-                className="record-card a-card"
-                key={record.id}
-                onClick={() => onRecord(record)}
-              >
-                <div className="record-card__row">
-                  <span className="record-title">{record.title}</span>
-                  <Status status={record.status} />
-                </div>
-                <span className="record-subtitle">{record.subtitle}</span>
-                <div className="record-card__row">
-                  <span className="record-value">{record.value}</span>
-                  {record.severity ? (
-                    <Badge tone={tone(record.severity)}>
-                      {record.severity}
-                    </Badge>
-                  ) : null}
-                </div>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <EmptyState
-          title={emptyCopy[0]!}
-          description={emptyCopy[1]!}
-          action={
-            <Button variant="primary">
-              Configure {route.replaceAll("-", " ")}
-            </Button>
-          }
+        }
+      />
+      <div className="filters">
+        <Input
+          aria-label="Search drift"
+          placeholder="Search contract or address"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
         />
-      )}
-    </Card>
-  );
-}
-
-function Settings({ route }: { route: string }) {
-  return (
-    <div className="settings-layout">
-      <Card className="settings-nav">
-        {[
-          ["General", "general"],
-          ["Security", "security"],
-          ["API keys", "api-keys"],
-          ["Execution", "execution"],
-        ].map(([label, key]) => (
-          <Link href={`/app/settings/${key}`} key={key}>
-            {label}
-          </Link>
-        ))}
-      </Card>
-      <form
-        className="settings-form a-card"
-        onSubmit={(event) => event.preventDefault()}
+        <Select
+          aria-label="Filter severity"
+          value={severity}
+          onChange={(event) => setSeverity(event.target.value)}
+        >
+          <option value="all">All severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+        </Select>
+        <Button size="sm">
+          <Filter size={14} /> Filters
+        </Button>
+      </div>
+      <Panel
+        title={`${drift.length} active finding${drift.length === 1 ? "" : "s"}`}
       >
-        {route === "general" ? (
+        {drift.length ? (
           <>
-            <Field label="Organization name">
-              <Input defaultValue="Arcadia Labs" />
-            </Field>
-            <Field label="Display timezone">
-              <Select defaultValue="Africa/Lagos">
-                <option>Africa/Lagos</option>
-                <option>UTC</option>
-              </Select>
-            </Field>
-            <Field label="Audit retention">
-              <Select defaultValue="indefinite">
-                <option value="indefinite">
-                  Indefinite core audit history
-                </option>
-                <option>7 years</option>
-              </Select>
-            </Field>
-          </>
-        ) : route === "security" ? (
-          <>
-            <Field label="Approval authentication">
-              <Select defaultValue="strong">
-                <option value="strong">
-                  Require recent MFA for critical approvals
-                </option>
-              </Select>
-            </Field>
-            <div className="a-callout">
-              <ShieldTick size={18} />
-              <div>
-                <strong>3 active sessions</strong>
-                <p>
-                  MacBook Pro · Lagos · current session; two trusted review
-                  devices.
-                </p>
-              </div>
-            </div>
-          </>
-        ) : route === "api-keys" ? (
-          <>
-            <div className="a-callout">
-              <Warning2 size={18} />
-              <div>
-                <strong>Secrets are shown once</strong>
-                <p>
-                  Aether stores only a hash and never shows full API key values
-                  after creation.
-                </p>
-              </div>
-            </div>
             <DataTable
-              caption="API keys"
-              columns={["Name", "Scope", "Last used"]}
-              rows={[
-                {
-                  id: "ci",
-                  Name: "deployment-checks",
-                  Scope: "protocols:read",
-                  "Last used": "18 minutes ago",
-                },
-              ]}
+              caption="Active drift findings"
+              columns={["Finding", "Severity", "Status", "Observed"]}
+              rows={drift.map((item) => ({
+                id: item.id,
+                Finding: (
+                  <>
+                    <div className="record-title">{item.title}</div>
+                    <div className="record-subtitle">{item.subtitle}</div>
+                  </>
+                ),
+                Severity: (
+                  <Badge tone={tone(item.severity)}>{item.severity}</Badge>
+                ),
+                Status: <Status status={item.status} />,
+                Observed: item.value,
+              }))}
+              onRowClick={(index) => setSelected(drift[index])}
             />
+            <ResponsiveCards records={drift} onSelect={setSelected} />
           </>
         ) : (
-          <>
-            <Field label="Execution mode">
-              <Select defaultValue="approval">
-                <option value="read">Read only</option>
-                <option value="approval">Plan and require approval</option>
-                <option value="bounded">Allow low-risk automation</option>
-              </Select>
-            </Field>
-            <div className="a-callout a-callout--danger">
+          <EmptyState
+            title="No active drift"
+            description="Observed state matches desired state v2.4.2 across both configured networks."
+          />
+        )}
+      </Panel>
+      <Drawer
+        open={Boolean(selected)}
+        onOpenChange={(open) => !open && setSelected(undefined)}
+        title={selected?.title ?? "Drift evidence"}
+        description="Facts are retained separately from analysis and recommended action."
+      >
+        {selected ? (
+          <div className="panel-stack">
+            <div className="context-strip">
+              <Badge tone="danger">{selected.severity}</Badge>
+              <Status status={selected.status} />
+              <span>Base Sepolia</span>
+            </div>
+            <Panel title="Observed fact">
+              <p className="record-subtitle">
+                At block 17,924,118, <strong>ArcadiaMarketProxy</strong>{" "}
+                returned an oracle address that does not match the active
+                manifest.
+              </p>
+              <ChainValue value="0x91A6D4bF5c0A8dF0E9F12D78771133796a33B741" />
+            </Panel>
+            <Panel title="Desired value">
+              <ChainValue value="0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311" />
+              <p className="record-meta">
+                Source: desired state v2.4.2 · GitHub PR #482
+              </p>
+            </Panel>
+            <div className="a-callout">
               <Warning2 size={18} />
               <div>
-                <strong>Mainnet lock enabled</strong>
+                <strong>Analysis, not proof</strong>
                 <p>
-                  Live mainnet execution cannot be enabled from the browser or
-                  mock mode.
+                  No configured release explains this change. A privileged
+                  direct call is likely, but actor attribution requires
+                  transaction review.
                 </p>
               </div>
             </div>
-            <Field label="Canary observation window">
-              <Input defaultValue="30 minutes" />
-            </Field>
-          </>
-        )}
-        <Button variant="primary" type="submit">
-          Save settings
-        </Button>
-      </form>
-    </div>
+            <Link href={`/app/operations/${data.operation.id}`}>
+              <Button variant="primary">
+                Generate correction plan <ArrowRight2 size={14} />
+              </Button>
+            </Link>
+          </div>
+        ) : null}
+      </Drawer>
+    </>
   );
 }
 
-function ActionModal({
-  open,
-  onOpenChange,
-  route,
-  readOnly,
-  onApprove,
+function OperationDetail({
+  data,
+  resourceId,
+  approve,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  route: string;
-  readOnly: boolean;
-  onApprove: (decision: "approve" | "reject") => void;
+  data: ReturnType<typeof useDashboard>["data"] & {};
+  resourceId?: string;
+  approve: (decision: "approve" | "reject") => void;
 }) {
-  const approval = route === "approvals" || route === "operations";
+  const [selectedStep, setSelectedStep] = useState<OperationStep>();
+  const operation = data.operation;
+  if (resourceId !== operation.id) {
+    return (
+      <EmptyState
+        title="Operation not found"
+        description="This mock workspace contains one immutable correction operation."
+        action={
+          <Link href={`/app/operations/${operation.id}`}>Open operation</Link>
+        }
+      />
+    );
+  }
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={
-        approval
-          ? "Review immutable plan approval"
-          : `${route === "drift" ? "Start investigation" : "Configure " + route.replaceAll("-", " ")}`
-      }
-      description={
-        approval
-          ? "Your decision binds to plan v2 and hash 0xa41d92c09fb4…8e77."
-          : "This mock mutation follows the typed API contract and updates query state."
-      }
-    >
-      {readOnly ? (
-        <PermissionState action="submit this action" />
-      ) : (
-        <div className="form-stack">
-          {approval ? (
-            <>
-              <div className="a-callout">
-                <DocumentCode2 size={18} />
-                <div>
-                  <strong>Restore approved OracleAdapter</strong>
-                  <p>
-                    Before: 0x6F2B…E912 · After: 0x2C8A…44311 · simulated gas
-                    182,440.
-                  </p>
-                </div>
+    <>
+      <PageHeader
+        title={operation.title}
+        description={descriptions.operations}
+        actions={
+          <>
+            <Badge tone={tone(operation.risk)}>{operation.risk} risk</Badge>
+            <Status status={operation.status} />
+          </>
+        }
+      />
+      <div className="context-strip">
+        <span>{operation.planVersion}</span>
+        <span className="mono">{operation.planHash.slice(0, 18)}…</span>
+        <span>Immutable after approval</span>
+      </div>
+      <div className="dashboard-grid">
+        <Panel title="Correction plan" action={<DocumentCode2 size={17} />}>
+          <p className="record-subtitle">{operation.summary}</p>
+          <div className="operation-graph-wrap">
+            <OperationGraph
+              steps={operation.steps}
+              onSelect={setSelectedStep}
+            />
+          </div>
+          <ol
+            className="operation-stepper"
+            aria-label="Accessible operation steps"
+          >
+            {operation.steps.map((item) => (
+              <li key={item.id}>
+                <button onClick={() => setSelectedStep(item)}>
+                  <strong>{item.label}</strong>
+                  <Status status={item.status} />
+                  <span>{item.detail}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </Panel>
+        <div className="panel-stack">
+          <Panel title="Evidence">
+            <Timeline
+              items={operation.evidence.map((detail) => ({
+                title: "Observed fact",
+                detail,
+                status: "healthy",
+              }))}
+            />
+          </Panel>
+          <Panel title="AI-assisted analysis">
+            <div className="a-callout">
+              <Warning2 size={18} />
+              <div>
+                <strong>Inference is advisory</strong>
+                <p>{operation.inference.join(" ")}</p>
               </div>
-              <Field label="Approval rationale">
-                <Input placeholder="State why this plan is safe to execute" />
-              </Field>
-              <div
-                style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
-              >
-                <Button variant="danger" onClick={() => onApprove("reject")}>
+            </div>
+          </Panel>
+          <Panel title="Policy and simulation">
+            <RecordList
+              records={[...operation.policyChecks, operation.simulation]}
+            />
+          </Panel>
+          <Panel title="Approval">
+            <RecordList records={operation.approvals} />
+            {operation.status === "awaiting_approval" ||
+            operation.status === "plan_ready" ? (
+              <div className="page-actions">
+                <Button variant="danger" onClick={() => approve("reject")}>
                   Reject
                 </Button>
-                <Button variant="primary" onClick={() => onApprove("approve")}>
-                  Approve plan v2
+                <Button variant="primary" onClick={() => approve("approve")}>
+                  Approve exact plan
                 </Button>
               </div>
-            </>
-          ) : (
-            <>
-              <Field label="Name or objective">
-                <Input placeholder={`Describe ${route.replaceAll("-", " ")}`} />
-              </Field>
-              {route === "protocols" ? (
-                <div className="choice-grid">
-                  <button className="choice-card is-selected">
-                    <h3>GitHub import wizard</h3>
-                    <p>Discover deployments and ABIs for review.</p>
-                  </button>
-                  <button className="choice-card">
-                    <h3>Manual configuration</h3>
-                    <p>Add networks and contracts safely.</p>
-                  </button>
-                </div>
-              ) : (
-                <Field label="Scope">
-                  <Select>
-                    <option>Arcadia Markets · Production</option>
-                    <option>All protocols</option>
-                  </Select>
-                </Field>
-              )}
-              <Button variant="primary" onClick={() => onOpenChange(false)}>
-                Save mock configuration
-              </Button>
-            </>
-          )}
+            ) : (
+              <Link href={`/app/executions/${data.execution.id}`}>
+                <Button variant="primary" className="mt-4">
+                  Open KeeperHub execution <ArrowRight2 size={14} />
+                </Button>
+              </Link>
+            )}
+          </Panel>
         </div>
-      )}
-    </Dialog>
-  );
-}
-
-function DetailDrawer({
-  record,
-  onOpenChange,
-  route,
-}: {
-  record: AetherRecord | null;
-  onOpenChange: (open: boolean) => void;
-  route: string;
-}) {
-  if (!record) return null;
-  return (
-    <Drawer
-      open={Boolean(record)}
-      onOpenChange={onOpenChange}
-      title={record.title}
-      description={`${route.replaceAll("-", " ")} detail · deep link ${record.id}`}
-    >
-      <div className="context-strip">
-        <Status status={record.status} />
-        {record.severity ? (
-          <Badge tone={tone(record.severity)}>{record.severity}</Badge>
-        ) : null}
       </div>
-      <Card className="panel">
-        <div className="panel__head">
-          <h2>Current evidence</h2>
-        </div>
-        <div className="panel__body panel-stack">
-          <div>
-            <span className="record-meta">Resource</span>
-            <p>{record.subtitle}</p>
+      <Drawer
+        open={Boolean(selectedStep)}
+        onOpenChange={(open) => !open && setSelectedStep(undefined)}
+        title={selectedStep?.label ?? "Plan step"}
+        description="This step is bound to the immutable operation plan."
+      >
+        {selectedStep ? (
+          <div className="panel-stack">
+            <Status status={selectedStep.status} />
+            <p>{selectedStep.detail}</p>
+            <CodeBlock
+              language="json"
+              code={JSON.stringify(
+                {
+                  id: selectedStep.id,
+                  type: selectedStep.type,
+                  status: selectedStep.status,
+                  planHash: operation.planHash,
+                },
+                null,
+                2,
+              )}
+            />
           </div>
-          <div>
-            <span className="record-meta">Observed value</span>
-            <p className="mono">{record.value}</p>
-          </div>
-          <div>
-            <span className="record-meta">Provider evidence</span>
-            <p>{record.meta}</p>
-          </div>
-          {route === "drift" || route === "incidents" ? (
-            <>
-              <div className="a-callout a-callout--danger">
-                <Warning2 size={18} />
-                <div>
-                  <strong>AI investigation hypothesis · 94% confidence</strong>
-                  <p>
-                    The oracle was changed by an unrecognized operator. No
-                    matching GitHub release, governance proposal, Safe
-                    transaction, or prior Aether operation exists.
-                  </p>
-                </div>
-              </div>
-              <ChainValue
-                value="0x7f92cdd4b9c61bb4729083f6c2db11a4d535acc05372a8cc66dd1e485944ac12"
-                kind="transaction"
-                href="https://sepolia.etherscan.io"
-              />
-            </>
-          ) : null}
-        </div>
-      </Card>
-      <h3 style={{ color: "var(--paper)", fontWeight: 500 }}>Audit timeline</h3>
-      <Timeline
-        items={[
-          {
-            title: "Observation captured",
-            detail: "Block 17,924,118 · complete snapshot",
-            status: "resolved",
-          },
-          {
-            title: "Evidence correlated",
-            detail: "Transaction, sender, calldata, and events decoded",
-            status: "resolved",
-          },
-          {
-            title: "Current state",
-            detail: record.status,
-            status: record.status,
-          },
-        ]}
-      />
-    </Drawer>
+        ) : null}
+      </Drawer>
+    </>
   );
 }
 
-function StepDrawer({
-  step,
-  onOpenChange,
+function ExecutionDetail({
+  data,
+  resourceId,
+  advance,
+  advancing,
 }: {
-  step: OperationStep | null;
-  onOpenChange: (open: boolean) => void;
+  data: ReturnType<typeof useDashboard>["data"] & {};
+  resourceId?: string;
+  advance: () => void;
+  advancing: boolean;
 }) {
-  if (!step) return null;
+  const execution = data.execution;
+  if (resourceId !== execution.id) {
+    return (
+      <EmptyState
+        title="Execution not found"
+        description="This mock workspace contains one KeeperHub execution."
+        action={
+          <Link href={`/app/executions/${execution.id}`}>Open execution</Link>
+        }
+      />
+    );
+  }
   return (
-    <Drawer
-      open={Boolean(step)}
-      onOpenChange={onOpenChange}
-      title={step.label}
-      description={`${step.type} step · immutable plan v2`}
-    >
-      <Status status={step.status} />
-      <div className="settings-form a-card" style={{ marginTop: 16 }}>
-        <p>{step.detail}</p>
-        <Field label="Normalized input">
-          <CodeBlock
-            language="json"
-            code={
-              '{\n  "chainId": 84532,\n  "target": "0x2C8A...44311",\n  "function": "setOracle(address)",\n  "value": "0"\n}'
-            }
-          />
-        </Field>
+    <>
+      <PageHeader
+        title={`KeeperHub ${execution.workflowId}`}
+        description={descriptions.executions}
+        actions={<Status status={execution.status} />}
+      />
+      <div className="context-strip" aria-live="polite">
+        <span>{execution.network}</span>
+        <span>{execution.currentStep}</span>
+        <Status status={data.realtime} label={`Realtime ${data.realtime}`} />
+      </div>
+      {execution.error ? (
+        <div className="a-callout a-callout--danger" role="alert">
+          <Warning2 size={18} />
+          <div>
+            <strong>Execution requires attention</strong>
+            <p>{execution.error}</p>
+          </div>
+        </div>
+      ) : null}
+      {execution.reconciliation ? (
         <div className="a-callout">
           <Activity size={18} />
           <div>
-            <strong>Idempotency intent persisted</strong>
-            <p>op-oracle:plan-v2:{step.id}:attempt-1</p>
+            <strong>
+              {execution.status === "unknown"
+                ? "Automatic retry is locked"
+                : "Forward correction required"}
+            </strong>
+            <p>{execution.reconciliation}</p>
           </div>
         </div>
+      ) : null}
+      <div className="dashboard-grid">
+        <Panel title="Execution lifecycle">
+          <Timeline
+            items={execution.steps.map((item) => ({
+              title: item.label,
+              detail: item.detail,
+              status: item.status,
+            }))}
+          />
+        </Panel>
+        <div className="panel-stack">
+          <Panel title="Transaction">
+            {execution.txHash ? (
+              <ChainValue
+                value={execution.txHash}
+                kind="transaction"
+                href={`https://sepolia.basescan.org/tx/${execution.txHash}`}
+              />
+            ) : (
+              <p className="record-subtitle">
+                No transaction submitted. Simulation and approval must complete
+                first.
+              </p>
+            )}
+            <RecordList
+              records={[
+                {
+                  id: "gas",
+                  title: "Gas",
+                  subtitle: `Estimated ${execution.gasEstimate}`,
+                  status: "healthy",
+                  value: execution.gasUsed
+                    ? `${execution.gasUsed} used`
+                    : "Pending",
+                  timestamp: execution.updatedAt,
+                },
+              ]}
+            />
+          </Panel>
+          <Panel title="Safety boundary">
+            <p className="record-subtitle">
+              KeeperHub executes the approved request. Aether independently
+              verifies postconditions and never treats an uncertain outcome as
+              safe to retry.
+            </p>
+          </Panel>
+          {execution.status !== "completed" &&
+          execution.status !== "unknown" &&
+          execution.status !== "partial" &&
+          execution.status !== "failed" ? (
+            <Button variant="primary" disabled={advancing} onClick={advance}>
+              Advance mock lifecycle <ArrowRight2 size={14} />
+            </Button>
+          ) : null}
+          <Link href="/app/audit-log">
+            <Button>Review audit evidence</Button>
+          </Link>
+        </div>
       </div>
-    </Drawer>
+    </>
+  );
+}
+
+function AuditLog({
+  data,
+}: {
+  data: ReturnType<typeof useDashboard>["data"] & {};
+}) {
+  const [selected, setSelected] = useState<AetherRecord>();
+  const [query, setQuery] = useState("");
+  const records = (data.records["audit-log"] ?? []).filter((item) =>
+    `${item.title} ${item.subtitle}`
+      .toLowerCase()
+      .includes(query.toLowerCase()),
+  );
+  return (
+    <>
+      <PageHeader title="Audit Log" description={descriptions["audit-log"]} />
+      <div className="filters">
+        <Input
+          aria-label="Search audit log"
+          placeholder="Search event, actor, request, or transaction"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <Select aria-label="Filter actor" defaultValue="all">
+          <option value="all">All actors</option>
+          <option value="human">Human</option>
+          <option value="system">System</option>
+          <option value="provider">Provider</option>
+        </Select>
+        <Input aria-label="Filter audit date" type="date" />
+      </div>
+      <Panel title={`${records.length} retained events`}>
+        <DataTable
+          caption="Audit events"
+          columns={["Event", "Actor and context", "Status", "Reference"]}
+          rows={records.map((item) => ({
+            id: item.id,
+            Event: <div className="record-title">{item.title}</div>,
+            "Actor and context": (
+              <div className="record-subtitle">{item.subtitle}</div>
+            ),
+            Status: <Status status={item.status} />,
+            Reference: item.value,
+          }))}
+          onRowClick={(index) => setSelected(records[index])}
+        />
+        <ResponsiveCards records={records} onSelect={setSelected} />
+      </Panel>
+      <Drawer
+        open={Boolean(selected)}
+        onOpenChange={(open) => !open && setSelected(undefined)}
+        title={selected?.title ?? "Audit event"}
+        description="Immutable event evidence with correlation context."
+      >
+        {selected ? (
+          <div className="panel-stack">
+            <Status status={selected.status} />
+            <dl className="settings-form a-card">
+              <dt>Actor and context</dt>
+              <dd>{selected.subtitle}</dd>
+              <dt>Reference</dt>
+              <dd className="mono">{selected.value}</dd>
+              <dt>Evidence</dt>
+              <dd>{selected.meta}</dd>
+              <dt>Recorded</dt>
+              <dd>{new Date(selected.timestamp).toLocaleString()}</dd>
+            </dl>
+            <CodeBlock
+              language="json"
+              code={JSON.stringify(selected, null, 2)}
+            />
+          </div>
+        ) : null}
+      </Drawer>
+    </>
+  );
+}
+
+function Panel({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="panel a-card">
+      <div className="panel__head">
+        <h2>{title}</h2>
+        {action}
+      </div>
+      <div className="panel__body">{children}</div>
+    </section>
+  );
+}
+
+function RecordList({ records }: { records: AetherRecord[] }) {
+  return (
+    <div className="panel-stack">
+      {records.map((item) => (
+        <Card key={item.id}>
+          <div className="panel__head">
+            <div>
+              <div className="record-title">{item.title}</div>
+              <div className="record-subtitle">{item.subtitle}</div>
+            </div>
+            <Status status={item.status} />
+          </div>
+          <div className="record-meta">
+            {item.value}
+            {item.meta ? ` · ${item.meta}` : ""}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function ResponsiveCards({
+  records,
+  onSelect,
+}: {
+  records: AetherRecord[];
+  onSelect?: (record: AetherRecord) => void;
+}) {
+  return (
+    <div className="responsive-cards">
+      {records.map((item) => (
+        <button
+          key={item.id}
+          className="a-card"
+          onClick={() => onSelect?.(item)}
+        >
+          <div className="panel__head">
+            <strong>{item.title}</strong>
+            <Status status={item.status} />
+          </div>
+          <p>{item.subtitle}</p>
+          <span>{item.value}</span>
+        </button>
+      ))}
+    </div>
   );
 }

@@ -1,19 +1,19 @@
 # Mock Scenarios
 
-Open **Demo controls** at the bottom-right of any application route.
+Open **Demo controls** at the bottom-right of an authenticated route.
 
-1. Healthy protocol.
-2. Unauthorized stale-oracle drift.
-3. Expected GitHub release drift.
-4. Cross-chain version mismatch.
-5. Insufficient execution-wallet gas.
-6. Simulation failure caused by missing role.
-7. Approval rejection.
-8. Approval expiry.
-9. KeeperHub rate limit with retry state.
-10. Partial execution requiring forward correction.
-11. Empty organization onboarding.
-12. Read-only viewer permissions.
-13. Stale RPC / partial scan.
+1. `healthy` — 100% aligned with independent verification evidence.
+2. `unauthorized-oracle` — critical oracle address drift.
+3. `approval-execution` — plan at approval boundary, then successful execution.
+4. `missing-role` — exact-request simulation reverts; no transaction is submitted.
+5. `partial-execution` — write confirms but verification requires forward correction.
+6. `unknown-outcome` — receipt is uncertain; automatic retry is locked during reconciliation.
 
-The primary scenario advances deterministically through investigation, plan readiness, approval, simulation, execution, independent verification, restored health, resolved drift, and completed audit evidence. MSW mutations update the same dashboard aggregate consumed by lists, metrics, notifications, graphs, and drawers.
+The primary showcase advances:
+
+`investigate → plan → approve → simulate → execute → independently verify`
+
+Each transition updates protocol health, metrics, drift, operation graph, execution,
+contextual updates, and audit events through one in-memory state machine. Components
+never import fixtures directly. Direct mock transport and MSW implement the same SDK
+HTTP contract with deterministic 180ms latency.

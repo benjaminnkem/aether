@@ -1,34 +1,25 @@
 # Visual Review
 
-Reviewed in the in-app browser on July 30, 2026 with
-`NEXT_PUBLIC_AETHER_DATA_MODE=mock`.
+## Required route audit
 
-## Route Audit
+- `/`
+- `/login`
+- `/signup`
+- `/onboarding`
+- `/app/overview`
+- `/app/protocol-setup` and all five tabs
+- `/app/desired-state` form and YAML
+- `/app/drift` aligned, finding, filter, mobile card, and evidence drawer
+- `/app/operations/op-oracle-restoration` graph, fallback, approval, and step drawer
+- `/app/executions/exec-kh-8314` success, failure, partial, and unknown states
+- `/app/audit-log` filters, mobile cards, and event drawer
+- not-found and error states
 
-All 32 routes in `docs/FRONTEND_ROUTES.md` rendered their expected primary
-heading without browser console errors. The audit covered every public,
-authentication, onboarding, application, and settings route.
+Review at desktop and 390 × 844, with keyboard-only and reduced-motion settings.
 
-## Focused Reviews
+## Deferred browser automation
 
-- Landing hero and full marketing narrative at desktop and 390 × 844.
-- Overview metrics, alignment, operation timeline, findings, and deployment parity.
-- Desired-state form, YAML, semantic diff, provenance, and chain overrides.
-- Operation graph on desktop and the complete vertical-step fallback at 390 × 844.
-- Unauthorized oracle scenario, drift responsive card, and evidence drawer.
-- Demo scenario controller and deterministic scenario mutation.
-- Responsive app top bar, action stacking, context wrapping, and mobile navigation.
-
-## Overlay Review
-
-- Drift evidence drawer exposes a dialog name, close control, evidence, confidence,
-  transaction copy/explorer actions, and audit timeline.
-- Demo controller exposes a named complementary landmark, labelled scenario select,
-  close control, and lifecycle action.
-- Dialog, command palette, notification drawer, and graph-step drawer behavior is
-  additionally covered by component tests.
-
-## Deferred Browser Automation
-
-The Playwright configuration and smoke tests are present. Browser binaries are not
-installed because the user deferred the download due network conditions.
+Playwright smoke tests are present. Browser binaries remain uninstalled at the user's
+request because of network conditions. Current implementation status must record
+manual or automated review evidence separately and must not reuse the pre-reduction
+32-route audit.

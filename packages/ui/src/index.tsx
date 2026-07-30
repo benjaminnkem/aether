@@ -146,9 +146,16 @@ export function Status({ status, label }: { status: string; label?: string }) {
     status,
   )
     ? "success"
-    : ["critical", "failed", "rejected", "expired"].includes(status)
+    : ["critical", "failed", "rejected"].includes(status)
       ? "danger"
-      : ["stale", "retrying", "partial", "open"].includes(status)
+      : [
+            "warning",
+            "partial",
+            "open",
+            "unknown",
+            "reconciling",
+            "correction_required",
+          ].includes(status)
         ? "warning"
         : "info";
   const Icon =

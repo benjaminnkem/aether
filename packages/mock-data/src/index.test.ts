@@ -8,7 +8,7 @@ import {
 
 describe("mock scenario engine", () => {
   it("implements every documented deterministic scenario", () => {
-    expect(mockScenarioNames).toHaveLength(13);
+    expect(mockScenarioNames).toHaveLength(6);
     for (const scenario of mockScenarioNames) {
       expect(createScenarioDashboard(scenario.value).scenario).toBe(
         scenario.value,
@@ -19,31 +19,38 @@ describe("mock scenario engine", () => {
   it("returns protocol health after verified oracle correction", () => {
     const drift = createScenarioDashboard("unauthorized-oracle", 0);
     const verified = createScenarioDashboard("unauthorized-oracle", 6);
-    expect(drift.protocols[0]?.health).toBe(61);
+    expect(drift.protocols[0]?.health).toBe(64);
     expect(drift.records.drift?.[0]?.status).toBe("open");
-    expect(verified.protocols[0]?.health).toBe(98);
+    expect(verified.protocols[0]?.health).toBe(100);
     expect(verified.operation.status).toBe("resolved");
-    expect(verified.records.drift?.[0]?.status).toBe("resolved");
+    expect(verified.records.drift).toHaveLength(0);
   });
 
   it("runs the complete oracle incident lifecycle through the transport", async () => {
     resetScenario();
     const detected = await mockTransport.setScenario("unauthorized-oracle");
-    expect(detected.records.incidents?.[0]?.status).toBe("open");
+    expect(detected.records.drift?.[0]?.status).toBe("open");
     let dashboard = detected;
-    for (let stage = 0; stage < 6; stage += 1) {
+    for (let stage = 0; stage < 2; stage += 1) {
       dashboard = await mockTransport.advanceLifecycle();
     }
+    expect(dashboard.operation.status).toBe("plan_ready");
+    dashboard = await mockTransport.approveOperation("approve");
+    expect(dashboard.operation.status).toBe("approved");
+    for (let stage = 0; stage < 3; stage += 1)
+      dashboard = await mockTransport.advanceLifecycle();
     expect(dashboard.operation.status).toBe("resolved");
-    expect(dashboard.protocols[0]?.health).toBe(98);
-    expect(dashboard.notifications[0]?.title).toContain("verified");
-    expect(dashboard.records["audit-log"]?.at(-1)?.title).toContain(
-      "verification",
-    );
+    expect(dashboard.protocols[0]?.health).toBe(100);
+    expect(
+      dashboard.records["audit-log"]?.some((event) =>
+        event.title.includes("verified"),
+      ),
+    ).toBe(true);
   });
 
-  it("isolates viewer permissions and stale provider state", () => {
-    expect(createScenarioDashboard("viewer").organization.role).toBe("viewer");
-    expect(createScenarioDashboard("stale-rpc").realtime).toBe("reconnecting");
+  it("locks retries for an unknown transaction outcome", () => {
+    const dashboard = createScenarioDashboard("unknown-outcome");
+    expect(dashboard.execution.status).toBe("unknown");
+    expect(dashboard.execution.reconciliation).toContain("two RPC providers");
   });
 });

@@ -7,14 +7,13 @@ import { useUiStore } from "@/stores/ui";
 
 const steps = [
   "Organization",
-  "Protocol source",
-  "Repository",
-  "Networks",
-  "Contracts",
-  "Monitoring",
-  "Execution mode",
+  "Protocol",
+  "Setup method",
+  "Network",
+  "Contract",
+  "KeeperHub",
   "Initial scan",
-  "Complete",
+  "Overview",
 ];
 export function Onboarding() {
   const persisted = useUiStore((state) => state.onboardingStep);
@@ -50,10 +49,12 @@ export function Onboarding() {
           </h1>
           <p style={{ color: "var(--fog)", maxWidth: 560 }}>
             {persisted === 0
-              ? "Create the tenant boundary that will contain protocols, policies, integrations, and audit history."
+              ? "Name the workspace that contains this protocol and its audit evidence."
               : persisted === 1
-                ? "Begin with the deterministic Arcadia demo or connect an existing protocol without granting execution access."
-                : "Review this setup stage. All live integrations remain disconnected in frontend mock mode."}
+                ? "Name the protocol and choose the environment Aether should observe."
+                : persisted === 2
+                  ? "Start with the deterministic Arcadia demo or enter resources manually."
+                  : "Review this setup stage. Live credentials remain disconnected in frontend mock mode."}
           </p>
           {persisted === 0 ? (
             <div className="settings-form a-card" style={{ marginTop: 24 }}>
@@ -61,7 +62,7 @@ export function Onboarding() {
                 <Input defaultValue="Arcadia Labs" />
               </Field>
             </div>
-          ) : persisted === 1 ? (
+          ) : persisted === 2 ? (
             <div className="choice-grid">
               <button
                 className={`choice-card ${selected === "demo" ? "is-selected" : ""}`}

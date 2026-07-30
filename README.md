@@ -1,6 +1,8 @@
 # Aether
 
-Aether is a desired-state control plane for smart-contract protocols. Phase 1 is a complete frontend-first implementation: public product site, authentication and onboarding, the full operations dashboard, a typed browser SDK, deterministic MSW scenarios, realtime-shaped state transitions, and accessibility/responsive fallbacks.
+Aether is a desired-state control plane for smart-contract protocols. The focused MVP
+frontend covers protocol setup, desired state, drift investigation, correction
+operations, KeeperHub execution evidence, and audit history.
 
 ## Quick Start
 
@@ -39,7 +41,8 @@ deterministic SDK transport and MSW implements the same HTTP paths.
 - `packages/mock-data` — deterministic scenarios and MSW handlers.
 - `packages/eslint-config`, `packages/typescript-config` — shared quality configuration.
 
-Backend, worker, contracts, and live provider adapters are intentionally not implemented in Phase 1.
+Backend, worker, contracts, and live provider adapters are intentionally not implemented.
+The six deterministic mock scenarios require no credentials.
 
 ## Quality Commands
 

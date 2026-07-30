@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { parse, stringify } from "yaml";
 import { desiredStateSchema, type DesiredState } from "@aether/shared";
 import {
   Button,
-  CodeBlock,
   DiffBlock,
   Field,
   Input,
@@ -14,56 +13,85 @@ import {
   TabContent,
   Tabs,
   Textarea,
+  ToastRegion,
   ValidationSummary,
 } from "@aether/ui";
 import { aetherClient } from "@aether/sdk";
 
 const defaults: DesiredState = {
   version: "v2.4.2",
+  networkId: "base-sepolia",
   chainId: 84532,
-  oracle: "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311",
-  heartbeatSeconds: 1800,
+  contractId: "arcadia-market",
+  contractVersion: "2.4.2",
+  implementationAddress: "0x7D4A3AfF7c4C51B1726a91c738ACb6F227127C3f",
+  oracleAddress: "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311",
+  administrators: ["0x4eC4816D356B31fD7023d15E2eDF4fC2B5518AB7"],
+  guardians: ["0x6BA4F4C99Aba65Cfa9Ce27Ab981EE33573Ec7Cc1"],
+  paused: false,
   fee: { value: "50", unit: "bps" },
+  minimumExecutorGas: { value: "0.1", unit: "ether" },
+  maximumAutomaticTransaction: { value: "0", unit: "ether" },
   release: "arcadia-v2.4.2",
+  source: "github.com/arcadia-labs/markets/pull/482",
 };
+
 export default function DesiredStateEditor() {
   const [mode, setMode] = useState("form");
-  const [errors, setErrors] = useState<string[]>([]);
-  const [valid, setValid] = useState(false);
-  const { register, handleSubmit, watch, setValue } = useForm<DesiredState>({
+  const [issues, setIssues] = useState<string[]>([]);
+  const [validated, setValidated] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [yamlDraft, setYamlDraft] = useState(() => stringify(defaults));
+  const { register, handleSubmit, watch, reset } = useForm<DesiredState>({
     defaultValues: defaults,
   });
   const values = watch();
-  const yaml = stringify(values);
-  const validate = async (input: DesiredState) => {
+  const dirty = useMemo(
+    () => JSON.stringify(values) !== JSON.stringify(defaults),
+    [values],
+  );
+
+  const validate = async (input: unknown) => {
     const result = desiredStateSchema.safeParse(input);
     if (!result.success) {
-      setErrors(
+      setIssues(
         result.error.issues.map(
           (issue) => `${issue.path.join(".")}: ${issue.message}`,
         ),
       );
-      setValid(false);
+      setValidated(false);
       return;
     }
     await aetherClient.validateDesiredState(result.data);
-    setErrors([]);
-    setValid(true);
+    setIssues([]);
+    setValidated(true);
+    setYamlDraft(stringify(result.data));
   };
+
+  const validateYaml = async () => {
+    try {
+      const parsed = desiredStateSchema.parse(parse(yamlDraft));
+      reset(parsed);
+      await validate(parsed);
+    } catch (error) {
+      setValidated(false);
+      setIssues([
+        error instanceof Error
+          ? `YAML: ${error.message}`
+          : "YAML does not match the desired-state schema.",
+      ]);
+    }
+  };
+
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 15,
-          alignItems: "center",
-          marginBottom: 16,
-        }}
-      >
+      <div className="panel__head" style={{ marginBottom: 16 }}>
         <Tabs
           value={mode}
-          onValueChange={setMode}
+          onValueChange={(nextMode) => {
+            if (nextMode === "code") setYamlDraft(stringify(values));
+            setMode(nextMode);
+          }}
           tabs={[
             { value: "form", label: "Form" },
             { value: "code", label: "YAML" },
@@ -72,19 +100,34 @@ export default function DesiredStateEditor() {
           <span />
         </Tabs>
         <span className="a-badge">
-          {valid ? "Schema valid" : "Draft not validated"}
+          {dirty
+            ? "Unsaved changes"
+            : validated
+              ? "Schema valid"
+              : "Active values"}
         </span>
       </div>
-      <ValidationSummary errors={errors} />
+      <ValidationSummary errors={issues} />
       <Tabs value={mode} onValueChange={setMode} tabs={[]}>
         <TabContent value="form">
           <form
             className="settings-form a-card"
-            onSubmit={handleSubmit(validate)}
+            onSubmit={handleSubmit((input) => void validate(input))}
           >
             <div className="form-row">
               <Field label="Manifest version">
                 <Input {...register("version")} />
+              </Field>
+              <Field label="Release provenance">
+                <Input {...register("release")} />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field label="Network">
+                <Select {...register("networkId")}>
+                  <option value="base-sepolia">Base Sepolia</option>
+                  <option value="ethereum-sepolia">Ethereum Sepolia</option>
+                </Select>
               </Field>
               <Field label="Chain ID">
                 <Input
@@ -93,73 +136,120 @@ export default function DesiredStateEditor() {
                 />
               </Field>
             </div>
+            <div className="form-row">
+              <Field label="Contract resource">
+                <Input {...register("contractId")} />
+              </Field>
+              <Field label="Contract version">
+                <Input {...register("contractVersion")} />
+              </Field>
+            </div>
+            <Field label="Approved implementation address">
+              <Input className="mono" {...register("implementationAddress")} />
+            </Field>
             <Field label="Approved oracle address">
-              <Input className="mono" {...register("oracle")} />
+              <Input className="mono" {...register("oracleAddress")} />
             </Field>
             <div className="form-row">
-              <Field
-                label="Oracle heartbeat (seconds)"
-                hint="Preview: 30 minutes"
-              >
-                <Input
-                  type="number"
-                  {...register("heartbeatSeconds", { valueAsNumber: true })}
-                />
+              <Field label="Administrator">
+                <Input className="mono" {...register("administrators.0")} />
               </Field>
-              <Field label="Fee value and canonical unit">
+              <Field label="Guardian">
+                <Input className="mono" {...register("guardians.0")} />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field
+                label="Protocol fee"
+                hint={`${values.fee.value} basis points`}
+              >
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 110px",
+                    gridTemplateColumns: "1fr 100px",
                     gap: 8,
                   }}
                 >
-                  <Input {...register("fee.value")} />
+                  <Input inputMode="numeric" {...register("fee.value")} />
                   <Select {...register("fee.unit")}>
-                    <option value="bps">basis points</option>
-                    <option value="wei">wei</option>
-                    <option value="gwei">gwei</option>
-                    <option value="ether">ether</option>
+                    <option value="bps">bps</option>
+                  </Select>
+                </div>
+              </Field>
+              <Field
+                label="Minimum executor gas"
+                hint={`${values.minimumExecutorGas.value} native token`}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 100px",
+                    gap: 8,
+                  }}
+                >
+                  <Input {...register("minimumExecutorGas.value")} />
+                  <Select {...register("minimumExecutorGas.unit")}>
+                    <option value="ether">ETH</option>
                   </Select>
                 </div>
               </Field>
             </div>
-            <Field label="Release provenance">
-              <Input {...register("release")} />
+            <Field
+              label="Maximum automatic transaction value"
+              hint="Zero prevents native-value automation."
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 100px",
+                  gap: 8,
+                }}
+              >
+                <Input {...register("maximumAutomaticTransaction.value")} />
+                <Select {...register("maximumAutomaticTransaction.unit")}>
+                  <option value="ether">ETH</option>
+                </Select>
+              </div>
             </Field>
-            <Button type="submit" variant="primary">
-              Validate draft
-            </Button>
+            <Field label="Source">
+              <Input {...register("source")} />
+            </Field>
+            <label className="a-field">
+              <span className="a-field__label">Emergency state</span>
+              <span className="context-strip">
+                <input type="checkbox" {...register("paused")} />
+                Pause protocol in desired state
+              </span>
+            </label>
+            <div className="page-actions">
+              <Button type="submit">Validate draft</Button>
+              <Button
+                variant="primary"
+                disabled={!validated}
+                onClick={() => setSaved(true)}
+              >
+                Save new version
+              </Button>
+            </div>
           </form>
         </TabContent>
         <TabContent value="code">
           <div className="settings-form a-card">
             <Field
               label="Canonical YAML"
-              hint="Form and code mode share one runtime schema."
+              hint="Form and code modes use the same browser-safe Zod schema."
             >
               <Textarea
                 className="mono"
-                value={yaml}
-                rows={15}
+                rows={28}
+                value={yamlDraft}
                 onChange={(event) => {
-                  try {
-                    const parsed = desiredStateSchema.parse(
-                      parse(event.target.value),
-                    );
-                    Object.entries(parsed).forEach(([key, value]) =>
-                      setValue(key as keyof DesiredState, value as never),
-                    );
-                    setErrors([]);
-                  } catch {
-                    setErrors([
-                      "YAML does not match the desired-state schema.",
-                    ]);
-                  }
+                  setYamlDraft(event.target.value);
+                  setValidated(false);
                 }}
               />
             </Field>
-            <Button variant="primary" onClick={() => void validate(values)}>
+            <Button variant="primary" onClick={() => void validateYaml()}>
               Validate YAML
             </Button>
           </div>
@@ -167,13 +257,17 @@ export default function DesiredStateEditor() {
       </Tabs>
       <div style={{ marginTop: 16 }}>
         <DiffBlock
-          before={"oracle: 0x2C8A…44311\nrelease: arcadia-v2.4.1"}
-          after={`oracle: ${values.oracle.slice(0, 10)}…\nrelease: ${values.release}`}
+          before={
+            "version: v2.4.1\noracleAddress: 0x2C8A…44311\nminimumExecutorGas: 0.08 ETH"
+          }
+          after={`version: ${values.version}\noracleAddress: ${values.oracleAddress.slice(0, 12)}…\nminimumExecutorGas: ${values.minimumExecutorGas.value} ETH`}
         />
       </div>
-      <div style={{ marginTop: 16 }}>
-        <CodeBlock code={yaml} />
-      </div>
+      <ToastRegion
+        message={
+          saved ? "Desired state version saved in mock mode." : undefined
+        }
+      />
     </div>
   );
 }

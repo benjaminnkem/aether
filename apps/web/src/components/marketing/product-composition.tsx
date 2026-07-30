@@ -14,15 +14,10 @@ export function ProductComposition() {
         <aside className="hero-product__side">
           {[
             "Overview",
-            "Protocols",
-            "Desired state",
-            "Deployments",
-            "Contracts",
+            "Protocol Setup",
+            "Desired State",
             "Drift",
-            "Incidents",
-            "Operations",
-            "Approvals",
-            "KeeperHub runs",
+            "Audit Log",
           ].map((item, index) => (
             <div
               key={item}

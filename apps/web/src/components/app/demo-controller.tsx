@@ -56,7 +56,9 @@ export function DemoController() {
           variant="primary"
           size="sm"
           disabled={
-            data?.scenario !== "unauthorized-oracle" || advance.isPending
+            !["unauthorized-oracle", "approval-execution"].includes(
+              data?.scenario ?? "",
+            ) || advance.isPending
           }
           onClick={() => advance.mutate()}
         >

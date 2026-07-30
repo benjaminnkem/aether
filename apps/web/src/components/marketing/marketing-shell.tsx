@@ -46,10 +46,9 @@ export function MarketingShell({ children }: { children: ReactNode }) {
             />
           </Link>
           <div className="marketing-nav__links">
-            <Link href="/product">Product</Link>
-            <Link href="/security">Security</Link>
-            <Link href="/how-it-works">How it works</Link>
-            <Link href="/docs">Docs</Link>
+            <Link href="/#product">Product</Link>
+            <Link href="/#security">Security</Link>
+            <Link href="/#how-it-works">How it works</Link>
             <Link className="secondary-cta" href="/login">
               Sign in
             </Link>
@@ -87,9 +86,9 @@ export function Footer() {
           style={{ width: 170, height: 32 }}
         />
         <div className="integration-strip">
-          <Link href="/product">Product</Link>
-          <Link href="/security">Security</Link>
-          <Link href="/docs">Guide</Link>
+          <Link href="/#product">Product</Link>
+          <Link href="/#security">Security</Link>
+          <Link href="/#how-it-works">How it works</Link>
           <Link href="/login">Sign in</Link>
         </div>
         <span className="a-status a-status--success">

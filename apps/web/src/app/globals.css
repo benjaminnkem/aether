@@ -1272,7 +1272,7 @@ pre {
   font-weight: 500;
 }
 .panel__body {
-  padding: 16px;
+  padding: 16px !important;
 }
 .panel-stack {
   display: grid;
@@ -1338,6 +1338,7 @@ pre {
 }
 .record-meta {
   color: var(--fog);
+  padding: 12px;
   font-size: 10px;
 }
 .filters {
@@ -1375,6 +1376,24 @@ pre {
 .operation-stepper {
   display: none;
   padding: 16px;
+}
+.operation-stepper li {
+  margin-bottom: 8px;
+}
+.operation-stepper button {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  text-align: left;
+  color: var(--fog);
+  background: var(--obsidian);
+  border: 1px solid var(--graphite);
+  border-radius: 6px;
+}
+.operation-stepper button strong {
+  color: var(--paper);
+  font-weight: 500;
 }
 .flow-node {
   width: 170px;
@@ -1705,6 +1724,15 @@ pre {
   .responsive-cards {
     display: grid;
     gap: 8px;
+  }
+  .a-table-wrap {
+    display: none;
+  }
+  .responsive-cards > button {
+    width: 100%;
+    padding: 14px;
+    color: var(--fog);
+    text-align: left;
   }
   .record-card {
     padding: 14px;

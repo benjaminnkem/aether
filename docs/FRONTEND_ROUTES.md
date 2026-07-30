@@ -1,38 +1,36 @@
 # Frontend Routes
 
-## Public
+## Public and support
 
-- `/` — complete landing page and real product composition.
-- `/product` — product model and operational capabilities.
-- `/security` — trust boundaries and safety model.
-- `/how-it-works` — drift-to-verification lifecycle.
-- `/docs` — frontend product guide and mock-mode setup.
-- `/login`, `/signup`, `/forgot-password`, `/accept-invite` — authentication and invite flows.
-- `/onboarding` — nine-step resumable onboarding.
+- `/` — landing, product narrative, security model, and demo entry.
+- `/login` — sign in.
+- `/signup` — optional account creation.
+- `/onboarding` — eight-step minimal protocol setup.
+- framework `not-found` and `error` states.
 
-## Application
+Product, Security, and How it works are anchors on `/`, not separate routes.
+
+## Authenticated
 
 - `/app/overview`
-- `/app/protocols`
-- `/app/protocols/new`
-- `/app/protocols/arcadia`
-- `/app/protocols/arcadia/desired-state`
-- `/app/protocols/arcadia/deployments`
-- `/app/protocols/arcadia/contracts`
-- `/app/protocols/arcadia/drift`
-- `/app/protocols/arcadia/incidents`
-- `/app/protocols/arcadia/operations`
-- `/app/protocols/arcadia/approvals`
-- `/app/protocols/arcadia/invariants`
-- `/app/protocols/arcadia/policies`
-- `/app/keeperhub-runs`
+- `/app/protocol-setup`
+- `/app/desired-state`
+- `/app/drift`
+- `/app/operations/op-oracle-restoration`
+- `/app/executions/exec-kh-8314`
 - `/app/audit-log`
-- `/app/integrations`
-- `/app/team`
-- `/app/notifications`
-- `/app/settings/general`
-- `/app/settings/security`
-- `/app/settings/api-keys`
-- `/app/settings/execution`
 
-Each list page supports detail drawers. Context primary actions open create/edit/approval modals. The shell includes global search/command palette and notification center.
+The operation and execution identifiers are dynamic route parameters. The mock service
+exposes one deterministic record of each.
+
+## Sidebar
+
+Only Overview, Protocol Setup, Desired State, Drift, and Audit Log appear. Operation
+and execution details are opened from contextual links.
+
+## Intentional compatibility redirects
+
+Legacy protocol setup, contracts, deployments, integrations, desired-state, drift,
+incidents, operations, approvals, invariants, policies, execution settings, and
+KeeperHub-run paths redirect to the closest retained route. Old team, notification,
+security-settings, and API-key paths return not found.

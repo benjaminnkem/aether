@@ -8,602 +8,597 @@ import {
 } from "@aether/shared";
 
 const now = "2026-07-30T14:42:00.000Z";
-const tx = "0x7f92cdd4b9c61bb4729083f6c2db11a4d535acc05372a8cc66dd1e485944ac12";
-const address = "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311";
-const healthySteps: OperationStep[] = (
-  [
-    ["read", "Read current oracle", "read"],
-    ["check", "Evaluate oracle allowlist", "check"],
-    ["simulate", "Simulate restoration", "simulation"],
-    ["approve", "Collect 2-of-3 approval", "approval"],
-    ["write", "Execute setOracle", "write"],
-    ["finality", "Wait 12 confirmations", "wait"],
-    ["verify", "Verify state and freshness", "verification"],
-    ["notify", "Close incident", "notification"],
-  ] as const
-).map(([id, label, type]) => ({
-  id,
-  label,
-  type: type as OperationStep["type"],
-  status: "planned",
-  detail: `${label} against Arcadia Market on Base Sepolia.`,
-}));
+const approvedOracle = "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311";
+const observedOracle = "0x91A6D4bF5c0A8dF0E9F12D78771133796a33B741";
+const transaction =
+  "0x7f92cdd4b9c61bb4729083f6c2db11a4d535acc05372a8cc66dd1e485944ac12";
 
-const baseRecords: Record<string, AetherRecord[]> = {
-  protocols: [
-    {
-      id: "arcadia",
-      title: "Arcadia Markets",
-      subtitle: "Production · 3 chains",
-      status: "healthy",
-      value: "v2.4.1",
-      meta: "100% aligned",
-      timestamp: now,
-    },
-    {
-      id: "atlas",
-      title: "Atlas Treasury",
-      subtitle: "Staging · 2 chains",
-      status: "healthy",
-      value: "v1.8.0",
-      meta: "99% aligned",
-      timestamp: now,
-    },
-  ],
-  deployments: [
-    {
-      id: "base",
-      title: "Base Sepolia",
-      subtitle: "Block 17,924,118 · Alchemy",
-      status: "healthy",
-      value: "0.184 ETH",
-      meta: "13 contracts",
-      timestamp: now,
-    },
-    {
-      id: "eth",
-      title: "Ethereum Sepolia",
-      subtitle: "Block 6,482,991 · Tenderly",
-      status: "healthy",
-      value: "0.392 ETH",
-      meta: "13 contracts",
-      timestamp: now,
-    },
-    {
-      id: "arb",
-      title: "Arbitrum Sepolia",
-      subtitle: "Block 91,133,402 · QuickNode",
-      status: "healthy",
-      value: "0.226 ETH",
-      meta: "12 contracts",
-      timestamp: now,
-    },
-  ],
-  contracts: [
-    {
-      id: "market",
-      title: "ArcadiaMarketProxy",
-      subtitle: address,
-      status: "healthy",
-      value: "UUPS proxy",
-      meta: "ABI verified",
-      timestamp: now,
-    },
-    {
-      id: "oracle",
-      title: "OracleAdapter",
-      subtitle: "0x93C7…2B91",
-      status: "healthy",
-      value: "Price source",
-      meta: "Owner: Safe",
-      timestamp: now,
-    },
-    {
-      id: "fee",
-      title: "FeeController",
-      subtitle: "0x84A1…18F0",
-      status: "healthy",
-      value: "50 bps",
-      meta: "Role protected",
-      timestamp: now,
-    },
-  ],
-  drift: [],
-  incidents: [],
-  operations: [
-    {
-      id: "op-release",
-      title: "Roll out FeeController v2",
-      subtitle: "Plan v3 · 8 steps",
-      status: "verifying",
-      severity: "medium",
-      value: "2/3 chains",
-      meta: "KeeperHub KH-8312",
-      timestamp: now,
-    },
-  ],
-  approvals: [
-    {
-      id: "apr-1",
-      title: "FeeController v2 rollout",
-      subtitle: "Expires in 47m · Plan 0x5ad8…4c91",
-      status: "open",
-      severity: "medium",
-      value: "1 of 2",
-      meta: "Security reviewer required",
-      timestamp: now,
-    },
-  ],
-  invariants: [
-    {
-      id: "inv-1",
-      title: "Oracle freshness < 30m",
-      subtitle: "Evaluated at block 17,924,118",
-      status: "healthy",
-      value: "4m 12s",
-      meta: "Blocking",
-      timestamp: now,
-    },
-    {
-      id: "inv-2",
-      title: "Approved implementation only",
-      subtitle: "Code hash allowlist v4",
-      status: "healthy",
-      value: "Pass",
-      meta: "Blocking",
-      timestamp: now,
-    },
-    {
-      id: "inv-3",
-      title: "Executor gas > 0.1 ETH",
-      subtitle: "Across active deployments",
-      status: "healthy",
-      value: "0.184 ETH",
-      meta: "Warning",
-      timestamp: now,
-    },
-  ],
-  policies: [
-    {
-      id: "pol-1",
-      title: "Production execution policy",
-      subtitle: "Version 12 · active",
-      status: "healthy",
-      value: "2 approvals",
-      meta: "Canary required",
-      timestamp: now,
-    },
-    {
-      id: "pol-2",
-      title: "Emergency pause policy",
-      subtitle: "Version 4 · active",
-      status: "healthy",
-      value: "1 reviewer",
-      meta: "No automation",
-      timestamp: now,
-    },
-  ],
-  "keeperhub-runs": [
-    {
-      id: "KH-8312",
-      title: "KH-8312 · workflow",
-      subtitle: "FeeController v2 rollout",
-      status: "executing",
-      value: "318,442 gas",
-      meta: "2 transactions",
-      timestamp: now,
-    },
-    {
-      id: "KH-8308",
-      title: "KH-8308 · simulation",
-      subtitle: "Oracle restoration",
-      status: "resolved",
-      value: "Pass",
-      meta: "0 transactions",
-      timestamp: now,
-    },
-  ],
-  "audit-log": [
-    {
-      id: "aud-1",
-      title: "Desired state v2.4.1 activated",
-      subtitle: "Mina Chen · GitHub PR #482",
-      status: "resolved",
-      value: "req_01J8K5",
-      meta: "Manifest hash retained",
-      timestamp: now,
-    },
-    {
-      id: "aud-2",
-      title: "KeeperHub workflow submitted",
-      subtitle: "Aether worker · operation op-release",
-      status: "executing",
-      value: "corr_2FC71",
-      meta: "Inputs redacted",
-      timestamp: now,
-    },
-  ],
-  integrations: [
-    {
-      id: "int-kh",
-      title: "KeeperHub",
-      subtitle: "Mock REST adapter",
-      status: "healthy",
-      value: "Connected",
-      meta: "Execution + simulation",
-      timestamp: now,
-    },
-    {
-      id: "int-gh",
-      title: "GitHub",
-      subtitle: "aether-labs/arcadia",
-      status: "healthy",
-      value: "Connected",
-      meta: "Read metadata, checks",
-      timestamp: now,
-    },
-    {
-      id: "int-rpc",
-      title: "RPC providers",
-      subtitle: "3 chains · failover enabled",
-      status: "healthy",
-      value: "Operational",
-      meta: "216ms median",
-      timestamp: now,
-    },
-    {
-      id: "int-ai",
-      title: "OpenAI",
-      subtitle: "Deterministic mock adapter",
-      status: "healthy",
-      value: "Mock mode",
-      meta: "No external data sent",
-      timestamp: now,
-    },
-  ],
-  team: [
-    {
-      id: "mina",
-      title: "Mina Chen",
-      subtitle: "mina@arcadia.finance",
-      status: "healthy",
-      value: "Owner",
-      meta: "Last active now",
-      timestamp: now,
-    },
-    {
-      id: "sam",
-      title: "Sam Okafor",
-      subtitle: "sam@arcadia.finance",
-      status: "healthy",
-      value: "Security reviewer",
-      meta: "MFA enforced",
-      timestamp: now,
-    },
-    {
-      id: "bot",
-      title: "deployment-bot",
-      subtitle: "Service account · expires in 42d",
-      status: "healthy",
-      value: "Developer",
-      meta: "GitHub only",
-      timestamp: now,
-    },
-  ],
-  notifications: [
-    {
-      id: "note-1",
-      title: "Canary verification in progress",
-      subtitle: "FeeController v2 · Base Sepolia",
-      status: "verifying",
-      value: "Now",
-      meta: "Operation update",
-      timestamp: now,
-    },
-  ],
+const record = (
+  id: string,
+  title: string,
+  subtitle: string,
+  status: AetherRecord["status"],
+  value?: string,
+  meta?: string,
+  severity?: AetherRecord["severity"],
+): AetherRecord => ({
+  id,
+  title,
+  subtitle,
+  status,
+  value,
+  meta,
+  severity,
+  timestamp: now,
+});
+
+const step = (
+  id: string,
+  label: string,
+  type: OperationStep["type"],
+  status: OperationStep["status"],
+  detail: string,
+): OperationStep => ({ id, label, type, status, detail });
+
+const scenarioLabels: Record<Scenario, string> = {
+  healthy: "Healthy protocol",
+  "unauthorized-oracle": "Critical oracle drift",
+  "approval-execution": "Approval and successful execution",
+  "missing-role": "Simulation failure: missing role",
+  "partial-execution": "Partial execution and correction",
+  "unknown-outcome": "Unknown transaction outcome",
 };
 
-export const createScenarioDashboard = (
-  scenario: Scenario = "healthy",
-  stage = 0,
-): Dashboard => {
-  const records = structuredClone(baseRecords);
-  let health = 98;
-  let role: Dashboard["organization"]["role"] = "owner";
-  let operationStatus: Dashboard["operation"]["status"] = "planned";
-  let steps = structuredClone(healthySteps);
-  let realtime: Dashboard["realtime"] = "connected";
+export const mockScenarioNames = Object.entries(scenarioLabels).map(
+  ([value, label]) => ({ value: value as Scenario, label }),
+);
 
-  if (scenario === "empty-organization") {
-    Object.keys(records).forEach((key) => (records[key] = []));
-    health = 0;
+function operationSteps(stage: number, scenario: Scenario): OperationStep[] {
+  const statuses: OperationStep["status"][] = [
+    stage >= 1 ? "completed" : "investigating",
+    stage >= 2 ? "completed" : "plan_ready",
+    stage >= 3 ? "completed" : "awaiting_approval",
+    stage >= 4 ? "completed" : "queued",
+    stage >= 5 ? "completed" : "queued",
+    stage >= 6 ? "completed" : "queued",
+  ];
+  if (scenario === "missing-role") statuses[3] = "failed";
+  if (scenario === "partial-execution") {
+    statuses[4] = "partial";
+    statuses[5] = "correction_required";
   }
-  if (scenario === "viewer") role = "viewer";
-  if (scenario === "stale-rpc") {
-    health = 82;
-    realtime = "reconnecting";
-    records.deployments![1] = {
-      ...records.deployments![1]!,
-      status: "stale",
-      meta: "Partial scan · 11/13 reads",
-    };
+  if (scenario === "unknown-outcome") {
+    statuses[4] = "unknown";
+    statuses[5] = "reconciling";
   }
-  if (scenario === "unauthorized-oracle") {
-    health = stage >= 6 ? 98 : 61;
-    const resolved = stage >= 6;
-    records.drift = [
-      {
-        id: "drift-oracle",
-        title: "Unauthorized oracle address",
-        subtitle: "OracleAdapter · Base Sepolia",
-        status: resolved ? "resolved" : stage >= 1 ? "investigating" : "open",
-        severity: "critical",
-        value: resolved ? address : "0x6F2B…E912",
-        meta: resolved
-          ? "Verified at block 17,924,184"
-          : `Desired ${address.slice(0, 10)}…`,
-        timestamp: now,
-      },
-    ];
-    records.incidents = [
-      {
-        id: "inc-oracle",
-        title: "Critical oracle integrity incident",
-        subtitle: "1 market · $12.4m supplied value",
-        status: resolved ? "resolved" : stage >= 1 ? "investigating" : "open",
-        severity: "critical",
-        value: resolved ? "Closed" : "SEV-1",
-        meta: resolved
-          ? "Forward state verified"
-          : `Introduced by ${tx.slice(0, 12)}…`,
-        timestamp: now,
-      },
-    ];
-    const statuses: Dashboard["operation"]["status"][] = [
-      "investigating",
-      "planned",
-      "awaiting_approval",
-      "simulating",
-      "executing",
-      "verifying",
-      "resolved",
-    ];
-    operationStatus = statuses[Math.min(stage, statuses.length - 1)]!;
-    steps = steps.map((step, index) => ({
-      ...step,
-      status:
-        index < stage + 2
-          ? resolved
-            ? "resolved"
-            : index === stage + 1
-              ? operationStatus
-              : "resolved"
-          : "planned",
-    }));
-    records.operations![0] = {
-      ...records.operations![0]!,
-      title: "Restore approved oracle",
-      subtitle: "Immutable plan v2 · Base Sepolia",
-      status: operationStatus,
-      severity: resolved ? "low" : "critical",
-      value: resolved ? "Verified" : "op-oracle",
-      meta: resolved
-        ? "Independent postconditions pass"
-        : "Plan hash 0xa41d92c0…8e77",
-    };
-    const lifecycleEvents = [
-      ["Drift detected", "Block-pinned observation opened incident"],
-      ["Evidence investigation completed", "Unauthorized sender confirmed"],
-      ["Correction plan generated", "Immutable plan v2 retained"],
-      ["Approval threshold reached", "2-of-3 reviewers approved"],
-      ["Simulation and execution started", "KeeperHub run KH-8314"],
-      ["Independent verification started", "Finality reached"],
-      ["Post-execution verification completed", "All invariants pass"],
-    ] as const;
-    records["audit-log"] = lifecycleEvents
-      .slice(0, Math.min(stage + 1, lifecycleEvents.length))
-      .map(([title, subtitle], index) => ({
-        id: `aud-oracle-${index}`,
-        title,
-        subtitle,
-        status:
-          index < stage ? "resolved" : resolved ? "resolved" : operationStatus,
-        value: `seq_${index + 1}`,
-        meta: "Correlation corr_oracle_8314",
-        timestamp: now,
-      }));
-    records.notifications = [
-      {
-        id: "note-oracle",
-        title: resolved
-          ? "Oracle correction independently verified"
-          : lifecycleEvents[Math.min(stage, lifecycleEvents.length - 1)]![0],
-        subtitle: "Arcadia Markets · Base Sepolia",
-        status: resolved ? "resolved" : operationStatus,
-        value: resolved ? "Closed" : "Now",
-        meta: "Incident inc-oracle",
-        timestamp: now,
-      },
-    ];
-  }
-  if (scenario === "github-release")
-    records.drift = [
-      {
-        id: "release",
-        title: "Expected FeeController release drift",
-        subtitle: "GitHub PR #482 · Base pending",
-        status: "planned",
-        severity: "medium",
-        value: "v2.3.0 → v2.4.0",
-        meta: "Authorized source",
-        timestamp: now,
-      },
-    ];
-  if (scenario === "cross-chain-mismatch")
-    records.drift = [
-      {
-        id: "mismatch",
-        title: "Cross-chain release mismatch",
-        subtitle: "Arbitrum remains on v2.3.0",
-        status: "open",
-        severity: "high",
-        value: "1 chain behind",
-        meta: "Ethereum + Base aligned",
-        timestamp: now,
-      },
-    ];
-  if (scenario === "insufficient-gas")
-    records["keeperhub-runs"]![0] = {
-      ...records["keeperhub-runs"]![0]!,
-      status: "failed",
-      severity: "high",
-      meta: "Executor wallet requires 0.041 ETH",
-    };
-  if (scenario === "missing-role") operationStatus = "failed";
-  if (scenario === "approval-rejected") operationStatus = "rejected";
-  if (scenario === "approval-expired") operationStatus = "expired";
-  if (scenario === "keeperhub-rate-limit") operationStatus = "retrying";
-  if (scenario === "partial-execution") operationStatus = "partial";
+  return [
+    step(
+      "evidence",
+      "Confirm observed drift",
+      "read",
+      statuses[0]!,
+      `RPC reads show ${observedOracle}; desired state requires ${approvedOracle}.`,
+    ),
+    step(
+      "policy",
+      "Build safe correction",
+      "check",
+      statuses[1]!,
+      "Target and setOracle(address) are allowlisted; value transfer is zero.",
+    ),
+    step(
+      "approval",
+      "Collect reviewer approval",
+      "approval",
+      statuses[2]!,
+      "One protocol-owner approval is required for critical configuration drift.",
+    ),
+    step(
+      "simulation",
+      "Simulate exact calldata",
+      "simulation",
+      statuses[3]!,
+      scenario === "missing-role"
+        ? "Reverted: AETHER_EXECUTOR is missing ORACLE_ADMIN_ROLE."
+        : "Fork simulation passes with postcondition and gas checks.",
+    ),
+    step(
+      "execute",
+      "Execute through KeeperHub",
+      "write",
+      statuses[4]!,
+      "KeeperHub submits setOracle(address) using the approved plan hash.",
+    ),
+    step(
+      "verify",
+      "Verify independently",
+      "verification",
+      statuses[5]!,
+      "A separate RPC read checks the final oracle and freshness invariant.",
+    ),
+  ];
+}
+
+function statusFor(scenario: Scenario, stage: number) {
+  if (scenario === "healthy" || stage >= 6) return "resolved" as const;
+  if (scenario === "missing-role") return "failed" as const;
+  if (scenario === "partial-execution") return "correction_required" as const;
+  if (scenario === "unknown-outcome") return "reconciling" as const;
+  return ([
+    "investigating",
+    "investigating",
+    "plan_ready",
+    "approved",
+    "simulating",
+    "executing",
+  ][stage] ?? "verifying") as Dashboard["operation"]["status"];
+}
+
+function executionStatus(scenario: Scenario, stage: number) {
+  if (scenario === "healthy" || stage >= 6) return "completed" as const;
+  if (scenario === "missing-role") return "failed" as const;
+  if (scenario === "partial-execution") return "partial" as const;
+  if (scenario === "unknown-outcome") return "unknown" as const;
+  if (stage < 4) return "queued" as const;
+  if (stage === 4) return "simulating" as const;
+  return "executing" as const;
+}
+
+export function createScenarioDashboard(
+  scenario: Scenario = "healthy",
+  requestedStage = 0,
+): Dashboard {
+  const defaultStage =
+    scenario === "healthy"
+      ? 6
+      : scenario === "approval-execution"
+        ? 3
+        : scenario === "missing-role"
+          ? 4
+          : scenario === "partial-execution" || scenario === "unknown-outcome"
+            ? 5
+            : 0;
+  const stage = Math.max(requestedStage, defaultStage);
+  const resolved = scenario === "healthy" || stage >= 6;
+  const operationStatus = statusFor(scenario, stage);
+  const currentExecutionStatus = executionStatus(scenario, stage);
+  const severity = resolved ? "info" : "critical";
+  const drift = resolved
+    ? []
+    : [
+        record(
+          "drift-oracle-001",
+          "Unauthorized oracle address",
+          "ArcadiaMarketProxy · Base Sepolia",
+          stage >= 5 ? "investigating" : "open",
+          `${observedOracle.slice(0, 10)}…`,
+          `Desired ${approvedOracle.slice(0, 10)}… · block 17,924,118`,
+          "critical",
+        ),
+      ];
+  const audit = [
+    record(
+      "audit-scan",
+      "Observation scan completed",
+      "Aether observer · Base Sepolia block 17,924,118",
+      "completed",
+      "scan_01J8N6",
+      resolved ? "All resources aligned" : "1 critical difference",
+    ),
+    ...(resolved
+      ? [
+          record(
+            "audit-verify",
+            "Oracle correction independently verified",
+            "Aether verifier · 12 confirmations",
+            "resolved",
+            "verify_01J8N9",
+            transaction,
+          ),
+        ]
+      : [
+          record(
+            "audit-drift",
+            "Critical drift incident opened",
+            "Aether policy engine · unauthorized change",
+            "open",
+            "incident_01J8N7",
+            "Evidence snapshot retained",
+            "critical",
+          ),
+        ]),
+    ...(stage >= 3
+      ? [
+          record(
+            "audit-approval",
+            "Correction plan approved",
+            "Mina Chen · owner",
+            "approved",
+            "plan v1",
+            "Plan hash 0x5ad8…4c91",
+          ),
+        ]
+      : []),
+    ...(stage >= 5
+      ? [
+          record(
+            "audit-execution",
+            "KeeperHub workflow updated",
+            "Mock KeeperHub adapter · KH-8314",
+            currentExecutionStatus,
+            "exec-kh-8314",
+            currentExecutionStatus === "unknown"
+              ? "Receipt unavailable; reconciliation active"
+              : transaction,
+          ),
+        ]
+      : []),
+  ];
 
   return {
-    organization: { id: "org-arcadia", name: "Arcadia Labs", role },
+    organization: {
+      id: "org-arcadia",
+      name: "Arcadia Labs",
+      role: "owner",
+    },
     protocols: [
       {
         id: "arcadia",
         organizationId: "org-arcadia",
         name: "Arcadia Markets",
-        environment: "Production",
-        health,
-        status: health > 90 ? "healthy" : "open",
-        release: "v2.4.1",
-        repository: "aether-labs/arcadia",
-        governance: "Safe 2-of-3",
-        chains: ["Base", "Ethereum", "Arbitrum"],
-        openDrift: records.drift!.filter(
-          (record) => record.status !== "resolved",
-        ).length,
+        environment: "Testnet",
+        health: resolved ? 100 : scenario === "partial-execution" ? 58 : 64,
+        status: resolved ? "healthy" : "critical",
+        release: "v2.4.2",
+        repository: "github.com/arcadia-labs/markets",
+        governance: "Arcadia Security Safe · 2-of-3",
+        chains: ["Base Sepolia", "Ethereum Sepolia"],
+        openDrift: drift.length,
         lastScanAt: now,
       },
     ],
-    records,
     metrics: [
       {
         label: "Protocol health",
-        value: `${health}%`,
-        detail:
-          health > 90
-            ? "All blocking invariants pass"
-            : "Critical oracle drift is open",
-        trend: health > 90 ? "+2 this week" : "-37 since drift",
+        value: resolved ? "100%" : "64%",
+        detail: resolved
+          ? "All observed resources aligned"
+          : "Critical drift open",
+        trend: resolved ? "Verified 2m ago" : "Detected 11m ago",
       },
       {
-        label: "Desired alignment",
-        value: health > 90 ? "39 / 39" : "38 / 39",
-        detail: "Typed resources match intent",
+        label: "Networks",
+        value: "2",
+        detail: "Both RPC providers responding",
+      },
+      {
+        label: "Contracts",
+        value: "3",
+        detail: "Proxy and ABI metadata verified",
       },
       {
         label: "Open drift",
-        value: String(
-          records.drift!.filter((record) => record.status !== "resolved")
-            .length,
-        ),
-        detail: "Across 3 deployments",
-      },
-      {
-        label: "KeeperHub success",
-        value: "99.2%",
-        detail: "Last 30 days · 124 runs",
+        value: String(drift.length),
+        detail: resolved ? "No active incidents" : "1 critical finding",
       },
     ],
-    operation: {
-      id: "op-oracle",
-      title: "Restore approved oracle",
-      planHash: "0xa41d92c09fb4…8e77",
-      status: operationStatus,
-      steps,
+    records: {
+      networks: [
+        record(
+          "base-sepolia",
+          "Base Sepolia",
+          "Chain 84532 · block 17,924,118",
+          "healthy",
+          "216 ms",
+          "RPC fresh · executor 0.184 ETH",
+        ),
+        record(
+          "eth-sepolia",
+          "Ethereum Sepolia",
+          "Chain 11155111 · block 6,482,991",
+          "healthy",
+          "284 ms",
+          "RPC fresh · executor 0.392 ETH",
+        ),
+      ],
+      contracts: [
+        record(
+          "market",
+          "ArcadiaMarketProxy",
+          "0x7D4A3AfF7c4C51B1726a91c738ACb6F227127C3f",
+          resolved ? "healthy" : "critical",
+          "UUPS proxy",
+          "ABI verified",
+        ),
+        record(
+          "oracle",
+          "OracleAdapter",
+          approvedOracle,
+          "healthy",
+          "Price source",
+          "Owner: Arcadia Security Safe",
+        ),
+        record(
+          "fee",
+          "FeeController",
+          "0x84A1d4E153eD36F4DeF11F2D30e90E614B9418F0",
+          "healthy",
+          "50 bps",
+          "Role protected",
+        ),
+      ],
+      connections: [
+        record(
+          "github",
+          "GitHub",
+          "arcadia-labs/markets · main",
+          "healthy",
+          "Connected",
+          "Read-only release provenance",
+        ),
+        record(
+          "keeperhub",
+          "KeeperHub",
+          "Mock workflow adapter",
+          "healthy",
+          "Connected",
+          "Simulation and execution",
+        ),
+      ],
+      drift,
+      operations: [
+        record(
+          "op-oracle-restoration",
+          "Restore approved oracle",
+          "Immutable plan v1 · Base Sepolia",
+          operationStatus,
+          "6 steps",
+          "Plan 0x5ad8…4c91",
+          severity,
+        ),
+      ],
+      executions: [
+        record(
+          "exec-kh-8314",
+          "KH-8314 · Oracle restoration",
+          "KeeperHub workflow · Base Sepolia",
+          currentExecutionStatus,
+          stage >= 5 ? "Transaction submitted" : "Awaiting execution",
+          transaction,
+          severity,
+        ),
+      ],
+      "audit-log": audit,
     },
-    notifications: records.notifications!,
+    operation: {
+      id: "op-oracle-restoration",
+      title: "Restore approved oracle",
+      summary:
+        "Restore ArcadiaMarketProxy to the oracle address approved in desired state v2.4.2.",
+      planVersion: "v1",
+      planHash:
+        "0x5ad8a4a010143742c20e3bfc25e30cedd0ea40f153d35c32d7d7726142844c91",
+      status: operationStatus,
+      risk: severity,
+      createdAt: now,
+      evidence: [
+        `Observed oracle: ${observedOracle}`,
+        `Desired oracle: ${approvedOracle}`,
+        "Change first appeared between blocks 17,923,901 and 17,924,118.",
+      ],
+      inference: [
+        "The change was not associated with the configured GitHub release.",
+        "A privileged direct call is the most likely source; attribution is not proven.",
+      ],
+      policyChecks: [
+        record(
+          "target",
+          "Target allowlist",
+          "ArcadiaMarketProxy is approved",
+          "healthy",
+          "Pass",
+        ),
+        record(
+          "function",
+          "Function allowlist",
+          "setOracle(address) is approved",
+          "healthy",
+          "Pass",
+        ),
+        record(
+          "value",
+          "Value transfer",
+          "No native token transfer",
+          "healthy",
+          "0 ETH",
+        ),
+      ],
+      simulation: record(
+        "simulation",
+        scenario === "missing-role"
+          ? "Simulation reverted"
+          : "Simulation passed",
+        "Base Sepolia fork · block 17,924,118",
+        scenario === "missing-role" ? "failed" : "healthy",
+        scenario === "missing-role" ? "Missing role" : "284,211 gas",
+        scenario === "missing-role"
+          ? "AETHER_EXECUTOR lacks ORACLE_ADMIN_ROLE"
+          : "Postcondition matched",
+      ),
+      approvals: [
+        record(
+          "approval-mina",
+          stage >= 3 ? "Approved by Mina Chen" : "Owner approval required",
+          stage >= 3
+            ? "Bound to plan v1 and simulation sim_8314"
+            : "Expires 60 minutes after simulation",
+          stage >= 3 ? "approved" : "awaiting_approval",
+          stage >= 3 ? "Approved" : "0 of 1",
+        ),
+      ],
+      steps: operationSteps(stage, scenario),
+    },
+    execution: {
+      id: "exec-kh-8314",
+      operationId: "op-oracle-restoration",
+      workflowId: "KH-8314",
+      status: currentExecutionStatus,
+      network: "Base Sepolia",
+      currentStep:
+        currentExecutionStatus === "completed"
+          ? "Independent verification complete"
+          : currentExecutionStatus === "unknown"
+            ? "Reconciling transaction outcome"
+            : currentExecutionStatus === "partial"
+              ? "Forward correction required"
+              : currentExecutionStatus === "failed"
+                ? "Simulation failed"
+                : stage >= 5
+                  ? "Waiting for confirmations"
+                  : "Awaiting approved plan",
+      startedAt: now,
+      updatedAt: now,
+      txHash: stage >= 5 ? transaction : undefined,
+      gasEstimate: "284,211",
+      gasUsed:
+        stage >= 5 && scenario !== "unknown-outcome" ? "279,884" : undefined,
+      error:
+        scenario === "missing-role"
+          ? "Execution blocked before submission: missing ORACLE_ADMIN_ROLE."
+          : scenario === "partial-execution"
+            ? "Transaction confirmed, but the independent freshness check failed."
+            : scenario === "unknown-outcome"
+              ? "RPC timeout after submission; do not retry until reconciliation completes."
+              : undefined,
+      reconciliation:
+        scenario === "partial-execution"
+          ? "Create a forward-correction plan to restore the oracle heartbeat."
+          : scenario === "unknown-outcome"
+            ? "Aether is checking the transaction hash across two RPC providers and KeeperHub."
+            : undefined,
+      steps: operationSteps(stage, scenario),
+    },
+    notifications: audit.slice(0, 3),
     scenario,
-    realtime,
+    lifecycleStage: stage,
+    realtime: scenario === "unknown-outcome" ? "reconnecting" : "connected",
   };
+}
+
+let activeScenario: Scenario = "healthy";
+let lifecycleStage = 0;
+
+const snapshot = () => createScenarioDashboard(activeScenario, lifecycleStage);
+
+export function resetScenario() {
+  activeScenario = "healthy";
+  lifecycleStage = 0;
+}
+
+async function latency() {
+  await delay(180);
+}
+
+export const handlers = [
+  http.get("/v1/dashboard", async () => {
+    await latency();
+    return HttpResponse.json(snapshot());
+  }),
+  http.post("/v1/demo/scenario", async ({ request }) => {
+    const body = (await request.json()) as { scenario: Scenario };
+    activeScenario = body.scenario;
+    lifecycleStage = 0;
+    await latency();
+    return HttpResponse.json(snapshot());
+  }),
+  http.post("/v1/demo/advance", async () => {
+    lifecycleStage =
+      activeScenario === "unauthorized-oracle"
+        ? Math.min(2, lifecycleStage + 1)
+        : Math.min(6, lifecycleStage + 1);
+    await latency();
+    return HttpResponse.json(snapshot());
+  }),
+  http.post("/v1/operations/:operationId/approval", async ({ request }) => {
+    const body = (await request.json()) as { decision: "approve" | "reject" };
+    if (body.decision === "reject") {
+      activeScenario = "unauthorized-oracle";
+      lifecycleStage = 2;
+    } else {
+      activeScenario = "approval-execution";
+      lifecycleStage = 3;
+    }
+    await latency();
+    return HttpResponse.json(snapshot());
+  }),
+  http.post("/v1/desired-state/validate", async ({ request }) => {
+    await latency();
+    return HttpResponse.json((await request.json()) as DesiredState);
+  }),
+];
+
+type Listener = (event: {
+  id: string;
+  type: "dashboard.updated" | "operation.progress";
+  sequence: number;
+  createdAt: string;
+}) => void;
+const listeners = new Set<Listener>();
+let sequence = 0;
+const publish = () => {
+  sequence += 1;
+  listeners.forEach((listener) =>
+    listener({
+      id: `evt-${sequence}`,
+      type: "operation.progress",
+      sequence,
+      createdAt: now,
+    }),
+  );
 };
 
-let scenario: Scenario = "healthy";
-let stage = 0;
-const mockLatency = (milliseconds: number) =>
-  new Promise<void>((resolve) => globalThis.setTimeout(resolve, milliseconds));
-export const resetScenario = () => {
-  scenario = "healthy";
-  stage = 0;
-};
 export const mockTransport = {
   async getDashboard() {
-    await mockLatency(180);
-    return createScenarioDashboard(scenario, stage);
+    await latency();
+    return snapshot();
   },
-  async setScenario(nextScenario: Scenario) {
-    await mockLatency(160);
-    scenario = nextScenario;
-    stage = 0;
-    return createScenarioDashboard(scenario, stage);
+  async setScenario(scenario: Scenario) {
+    activeScenario = scenario;
+    lifecycleStage = 0;
+    publish();
+    await latency();
+    return snapshot();
   },
   async advanceLifecycle() {
-    await mockLatency(240);
-    stage = Math.min(stage + 1, 6);
-    return createScenarioDashboard(scenario, stage);
+    lifecycleStage =
+      activeScenario === "unauthorized-oracle"
+        ? Math.min(2, lifecycleStage + 1)
+        : Math.min(6, lifecycleStage + 1);
+    publish();
+    await latency();
+    return snapshot();
   },
   async approveOperation(decision: "approve" | "reject") {
-    await mockLatency(220);
-    stage = decision === "approve" ? 3 : 0;
-    if (decision === "reject") scenario = "approval-rejected";
-    return createScenarioDashboard(scenario, stage);
+    if (decision === "approve") {
+      activeScenario = "approval-execution";
+      lifecycleStage = 3;
+    } else {
+      activeScenario = "unauthorized-oracle";
+      lifecycleStage = 2;
+    }
+    publish();
+    await latency();
+    return snapshot();
   },
   async validateDesiredState(input: DesiredState) {
-    await mockLatency(180);
+    await latency();
     return input;
   },
 };
-export const handlers = [
-  http.get("/v1/dashboard", async () => {
-    await delay(180);
-    return HttpResponse.json(createScenarioDashboard(scenario, stage));
-  }),
-  http.post("/v1/demo/scenario", async ({ request }) => {
-    await delay(160);
-    const body = (await request.json()) as { scenario: Scenario };
-    scenario = body.scenario;
-    stage = 0;
-    return HttpResponse.json(createScenarioDashboard(scenario, stage));
-  }),
-  http.post("/v1/demo/advance", async () => {
-    await delay(240);
-    stage = Math.min(stage + 1, 6);
-    return HttpResponse.json(createScenarioDashboard(scenario, stage));
-  }),
-  http.post("/v1/operations/op-oracle/approval", async ({ request }) => {
-    await delay(220);
-    const body = (await request.json()) as { decision: "approve" | "reject" };
-    stage = body.decision === "approve" ? 3 : 0;
-    if (body.decision === "reject") scenario = "approval-rejected";
-    return HttpResponse.json(createScenarioDashboard(scenario, stage));
-  }),
-  http.post("/v1/desired-state/validate", async ({ request }) => {
-    await delay(180);
-    return HttpResponse.json(await request.json());
-  }),
-];
-export const mockScenarioNames: Array<{ value: Scenario; label: string }> = [
-  { value: "healthy", label: "Healthy protocol" },
-  { value: "unauthorized-oracle", label: "Unauthorized oracle drift" },
-  { value: "github-release", label: "Expected GitHub release" },
-  { value: "cross-chain-mismatch", label: "Cross-chain mismatch" },
-  { value: "insufficient-gas", label: "Insufficient executor gas" },
-  { value: "missing-role", label: "Simulation missing role" },
-  { value: "approval-rejected", label: "Approval rejected" },
-  { value: "approval-expired", label: "Approval expired" },
-  { value: "keeperhub-rate-limit", label: "KeeperHub rate limit" },
-  { value: "partial-execution", label: "Partial execution" },
-  { value: "empty-organization", label: "Empty organization" },
-  { value: "viewer", label: "Read-only viewer" },
-  { value: "stale-rpc", label: "Stale RPC / partial scan" },
-];
+
+export const mockRealtime = {
+  subscribe(listener: Listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
+};

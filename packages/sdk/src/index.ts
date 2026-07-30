@@ -72,9 +72,12 @@ export class AetherClient {
         await this.transport.approveOperation(decision),
       );
     }
-    const response = await this.http.post("/operations/op-oracle/approval", {
-      decision,
-    });
+    const response = await this.http.post(
+      "/operations/op-oracle-restoration/approval",
+      {
+        decision,
+      },
+    );
     return dashboardSchema.parse(response.data);
   }
 

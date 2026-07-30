@@ -9,8 +9,11 @@ pnpm test:e2e
 pnpm build
 ```
 
-Coverage focuses on design-system focus/escape behavior, resumable onboarding, desired-state schema validation, deterministic scenarios, viewer and stale-provider states, complete oracle correction, reduced motion, marketing/dashboard smoke, and mobile operation fallback.
+Coverage targets design-system focus/Escape behavior, eight-step onboarding resume,
+desired-state form/YAML validation, six deterministic scenarios, complete oracle
+correction, unknown-outcome retry safety, reduced motion, landing/overview smoke, and
+mobile operation fallback.
 
-The Playwright suite contains six project/spec combinations. On July 30, 2026,
-execution reached browser launch but Chromium was unavailable. The browser download
-was stopped and deferred at the user's request because of network conditions.
+Playwright 1.62.1 is configured. Its Chromium binary is not installed because the user
+deferred the network download. Do not claim browser execution until the binary exists;
+run `pnpm --filter @aether/web test:e2e` when it becomes available.
