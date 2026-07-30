@@ -13,6 +13,7 @@ pnpm --filter @aether/web dev
 ```
 
 Open `http://localhost:3000`. Mock mode requires no credentials.
+If the mode variable is omitted, Aether safely defaults to mock mode.
 
 ```env
 NEXT_PUBLIC_AETHER_DATA_MODE=mock

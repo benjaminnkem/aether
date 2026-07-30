@@ -55,6 +55,10 @@ img,
 svg {
   display: block;
 }
+svg[fill="none"]
+  :is(path, circle, rect, line, polyline, polygon, ellipse):not([stroke]) {
+  stroke: currentColor;
+}
 ::selection {
   background: var(--lime);
   color: var(--void);

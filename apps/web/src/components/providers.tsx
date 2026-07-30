@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Image from "next/image";
 import { useEffect, useState, type ReactNode } from "react";
 
+const isMockMode = process.env.NEXT_PUBLIC_AETHER_DATA_MODE !== "api";
+
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
     () =>
@@ -14,20 +16,20 @@ export function Providers({ children }: { children: ReactNode }) {
         },
       }),
   );
-  const [ready, setReady] = useState(
-    process.env.NEXT_PUBLIC_AETHER_DATA_MODE !== "mock",
-  );
+  const [ready, setReady] = useState(!isMockMode);
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_AETHER_DATA_MODE !== "mock") return;
+    if (!isMockMode) return;
     void import("@aether/mock-data/browser").then(
-      async ({ worker, mockTransport }) => {
+      ({ worker, mockTransport }) => {
         aetherClient.setTransport(mockTransport);
-        await worker.start({
-          onUnhandledRequest: "bypass",
-          serviceWorker: { url: "/mockServiceWorker.js" },
-        });
         setReady(true);
+        void worker
+          .start({
+            onUnhandledRequest: "bypass",
+            serviceWorker: { url: "/mockServiceWorker.js" },
+          })
+          .catch(() => undefined);
       },
     );
   }, []);
