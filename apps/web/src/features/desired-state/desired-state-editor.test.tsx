@@ -24,4 +24,32 @@ describe("desired state editor", () => {
     await user.click(screen.getByRole("button", { name: "Validate draft" }));
     expect(screen.getByRole("alert")).toBeVisible();
   });
+
+  it("invalidates an approval-to-save when a validated address changes", async () => {
+    vi.spyOn(aetherClient, "validateDesiredState").mockImplementation(
+      async (value) => value,
+    );
+    const user = userEvent.setup();
+    render(<DesiredStateEditor />);
+    await user.click(screen.getByRole("button", { name: "Validate draft" }));
+    const save = await screen.findByRole("button", {
+      name: "Save new version",
+    });
+    expect(save).toBeEnabled();
+    await user.type(screen.getByLabelText("Approved oracle address"), "0");
+    expect(save).toBeDisabled();
+  });
+
+  it("keeps form and YAML validation bound to the same parsed values", async () => {
+    vi.spyOn(aetherClient, "validateDesiredState").mockImplementation(
+      async (value) => value,
+    );
+    const user = userEvent.setup();
+    render(<DesiredStateEditor />);
+    await user.click(screen.getByRole("tab", { name: "YAML" }));
+    const yaml = screen.getByLabelText("Canonical YAML");
+    expect((yaml as HTMLTextAreaElement).value).toContain("chainId: 84532");
+    await user.click(screen.getByRole("button", { name: "Validate YAML" }));
+    expect(await screen.findByText("Schema valid")).toBeVisible();
+  });
 });

@@ -52,7 +52,9 @@ deterministic SDK transport and MSW implements the same HTTP paths.
 
 The browser still defaults to deterministic mock mode. API mode uses the same SDK
 schemas and requires no component changes. Server provider mode separately selects
-validated mock or live RPC/KeeperHub/GitHub adapters.
+validated mock or live RPC/KeeperHub/GitHub adapters plus an optional advisory-only
+OpenAI evidence assistant. Live mode uses bounded retry, rate-limit handling, redacted
+provider telemetry, health state, and server-only credentials.
 
 ## Quality Commands
 

@@ -24,11 +24,11 @@
     MongoDB, and canonical mutations require replica-set transactions.
 14. Browser data mode and server provider mode are independent. `mock|api` selects the
     browser transport; `AETHER_PROVIDER_MODE=mock|live` selects server adapters.
-15. KeeperHub's concrete external API specification was not present in the repository.
-    The live adapter therefore uses the documented Aether-side typed contract:
-    `POST /workflows`, `POST /simulations`, and correlation lookup. Deployment must map
-    or replace this adapter if the provider contract differs; deterministic safety is
-    upstream and unchanged.
+15. KeeperHub's public API documentation is now used for workflow execution, execution
+    status/logs, dry-run contract-call simulation, idempotency, and rate limits. Aether
+    requires a pre-reviewed workflow ID and passes the exact request as input. KeeperHub
+    does not document lookup by Aether correlation alone, so an uncertain response
+    without an execution ID remains retry-locked for manual reconciliation.
 16. `oracleStatus()` is the fixture read contract. Its generated selector is the live
     adapter default; `AETHER_ORACLE_READ_CALLDATA` is retained only as an explicit
     server-side override. The MVP only generates `setOracle(address)` writes.
@@ -43,3 +43,9 @@
 20. The checked-in local deployment addresses are deterministic for a fresh default
     Anvil chain and are public fixture data. A new Anvil state must rerun deployment and
     artifact generation before live backend use.
+21. Optional OpenAI assistance uses the Responses API with strict structured output and
+    defaults to `gpt-5.6-sol` as resolved from current official model guidance on
+    July 30, 2026. Deployments may pin another compatible structured-output model.
+22. Provider secrets normally come directly from the deployment secret manager. If a
+    provider connection is persisted, its credential envelope requires a separately
+    managed 32-byte AES key and tenant/provider-bound authenticated data.

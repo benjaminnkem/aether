@@ -1,9 +1,5 @@
 # Aether Post-MVP Roadmap
 
-This file protects the MVP boundary. Items below are intentionally deferred and must
-not be reintroduced into the current navigation or data model without a new product
-decision.
-
 ## Phase 2 — Live MVP services
 
 - NestJS API and worker implementing the reduced module set.
@@ -28,16 +24,3 @@ decision.
 - Reusable policy and invariant libraries.
 - Standalone approval work queues when volume justifies them.
 - Governance and Safe proposal integrations.
-
-## Phase 5 — Enterprise and ecosystem
-
-- API keys, webhooks, retention controls, exports, billing, and SSO.
-- Additional execution providers and non-EVM observation adapters.
-- Advanced analytics and compliance reports.
-- Mainnet enablement only after security review, operational runbooks, and staged limits.
-
-## Re-entry rule
-
-A deferred feature must have a validated user need, explicit security model, typed
-backend contract, route owner, accessibility specification, test plan, and evidence
-that it cannot be served contextually by one of the seven MVP product areas.

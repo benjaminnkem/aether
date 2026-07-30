@@ -39,7 +39,7 @@ const defaults: DesiredState = {
 export default function DesiredStateEditor() {
   const [mode, setMode] = useState("form");
   const [issues, setIssues] = useState<string[]>([]);
-  const [validated, setValidated] = useState(false);
+  const [validatedFingerprint, setValidatedFingerprint] = useState("");
   const [saved, setSaved] = useState(false);
   const [yamlDraft, setYamlDraft] = useState(() => stringify(defaults));
   const { register, handleSubmit, watch, reset } = useForm<DesiredState>({
@@ -50,6 +50,19 @@ export default function DesiredStateEditor() {
     () => JSON.stringify(values) !== JSON.stringify(defaults),
     [values],
   );
+  const formFingerprint = useMemo(() => JSON.stringify(values), [values]);
+  const yamlFingerprint = useMemo(() => {
+    try {
+      return JSON.stringify(desiredStateSchema.parse(parse(yamlDraft)));
+    } catch {
+      return "";
+    }
+  }, [yamlDraft]);
+  const activeFingerprint = mode === "code" ? yamlFingerprint : formFingerprint;
+  const validated =
+    activeFingerprint.length > 0 && validatedFingerprint === activeFingerprint;
+  const hasUnsavedChanges =
+    mode === "code" ? yamlFingerprint !== JSON.stringify(defaults) : dirty;
 
   const validate = async (input: unknown) => {
     const result = desiredStateSchema.safeParse(input);
@@ -59,12 +72,12 @@ export default function DesiredStateEditor() {
           (issue) => `${issue.path.join(".")}: ${issue.message}`,
         ),
       );
-      setValidated(false);
+      setValidatedFingerprint("");
       return;
     }
     await aetherClient.validateDesiredState(result.data);
     setIssues([]);
-    setValidated(true);
+    setValidatedFingerprint(JSON.stringify(result.data));
     setYamlDraft(stringify(result.data));
   };
 
@@ -74,7 +87,7 @@ export default function DesiredStateEditor() {
       reset(parsed);
       await validate(parsed);
     } catch (error) {
-      setValidated(false);
+      setValidatedFingerprint("");
       setIssues([
         error instanceof Error
           ? `YAML: ${error.message}`
@@ -100,7 +113,7 @@ export default function DesiredStateEditor() {
           <span />
         </Tabs>
         <span className="a-badge">
-          {dirty
+          {hasUnsavedChanges
             ? "Unsaved changes"
             : validated
               ? "Schema valid"
@@ -224,6 +237,7 @@ export default function DesiredStateEditor() {
             <div className="page-actions">
               <Button type="submit">Validate draft</Button>
               <Button
+                type="button"
                 variant="primary"
                 disabled={!validated}
                 onClick={() => setSaved(true)}
@@ -240,12 +254,13 @@ export default function DesiredStateEditor() {
               hint="Form and code modes use the same browser-safe Zod schema."
             >
               <Textarea
+                aria-label="Canonical YAML"
                 className="mono"
                 rows={28}
                 value={yamlDraft}
                 onChange={(event) => {
                   setYamlDraft(event.target.value);
-                  setValidated(false);
+                  setValidatedFingerprint("");
                 }}
               />
             </Field>

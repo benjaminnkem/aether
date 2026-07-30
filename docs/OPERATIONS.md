@@ -24,6 +24,18 @@ Operational response by state:
   failed BullMQ job history before retry.
 - `verified`: independent oracle postcondition and confirmation threshold passed.
 
+Provider health is `healthy`, `degraded`, or `unavailable` with latency, consecutive
+failure count, and a rate-limit-until timestamp when applicable. For KeeperHub 429s,
+honor `Retry-After`; do not bypass the bounded provider retry. If an uncertain
+submission has no external execution ID, keep the submit retry locked and reconcile
+manually with the persisted Aether correlation. Never create a second idempotency key
+for the same plan.
+
+KeeperHub step logs are untrusted evidence and are schema-validated/redacted before
+persistence. Use the independently observed RPC receipt/log/block evidence for
+postconditions. OpenAI outages degrade only advisory analysis and never block
+deterministic investigation, policy, approval, execution, or verification.
+
 Shutdown uses Nest lifecycle hooks to close workers, queues, and Redis. Back up MongoDB
 as the canonical operational and audit store; Redis queue data alone is insufficient
 for recovery.

@@ -9,6 +9,15 @@ browser binary.
 
 Status: implemented.
 
+- Live provider boundaries cover GitHub repository/release/commit/PR provenance,
+  KeeperHub exact dry-run plus workflow submission/status/step logs/transaction
+  correlation, EVM block-pinned reads/logs/receipts/finality/verification, and optional
+  strict-schema OpenAI advisory summaries/plan suggestions.
+- Every live provider uses timeout, bounded safe retry, `Retry-After`, redacted
+  observability, runtime response validation, and health state; deterministic mocks
+  implement the same expanded interfaces.
+- Provider credential envelopes use tenant/provider-bound AES-256-GCM, and uncertain
+  KeeperHub submissions remain retry-locked when no external execution ID is available.
 - NestJS API with MongoDB/Mongoose persistence definitions, Swagger/OpenAPI, JWT tenant
   context, contextual RBAC, strict CORS, Helmet, Zod request/provider validation, and
   structured redacted logs.
@@ -85,11 +94,13 @@ Status: implemented and locally validated.
 ## Complete
 
 - Original SVG brand set, favicon, loading, empty-state, and static hero fallback use.
-- Landing, login, signup, eight-step onboarding, not-found, and error states.
+- Landing, login, signup, eight-step onboarding, not-found, unauthorized, and error
+  states.
 - Exactly seven authenticated areas with five sidebar destinations.
 - Protocol Setup consolidating general, networks, contracts, GitHub, and KeeperHub.
 - Desired State form/YAML modes, runtime validation, explicit units/addresses/roles,
-  diff, provenance, safety summary, and version history.
+  diff, provenance, safety summary, version history, and save invalidation whenever the
+  validated exact draft changes.
 - Drift list/filter/mobile cards and evidence drawer separating facts from inference.
 - Immutable operation detail with policy, simulation, approval, React Flow graph,
   accessible fallback, and graph-step drawer.
@@ -108,25 +119,29 @@ Status: implemented and locally validated.
 - Command palette and notification center.
 - Seven non-MVP mock scenarios.
 
-## Validation evidence — July 30, 2026
+## MVP provider and end-to-end hardening validation — July 30, 2026
 
-- `pnpm format` — passed; Prettier completed.
-- `pnpm lint` — 5/5 package tasks passed with zero warnings.
-- `pnpm check-types` — 5/5 package tasks passed in strict mode.
-- `pnpm test` — 9/9 tasks passed; 10 tests passed: 4 mock-service and 6 web tests.
-- `pnpm build` — 5/5 package tasks passed; Next.js 16.2.12 production build compiled
-  and generated `/`, login, signup, onboarding, favicon, not-found, and the dynamic app route.
-- In-app browser route review — landing, auth, onboarding, all seven authenticated
-  areas, and removed `/app/team` behaved as specified; no captured console errors or
-  horizontal overflow.
-- Mobile 390 × 844 review — drift table became one actionable card, evidence drawer
-  exposed complete facts/inference, and operation graph became a six-step fallback.
-- Playwright — not run in this reduction pass because Chromium is absent and the user
-  explicitly deferred browser installation due network conditions.
+- `pnpm format:check`, `pnpm lint`, and `pnpm check-types` — passed across all
+  runnable workspace tasks, including Foundry formatting, lint, and warning-denying
+  compilation.
+- `pnpm test` — 62 tests passed: 15 contracts, 6 backend, 10 API, 17 worker,
+  5 deterministic mock transport, and 9 web unit/component tests.
+- Focused API integration, API contract, API security, worker idempotency, worker
+  retry, contract gas-report, and contract snapshot gates — passed.
+- `pnpm build` — all 9 runnable production builds passed. The separate API-mode web
+  production build also passed without weakening mock mode.
+- `pnpm audit --prod` — no known production dependency vulnerabilities.
+- The Playwright matrix discovered 20 desktop/mobile cases. All 20 stopped before
+  application launch because Playwright's Chromium headless-shell executable was not
+  installed locally; this is an environment constraint, not a passing browser result.
+- In-app browser inspection covered landing, login, signup, onboarding, unauthorized,
+  all seven authenticated areas, legacy redirects, removed routes, dialogs/drawers,
+  tables/cards, and operation graph fallback at desktop and 390 × 844. It found and
+  verified fixes for mobile protocol-tab overflow and controlled-drawer focus
+  restoration; retained routes had no remaining horizontal overflow.
 
 ## Deferred by phase boundary
 
-- Live Base Sepolia deployment and provider acceptance against actual RPC/KeeperHub
-  accounts.
+- Live Base Sepolia deployment and provider acceptance against actual RPC/KeeperHub,
+  GitHub, and OpenAI accounts; no provider credentials were available in this pass.
 - External identity token issuance/revocation and Safe/governance signing adapters.
-- Optional schema-validated investigation assistant.

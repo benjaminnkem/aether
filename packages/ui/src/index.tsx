@@ -14,6 +14,7 @@ import {
 } from "iconsax-react";
 import {
   forwardRef,
+  useRef,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
   type InputHTMLAttributes,
@@ -189,6 +190,7 @@ export function Dialog({
   children: ReactNode;
   trigger?: ReactNode;
 }) {
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       {trigger ? (
@@ -196,7 +198,20 @@ export function Dialog({
       ) : null}
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="a-overlay" />
-        <DialogPrimitive.Content className="a-dialog">
+        <DialogPrimitive.Content
+          className="a-dialog"
+          onOpenAutoFocus={() => {
+            if (document.activeElement instanceof HTMLElement) {
+              returnFocusRef.current = document.activeElement;
+            }
+          }}
+          onCloseAutoFocus={(event) => {
+            if (returnFocusRef.current?.isConnected) {
+              event.preventDefault();
+              returnFocusRef.current.focus();
+            }
+          }}
+        >
           <div className="a-dialog__header">
             <div>
               <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
@@ -232,11 +247,25 @@ export function Drawer({
   description?: string;
   children: ReactNode;
 }) {
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="a-overlay" />
-        <DialogPrimitive.Content className="a-drawer">
+        <DialogPrimitive.Content
+          className="a-drawer"
+          onOpenAutoFocus={() => {
+            if (document.activeElement instanceof HTMLElement) {
+              returnFocusRef.current = document.activeElement;
+            }
+          }}
+          onCloseAutoFocus={(event) => {
+            if (returnFocusRef.current?.isConnected) {
+              event.preventDefault();
+              returnFocusRef.current.focus();
+            }
+          }}
+        >
           <div className="a-dialog__header">
             <div>
               <DialogPrimitive.Title>{title}</DialogPrimitive.Title>

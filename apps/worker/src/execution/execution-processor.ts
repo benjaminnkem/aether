@@ -9,6 +9,7 @@ import {
   type BoundApproval,
   type ChainReader,
   type DurableJob,
+  type KeeperStepLog,
   type KeeperHubProvider,
   type PolicyEnvelope,
   type Simulator,
@@ -42,6 +43,7 @@ export interface ExecutionRecord {
   transactionHash?: string;
   retryLocked: boolean;
   correctionOperationId?: string;
+  providerStepLogs?: KeeperStepLog[];
 }
 
 export interface ExecutionStore {
@@ -187,7 +189,10 @@ export class ExecutionProcessor {
       );
     }
     const status = keeperStatusSchema.parse(
-      await this.keeperHub.reconcile(execution.providerCorrelationId),
+      await this.keeperHub.reconcile(
+        execution.providerCorrelationId,
+        execution.workflowId,
+      ),
     );
     if (status.status === "unknown" || status.status === "pending") {
       await this.store.update(
@@ -202,18 +207,25 @@ export class ExecutionProcessor {
       throw pending;
     }
     if (status.status === "failed") {
+      const providerStepLogs = await this.keeperHub.getStepLogs(
+        status.workflowId,
+      );
       return this.store.update(
         job,
-        { status: "failed", retryLocked: false },
+        { status: "failed", retryLocked: false, providerStepLogs },
         "execution.failed",
       );
     }
+    const providerStepLogs = await this.keeperHub.getStepLogs(
+      status.workflowId,
+    );
     const confirmed = await this.store.update(
       job,
       {
         status: "confirmed",
         retryLocked: false,
         transactionHash: status.transactionHash,
+        providerStepLogs,
       },
       "execution.confirmed",
     );

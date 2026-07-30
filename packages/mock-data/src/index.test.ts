@@ -53,4 +53,24 @@ describe("mock scenario engine", () => {
     expect(dashboard.execution.status).toBe("unknown");
     expect(dashboard.execution.reconciliation).toContain("two RPC providers");
   });
+
+  it("keeps every definitive safety outcome distinct", () => {
+    const healthy = createScenarioDashboard("healthy");
+    const approval = createScenarioDashboard("approval-execution");
+    const missingRole = createScenarioDashboard("missing-role");
+    const partial = createScenarioDashboard("partial-execution");
+
+    expect(healthy.records.drift).toHaveLength(0);
+    expect(healthy.protocols[0]?.health).toBe(100);
+    expect(approval.operation.status).toBe("approved");
+    expect(missingRole.execution).toMatchObject({
+      status: "failed",
+      txHash: undefined,
+    });
+    expect(missingRole.execution.error).toContain("before submission");
+    expect(partial.execution).toMatchObject({
+      status: "partial",
+    });
+    expect(partial.execution.reconciliation).toContain("forward-correction");
+  });
 });

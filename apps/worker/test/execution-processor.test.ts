@@ -31,6 +31,12 @@ const request = {
   desiredOracle: "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311",
 };
 const planHash = ExecutionSafety.planHash(request, "dsv-active");
+const providerHealth = {
+  status: "healthy" as const,
+  checkedAt: "2026-07-30T00:00:00.000Z",
+  latencyMs: 0,
+  consecutiveFailures: 0,
+};
 const baseExecution: ExecutionRecord = {
   executionId: job.resourceId,
   organizationId: job.organizationId,
@@ -120,6 +126,7 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
       };
     });
     keeperHub = {
+      getHealth: () => ({ provider: "keeperhub", ...providerHealth }),
       submit: async (idempotencyKey, submittedPlanHash, submittedRequest) =>
         submit(idempotencyKey, submittedPlanHash, submittedRequest),
       reconcile: vi.fn(async (providerCorrelationId: string) => ({
@@ -130,9 +137,13 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
         blockNumber: 17_924_125,
         confirmations: 12,
       })),
+      getStepLogs: vi.fn(async () => []),
     };
     chainReader = {
+      getHealth: () => ({ provider: "evm-rpc", ...providerHealth }),
       observeOracle: vi.fn(),
+      getLogs: vi.fn(async () => []),
+      getReceipt: vi.fn(),
       verifyOracle: vi.fn(async () => ({
         verified: true,
         oracle: request.desiredOracle,
@@ -145,7 +156,10 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
         providerCorrelationId: "rpc-verify",
       })),
     };
-    simulator = { simulate: vi.fn() };
+    simulator = {
+      getHealth: () => ({ provider: "keeperhub", ...providerHealth }),
+      simulate: vi.fn(),
+    };
   });
 
   it("persists provider correlation before submit and never resubmits unknown outcomes", async () => {

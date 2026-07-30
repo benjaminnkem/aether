@@ -1718,6 +1718,11 @@ pre {
     flex-wrap: wrap;
     gap: 8px 12px;
   }
+  .a-tabs {
+    display: flex;
+    max-width: 100%;
+    overflow-x: auto;
+  }
   .desktop-table {
     display: none;
   }

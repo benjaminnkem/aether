@@ -6,6 +6,7 @@
 - `/login` — sign in.
 - `/signup` — optional account creation.
 - `/onboarding` — eight-step minimal protocol setup.
+- `/unauthorized` — explicit access-denied support state with no mutation claim.
 - framework `not-found` and `error` states.
 
 Product, Security, and How it works are anchors on `/`, not separate routes.

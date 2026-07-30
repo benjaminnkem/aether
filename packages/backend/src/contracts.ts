@@ -11,6 +11,23 @@ export type TenantContext = z.infer<typeof tenantContextSchema>;
 
 const evmAddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 const bytes32Schema = z.string().regex(/^0x[a-fA-F0-9]{64}$/);
+const commitShaSchema = z.string().regex(/^[a-f0-9]{40}$/i);
+
+export const providerHealthSchema = z.object({
+  provider: z.enum(["evm-rpc", "keeperhub", "github", "openai"]),
+  status: z.enum(["healthy", "degraded", "unavailable"]),
+  checkedAt: z.string().datetime(),
+  latencyMs: z.number().int().nonnegative().optional(),
+  consecutiveFailures: z.number().int().nonnegative(),
+  rateLimitedUntil: z.string().datetime().optional(),
+  detail: z.string().max(240).optional(),
+});
+
+export type ProviderHealth = z.infer<typeof providerHealthSchema>;
+
+export interface HealthCheckedProvider {
+  getHealth(): ProviderHealth;
+}
 
 export const transactionRequestSchema = z.object({
   chainId: z.number().int().positive(),
@@ -59,7 +76,50 @@ export const keeperStatusSchema = z.object({
   transactionHash: bytes32Schema.optional(),
   blockNumber: z.number().int().positive().optional(),
   confirmations: z.number().int().nonnegative().optional(),
+  transactions: z
+    .array(
+      z.object({
+        hash: bytes32Schema,
+        stepId: z.string().min(1),
+        stepName: z.string().min(1),
+        chainId: z.number().int().positive().optional(),
+      }),
+    )
+    .optional(),
+  steps: z
+    .array(
+      z.object({
+        stepId: z.string().min(1),
+        stepName: z.string().min(1),
+        status: z.enum([
+          "pending",
+          "running",
+          "success",
+          "failed",
+          "cancelled",
+        ]),
+      }),
+    )
+    .optional(),
 });
+
+export const keeperStepLogSchema = z.object({
+  logId: z.string().min(1),
+  workflowId: z.string().min(1),
+  stepId: z.string().min(1),
+  stepName: z.string().min(1),
+  stepType: z.string().min(1),
+  status: z.enum(["pending", "running", "success", "failed", "cancelled"]),
+  transactionHash: bytes32Schema.optional(),
+  error: z.string().max(1_000).optional(),
+  startedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  evidence: z.record(z.string(), z.unknown()),
+});
+
+export const keeperStepLogsSchema = z.array(keeperStepLogSchema);
+export type KeeperStepLog = z.infer<typeof keeperStepLogSchema>;
 
 export const chainObservationSchema = z.object({
   chainId: z.number().int().positive(),
@@ -85,20 +145,108 @@ export const verificationResultSchema = z.object({
   providerCorrelationId: z.string().min(1),
 });
 
+export const chainLogSchema = z.object({
+  address: evmAddressSchema,
+  blockNumber: z.number().int().positive(),
+  blockHash: bytes32Schema,
+  transactionHash: bytes32Schema,
+  logIndex: z.number().int().nonnegative(),
+  topics: z.array(bytes32Schema),
+  data: z.string().regex(/^0x[a-fA-F0-9]*$/),
+  removed: z.boolean(),
+});
+
+export const chainReceiptSchema = z.object({
+  transactionHash: bytes32Schema,
+  blockNumber: z.number().int().positive(),
+  blockHash: bytes32Schema,
+  success: z.boolean(),
+  confirmations: z.number().int().nonnegative(),
+  canonical: z.boolean(),
+  logs: z.array(chainLogSchema),
+});
+
 export const githubReleaseSchema = z.object({
   repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
   tag: z.string().min(1),
-  commitSha: z.string().regex(/^[a-f0-9]{40}$/i),
+  commitSha: commitShaSchema,
   url: z.string().url(),
   publishedAt: z.string().datetime(),
 });
 
-export interface ChainReader {
+export const githubRepositorySchema = z.object({
+  repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
+  defaultBranch: z.string().min(1),
+  url: z.string().url(),
+  visibility: z.enum(["public", "private", "internal"]),
+  archived: z.boolean(),
+  pushedAt: z.string().datetime(),
+});
+
+export const githubCommitSchema = z.object({
+  repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
+  commitSha: commitShaSchema,
+  url: z.string().url(),
+  message: z.string().min(1),
+  authoredAt: z.string().datetime(),
+  verified: z.boolean(),
+});
+
+export const githubPullRequestSchema = z.object({
+  repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
+  number: z.number().int().positive(),
+  url: z.string().url(),
+  state: z.enum(["open", "closed"]),
+  merged: z.boolean(),
+  headCommitSha: commitShaSchema,
+  baseCommitSha: commitShaSchema,
+  updatedAt: z.string().datetime(),
+});
+
+export const investigationInputSchema = z.object({
+  findingId: z.string().min(1),
+  observedFacts: z.array(z.string().min(1)).min(1).max(30),
+  desiredStateFacts: z.array(z.string().min(1)).min(1).max(30),
+  allowedChainIds: z.array(z.number().int().positive()).min(1),
+  allowedTargets: z.array(evmAddressSchema).min(1),
+  allowedFunctions: z.array(z.literal("setOracle(address)")).min(1),
+});
+
+export const investigationSuggestionSchema = z.object({
+  summary: z.string().min(1).max(2_000),
+  evidenceReferences: z.array(z.string().min(1)).min(1).max(30),
+  suggestedPlan: z
+    .object({
+      chainId: z.number().int().positive(),
+      target: evmAddressSchema,
+      functionSignature: z.literal("setOracle(address)"),
+      desiredOracle: evmAddressSchema,
+      rationale: z.string().min(1).max(1_000),
+    })
+    .optional(),
+  advisoryOnly: z.literal(true),
+});
+
+export type InvestigationInput = z.infer<typeof investigationInputSchema>;
+
+export interface ChainReader extends HealthCheckedProvider {
   observeOracle(
     chainId: number,
     contract: string,
     blockNumber?: number,
   ): Promise<z.input<typeof chainObservationSchema>>;
+  getLogs(input: {
+    chainId: number;
+    address: string;
+    fromBlock: number;
+    toBlock: number;
+    topics?: string[];
+  }): Promise<z.input<typeof chainLogSchema>[]>;
+  getReceipt(
+    chainId: number,
+    transactionHash: string,
+    minimumConfirmations: number,
+  ): Promise<z.input<typeof chainReceiptSchema> | undefined>;
   verifyOracle(
     request: TransactionRequest,
     minimumConfirmations: number,
@@ -106,7 +254,7 @@ export interface ChainReader {
   ): Promise<z.input<typeof verificationResultSchema>>;
 }
 
-export interface Simulator {
+export interface Simulator extends HealthCheckedProvider {
   simulate(
     planHash: string,
     request: TransactionRequest,
@@ -114,7 +262,7 @@ export interface Simulator {
   ): Promise<z.input<typeof simulationResultSchema>>;
 }
 
-export interface KeeperHubProvider {
+export interface KeeperHubProvider extends HealthCheckedProvider {
   submit(
     idempotencyKey: string,
     planHash: string,
@@ -122,14 +270,35 @@ export interface KeeperHubProvider {
   ): Promise<z.input<typeof keeperSubmissionSchema>>;
   reconcile(
     providerCorrelationId: string,
+    workflowId?: string,
   ): Promise<z.input<typeof keeperStatusSchema>>;
+  getStepLogs(
+    workflowId: string,
+  ): Promise<z.input<typeof keeperStepLogSchema>[]>;
 }
 
-export interface GitHubProvider {
+export interface GitHubProvider extends HealthCheckedProvider {
+  getRepository(
+    repository: string,
+  ): Promise<z.input<typeof githubRepositorySchema>>;
   getRelease(
     repository: string,
     tag: string,
   ): Promise<z.input<typeof githubReleaseSchema>>;
+  getCommit(
+    repository: string,
+    reference: string,
+  ): Promise<z.input<typeof githubCommitSchema>>;
+  getPullRequest(
+    repository: string,
+    number: number,
+  ): Promise<z.input<typeof githubPullRequestSchema>>;
+}
+
+export interface InvestigationAssistant extends HealthCheckedProvider {
+  suggest(
+    input: InvestigationInput,
+  ): Promise<z.input<typeof investigationSuggestionSchema>>;
 }
 
 export const queueNames = [

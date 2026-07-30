@@ -6,6 +6,7 @@ import {
   encodeSetOracleCalldata,
   getArcadiaDeployment,
 } from "../src/contract-artifacts";
+import { CredentialCipher } from "../src/security";
 
 const request = buildSetOracleTransactionRequest({
   chainId: 84532,
@@ -109,5 +110,23 @@ describe("ExecutionSafety", () => {
         approvals: [],
       }),
     ).toThrowError(/exact approved/);
+  });
+});
+
+describe("CredentialCipher", () => {
+  const scope = {
+    organizationId: "org-arcadia",
+    protocolId: "arcadia",
+    provider: "keeperhub",
+  };
+
+  it("encrypts credentials with tenant/provider-bound authenticated data", () => {
+    const cipher = new CredentialCipher(Buffer.alloc(32, 7).toString("base64"));
+    const encrypted = cipher.encrypt("kh_server_only", scope);
+    expect(encrypted).not.toContain("kh_server_only");
+    expect(cipher.decrypt(encrypted, scope)).toBe("kh_server_only");
+    expect(() =>
+      cipher.decrypt(encrypted, { ...scope, protocolId: "other-protocol" }),
+    ).toThrow();
   });
 });

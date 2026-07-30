@@ -50,10 +50,11 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
   });
 
   it("keeps an unavailable receipt in the unknown-outcome path", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => response(null)),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response("0x14a34"))
+      .mockResolvedValueOnce(response(null));
+    vi.stubGlobal("fetch", fetchMock);
     const reader = new JsonRpcChainReader();
     await expect(
       reader.verifyOracle(request, 12, transactionHash),
@@ -63,6 +64,7 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
   it("waits for the configured confirmation threshold", async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(response("0x14a34"))
       .mockResolvedValueOnce(
         response({
           transactionHash,
@@ -71,7 +73,7 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
           status: "0x1",
         }),
       )
-      .mockResolvedValueOnce(response("0x68"));
+      .mockResolvedValue(response("0x68"));
     vi.stubGlobal("fetch", fetchMock);
     const reader = new JsonRpcChainReader();
     await expect(
@@ -101,9 +103,43 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
     );
   });
 
+  it("reads and validates bounded block logs", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response("0x14a34"))
+      .mockResolvedValueOnce(
+        response([
+          {
+            address: market,
+            blockNumber: "0x64",
+            blockHash: receiptBlockHash,
+            transactionHash,
+            logIndex: "0x0",
+            topics: [`0x${"3".repeat(64)}`],
+            data: "0x",
+            removed: false,
+          },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const reader = new JsonRpcChainReader();
+    const logs = await reader.getLogs({
+      chainId,
+      address: market,
+      fromBlock: 100,
+      toBlock: 100,
+    });
+    expect(logs[0]).toMatchObject({
+      blockNumber: 100,
+      logIndex: 0,
+      removed: false,
+    });
+  });
+
   it("verifies a canonical, fresh postcondition only after finality", async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(response("0x14a34"))
       .mockResolvedValueOnce(
         response({
           transactionHash,
@@ -116,6 +152,7 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
       .mockResolvedValueOnce(
         response({ hash: receiptBlockHash, number: "0x64" }),
       )
+      .mockResolvedValueOnce(response("0x6f"))
       .mockResolvedValueOnce(response("0x14a34"))
       .mockResolvedValueOnce(response({ hash: headBlockHash, number: "0x6f" }))
       .mockResolvedValueOnce(

@@ -209,6 +209,7 @@ export const modelDefinitions = [
       workflowId: String,
       transactionHash: String,
       retryLocked: Boolean,
+      providerStepLogs: [Schema.Types.Mixed],
     })
       .index(
         { organizationId: 1, protocolId: 1, executionId: 1 },

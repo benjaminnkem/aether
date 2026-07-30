@@ -25,6 +25,11 @@ signing boundary in this phase. No private key is accepted or stored. Protocol s
 rejects credential-, secret-, token-, mnemonic-, signature-, and private-key-shaped
 fields. Live provider credentials remain server-only.
 
+Stored provider credentials use AES-256-GCM envelopes with random nonces and
+organization/protocol/provider identity as authenticated associated data. The
+encryption key is supplied separately as a base64-encoded 32-byte server secret and is
+never stored in MongoDB. Provider credential fields are excluded from normal queries.
+
 Logs use Nest JSON output and recursively redact authorization, cookies, credentials,
 tokens, secrets, seeds, mnemonics, signatures, and private keys. Audit/outbox payloads
 retain identifiers and redacted evidence, not raw headers or credentials.
@@ -37,6 +42,11 @@ secret, and MongoDB transactions require a replica set.
 Current MVP limitation: authentication uses a locally verified JWT boundary rather
 than a selected external identity provider. Production deployments must integrate
 token issuance and revocation at that boundary.
+
+Provider HTTP retries are bounded and allowed only for reads or explicitly idempotent
+requests. KeeperHub submission carries a persisted idempotency key. A 429 honors
+`Retry-After`; provider URLs are logged without query strings, and headers/bodies are
+not placed in observability events.
 
 The contracts are unaudited test fixtures, custody no value, and are prohibited from
 mainnet or production protocol use. Deployment scripts contain no signing material.

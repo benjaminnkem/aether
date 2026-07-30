@@ -7,11 +7,15 @@ import {
   HttpGitHubProvider,
   HttpKeeperHubProvider,
   HttpSimulator,
+  INVESTIGATION_ASSISTANT,
   JsonRpcChainReader,
   KEEPER_HUB,
   MockChainReader,
+  MockGitHubProvider,
+  MockInvestigationAssistant,
   MockKeeperHubProvider,
   MockSimulator,
+  OpenAiInvestigationAssistant,
   SIMULATOR,
 } from "./providers/providers";
 import { WorkerRuntime } from "./worker-runtime";
@@ -31,6 +35,8 @@ import { WorkerRuntime } from "./worker-runtime";
     MockChainReader,
     MockSimulator,
     MockKeeperHubProvider,
+    MockGitHubProvider,
+    MockInvestigationAssistant,
     HttpGitHubProvider,
     {
       provide: CHAIN_READER,
@@ -53,7 +59,21 @@ import { WorkerRuntime } from "./worker-runtime";
           ? new HttpKeeperHubProvider()
           : new MockKeeperHubProvider(),
     },
-    { provide: GITHUB_PROVIDER, useExisting: HttpGitHubProvider },
+    {
+      provide: GITHUB_PROVIDER,
+      useFactory: () =>
+        process.env.AETHER_PROVIDER_MODE === "live"
+          ? new HttpGitHubProvider()
+          : new MockGitHubProvider(),
+    },
+    {
+      provide: INVESTIGATION_ASSISTANT,
+      useFactory: () =>
+        process.env.AETHER_PROVIDER_MODE === "live" &&
+        process.env.AETHER_OPENAI_ENABLED === "true"
+          ? new OpenAiInvestigationAssistant()
+          : new MockInvestigationAssistant(),
+    },
     WorkerRuntime,
   ],
 })

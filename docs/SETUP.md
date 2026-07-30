@@ -47,3 +47,8 @@ The default server provider mode is deterministic mock mode; it still uses real
 MongoDB, outbox, Redis, queues, authorization, and verification state transitions.
 Live provider mode additionally requires the server-only variables in
 `docs/ENVIRONMENT.md`.
+
+KeeperHub live mode requires one pre-reviewed testnet workflow ID. Aether sends the
+immutable plan hash and exact transaction as workflow input, uses KeeperHub's dry-run
+contract-call endpoint before approval/submission, and reads execution status and step
+logs afterward. OpenAI remains disabled unless `AETHER_OPENAI_ENABLED=true`.

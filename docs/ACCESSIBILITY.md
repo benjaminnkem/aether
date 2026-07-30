@@ -12,6 +12,10 @@
 - Reduced motion disables smooth scroll, transitions, WebGL animation, and node pulses.
 - Three.js failure, reduced-motion, and mobile contexts use the static SVG state field.
 - Unknown and partial outcomes use explicit safety language and never rely on color.
+- The unauthorized state explains that no action occurred and offers keyboard-operable
+  recovery links.
+- Playwright coverage exercises drawer Escape behavior, reduced-motion static hero,
+  mobile graph fallback, and explicit missing-role/partial/unknown safety language.
 
 The MVP removed the global command palette and notification drawer, reducing focus
 surfaces that were not needed for the core journey.

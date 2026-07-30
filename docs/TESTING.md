@@ -46,10 +46,25 @@ forward correction. JSON-RPC tests additionally cover finality thresholds, canon
 receipt hashes, reorg-aware reads, unknown receipts, and fresh independent
 postconditions.
 
+Provider adapter tests also cover exact KeeperHub dry-run request parity, idempotent
+workflow submission, status/transaction correlation, redacted step logs, bounded
+rate-limit retry, non-idempotent no-retry behavior, provider health, deterministic
+GitHub/OpenAI mocks, and bounded EVM log reads. Credential tests bind AES-GCM envelopes
+to organization, protocol, and provider.
+
+The Playwright matrix covers onboarding resume, the healthy-to-verified journey,
+critical evidence drawer and Escape handling, exact approval, missing-role simulation
+failure before submission, partial forward correction, unknown-outcome retry lock,
+audit correlation, legacy redirects, removed-route 404s, reduced motion, and mobile
+operation fallback.
+
 Production startup is smoke-tested from compiled output. Mongo/Redis end-to-end
 infrastructure testing requires the local replica set and Redis from `compose.yaml`;
 the deterministic processor tests do not need external services.
 
-Playwright 1.62.1 is configured. Its Chromium binary is not installed because the user
-deferred the network download. Do not claim browser execution until the binary exists;
-run `pnpm --filter @aether/web test:e2e` when it becomes available.
+Playwright 1.62.1 is configured. On July 30, 2026,
+`pnpm --filter @aether/web test:e2e` discovered all 20 desktop/mobile cases, but each
+stopped before application launch because the local Chromium headless-shell executable
+was absent from the Playwright cache. This is not a passing result. Run the same command
+after installing the matching Chromium binary; do not alter the tests or claim browser
+execution in the meantime.
