@@ -1,0 +1,14 @@
+{
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": ".",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

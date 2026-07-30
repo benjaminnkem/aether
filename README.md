@@ -1,17 +1,20 @@
 # Aether
 
 Aether is a desired-state control plane for smart-contract protocols. The focused MVP
-frontend covers protocol setup, desired state, drift investigation, correction
-operations, KeeperHub execution evidence, and audit history.
+covers protocol setup, desired state, drift investigation, deterministic correction
+operations, KeeperHub execution, independent verification, realtime events, and audit
+history.
 
 ## Quick Start
 
-Requirements: Node.js 20.9+ and pnpm 10.15.1.
+Requirements: Node.js 20.9+, pnpm 10.15.1, MongoDB configured as a replica set,
+and Redis 7+.
 
 ```bash
 pnpm install
-cp apps/web/.env.example apps/web/.env.local
-pnpm --filter @aether/web dev
+cp .env.example .env
+docker compose up -d
+pnpm dev
 ```
 
 Open `http://localhost:3000`. Mock mode requires no credentials.
@@ -22,7 +25,7 @@ NEXT_PUBLIC_AETHER_DATA_MODE=mock
 NEXT_PUBLIC_AETHER_API_URL=/v1
 ```
 
-The future API switch is:
+The live API switch is:
 
 ```env
 NEXT_PUBLIC_AETHER_DATA_MODE=api
@@ -35,14 +38,19 @@ deterministic SDK transport and MSW implements the same HTTP paths.
 ## Workspace
 
 - `apps/web` — Next.js 16 App Router marketing and product UI.
+- `apps/api` — NestJS HTTP API, MongoDB persistence, Swagger, authorization, and SSE.
+- `apps/worker` — standalone NestJS BullMQ worker and provider adapters.
+- `packages/backend` — server-only schemas, deterministic safety checks, queue contracts,
+  Mongoose models, hashing, and redaction.
 - `packages/ui` — original Aether accessible component library.
 - `packages/shared` — browser-safe Zod schemas and domain types.
 - `packages/sdk` — typed Axios client and realtime contract.
 - `packages/mock-data` — deterministic scenarios and MSW handlers.
 - `packages/eslint-config`, `packages/typescript-config` — shared quality configuration.
 
-Backend, worker, contracts, and live provider adapters are intentionally not implemented.
-The six deterministic mock scenarios require no credentials.
+The browser still defaults to deterministic mock mode. API mode uses the same SDK
+schemas and requires no component changes. Server provider mode separately selects
+validated mock or live RPC/KeeperHub/GitHub adapters.
 
 ## Quality Commands
 
@@ -55,4 +63,5 @@ pnpm test:e2e
 pnpm build
 ```
 
-See `docs/FRONTEND_ROUTES.md`, `docs/MOCK_SCENARIOS.md`, and `docs/IMPLEMENTATION_STATUS.md`.
+Backend-specific focused gates are documented in `docs/TESTING.md`. See
+`docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/IMPLEMENTATION_STATUS.md`.

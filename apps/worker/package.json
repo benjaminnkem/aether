@@ -1,0 +1,37 @@
+{
+  "name": "@aether/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "lint": "eslint src test --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:idempotency": "vitest run test/execution-processor.test.ts",
+    "test:retry": "vitest run test/execution-processor.test.ts"
+  },
+  "dependencies": {
+    "@aether/backend": "workspace:*",
+    "@nestjs/common": "11.1.28",
+    "@nestjs/core": "11.1.28",
+    "@nestjs/mongoose": "11.0.3",
+    "bullmq": "6.0.0",
+    "ioredis": "5.7.0",
+    "mongoose": "8.24.2",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "11.0.16",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.39.1",
+    "typescript": "5.9.2",
+    "vitest": "4.1.10"
+  }
+}

@@ -15,3 +15,20 @@
     page; separate public content routes are removed.
 11. Operation and execution detail routes remain dynamic even though mock mode
     seeds one primary oracle-restoration flow.
+12. Backend scope remains exactly one seeded organization (`org-arcadia`) and protocol
+    (`arcadia`). Tenant identifiers are retained to enforce isolation, not to expose a
+    portfolio or administration surface.
+13. Local API tests use an in-memory state repository. The deployable API defaults to
+    MongoDB, and canonical mutations require replica-set transactions.
+14. Browser data mode and server provider mode are independent. `mock|api` selects the
+    browser transport; `AETHER_PROVIDER_MODE=mock|live` selects server adapters.
+15. KeeperHub's concrete external API specification was not present in the repository.
+    The live adapter therefore uses the documented Aether-side typed contract:
+    `POST /workflows`, `POST /simulations`, and correlation lookup. Deployment must map
+    or replace this adapter if the provider contract differs; deterministic safety is
+    upstream and unchanged.
+16. The configured oracle getter calldata is deployment-specific and supplied by
+    `AETHER_ORACLE_READ_CALLDATA`. The MVP only generates `setOracle(address)` writes.
+17. JWT issuance/revocation is an external authentication boundary. This phase verifies
+    signed issuer/audience/tenant claims and deliberately does not add a team or identity
+    administration module.

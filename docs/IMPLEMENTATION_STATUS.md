@@ -5,6 +5,44 @@
 Status: implemented and locally validated, except for the user-deferred Playwright
 browser binary.
 
+## Reduced MVP API and worker
+
+Status: implemented.
+
+- NestJS API with MongoDB/Mongoose persistence definitions, Swagger/OpenAPI, JWT tenant
+  context, contextual RBAC, strict CORS, Helmet, Zod request/provider validation, and
+  structured redacted logs.
+- Browser-compatible dashboard, scenario, advance, contextual approval, and desired
+  validation endpoints plus reduced setup, versions, observations, drift, operations,
+  executions, audit, and SSE resources.
+- Transactional audit/outbox mutation boundary and durable tenant-scoped event sequence.
+- Standalone NestJS worker with all seven BullMQ queues, stable job IDs, bounded retry,
+  outbox publication, validated mock/live adapters, KeeperHub correlation persistence,
+  reconciliation lock, independent verification, and forward correction.
+- Shared server safety package with Mongo collection/index definitions and deterministic
+  authorization checks.
+- API integration/contract/security tests and worker idempotency/retry tests.
+
+## Backend validation evidence — July 30, 2026
+
+- `pnpm format:check` — passed.
+- `pnpm lint` — 8 runnable workspace lint tasks passed with zero warnings.
+- `pnpm check-types` — 8 strict TypeScript tasks passed.
+- `pnpm test` — 27 tests passed: 10 API, 4 worker, 3 backend safety,
+  4 mock-service, and 6 web tests.
+- Focused API integration, browser-contract, API security, worker idempotency, and
+  worker retry commands — passed.
+- `pnpm audit --prod` — no known vulnerabilities after patched transitive overrides.
+- `pnpm build` — API, worker, web, and shared package production builds passed.
+- API-mode frontend production build with
+  `NEXT_PUBLIC_AETHER_DATA_MODE=api` — passed without component changes.
+- Compiled API smoke — health, OpenAPI (18 paths), and typed dashboard passed.
+- Isolated MongoDB replica-set plus Redis smoke — transactional outbox published the
+  execution job; the worker submitted, reconciled, and independently reached
+  `verified`, with seven correlated audit events.
+- Playwright browser execution remains deferred because its Chromium binary is absent,
+  as recorded by the frontend phase.
+
 ## Complete
 
 - Original SVG brand set, favicon, loading, empty-state, and static hero fallback use.
@@ -49,7 +87,7 @@ browser binary.
 
 ## Deferred by phase boundary
 
-- NestJS API and worker, MongoDB, Redis/BullMQ, outbox, and durable SSE.
 - Foundry contracts, live chain observation, and testnet deployment.
-- Live KeeperHub, GitHub, EVM RPC, OpenAI, and Safe/governance adapters.
-- Server-enforced authentication, tenancy, authorization, idempotency, and persistence.
+- Provider-specific acceptance testing against actual KeeperHub and RPC accounts.
+- External identity token issuance/revocation and Safe/governance signing adapters.
+- Optional schema-validated investigation assistant.

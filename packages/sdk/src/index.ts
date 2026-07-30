@@ -8,6 +8,10 @@ import {
   type Scenario,
 } from "@aether/shared";
 
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
 export interface AetherTransport {
   getDashboard(organizationId: string, protocolId: string): Promise<Dashboard>;
   setScenario(scenario: Scenario): Promise<Dashboard>;
@@ -93,7 +97,9 @@ export class AetherClient {
   }
 }
 
-export const aetherClient = new AetherClient("/v1");
+export const aetherClient = new AetherClient(
+  process.env.NEXT_PUBLIC_AETHER_API_URL ?? "/v1",
+);
 export const queryKeys = {
   dashboard: (organizationId: string, protocolId: string) =>
     ["dashboard", organizationId, protocolId] as const,

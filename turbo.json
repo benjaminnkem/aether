@@ -1,11 +1,30 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "AETHER_AUTH_MODE",
+    "AETHER_JWT_SECRET",
+    "AETHER_ORGANIZATION_ID",
+    "AETHER_PERSISTENCE_MODE",
+    "AETHER_PROTOCOL_ID",
+    "AETHER_PROVIDER_MODE",
+    "AETHER_RPC_URL",
+    "AETHER_ORACLE_READ_CALLDATA",
+    "AETHER_WEB_ORIGINS",
+    "GITHUB_READ_TOKEN",
+    "KEEPERHUB_API_TOKEN",
+    "KEEPERHUB_BASE_URL",
+    "MONGODB_URI",
+    "NEXT_PUBLIC_AETHER_API_URL",
+    "NODE_ENV",
+    "PORT",
+    "REDIS_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -14,8 +33,7 @@
       "dependsOn": ["^check-types"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "dependsOn": ["^build"]
     },
     "dev": {
       "cache": false,
