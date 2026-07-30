@@ -1,0 +1,20 @@
+# Verify supported model/settings in your installed Codex version before copying.
+model = "gpt-5.6"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[features]
+apps = true
+hooks = true
+
+[mcp_servers.keeperhub]
+url = "https://app.keeperhub.com/mcp"
+bearer_token_env_var = "KEEPERHUB_API_KEY"
+required = false
+tool_timeout_sec = 120
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
+required = false
+tool_timeout_sec = 120
