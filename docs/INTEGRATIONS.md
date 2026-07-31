@@ -1,37 +1,121 @@
-# Integrations
+# Live Integrations
 
-The worker exposes identical typed mock/live boundaries for EVM observation,
-exact-request simulation, KeeperHub submission/reconciliation/logs, read-only GitHub
-provenance, and optional OpenAI evidence assistance. Every response is runtime
-validated before entering domain state. All adapters expose health state and share
-timeouts, bounded idempotent retry, rate-limit handling, and redacted telemetry.
+## Global requirements
 
-KeeperHub receives a server-generated correlation/idempotency value, exact plan hash,
-and exact transaction request. Aether uses `POST /api/execute/contract-call` with
-`simulate: true`, then submits the pre-reviewed workflow through
-`POST /api/workflows/{workflowId}/execute`. It reads status and transaction correlation
-from `/api/workflows/executions/{executionId}/status` and redacted node evidence from
-the logs endpoint. Aether persists intent before the call and verifies through the
-chain reader. KeeperHub is execution transport, not an authority boundary.
+Every provider adapter must:
 
-The JSON-RPC adapter performs block-pinned `eth_call` observations and validates RPC
-envelopes, chain identity, block identity, ABI tuple encoding, receipt status,
-confirmations, canonical receipt hashes, and verification results. It calls the
-generated `oracleStatus()` selector and requires both the desired address and a fresh
-source after finality. The MVP permits only the configured test-chain
-`setOracle(address)` correction with zero value.
+- have a strict request and response schema;
+- expose health and configuration state;
+- use bounded timeouts;
+- retry only safe/idempotent operations;
+- honor provider rate-limit headers;
+- propagate request/correlation IDs;
+- redact secrets;
+- persist evidence required for reconciliation;
+- never fall back to mock data.
 
-Foundry produces `ArcadiaMarket` and `MockOracle` ABIs, method identifiers, and public
-deployment data in the `@aether/contracts/server` export. The safety package consumes
-this artifact to build and validate exact calldata. This export is intentionally not
-referenced by any browser package.
+## KeeperHub
 
-The GitHub adapter is read-only and validates repository metadata, releases,
-40-character commit SHAs and verification state, and pull-request head/base provenance.
-Its optional token is server-only. Safe/governance remains authority metadata; signing
-integration is excluded.
+KeeperHub is the execution transport, not Aether’s authority boundary.
 
-The optional OpenAI Responses API adapter returns only a strict schema-validated
-evidence summary and typed `setOracle(address)` suggestion marked `advisoryOnly`.
-It cannot emit approvals, policy mutations, signatures, provider calls, or verification
-results. Invalid/refused/missing structured output is rejected.
+### Canonical correction path
+
+1. Call `GET /api/chains`.
+2. Confirm chain ID `84532` is enabled and marked testnet.
+3. Build the exact transaction request deterministically from generated ABI artifacts.
+4. Persist plan hash, request hash, chain, target, function, arguments, value, approval binding, and idempotency key.
+5. Call `POST /api/execute/contract-call` with the exact request plus `simulate: true`.
+6. Require `success: true` and `wouldRevert: false`.
+7. Bind the simulation evidence to the immutable operation and approval.
+8. Remove only the `simulate` field.
+9. Submit the same request once with `Idempotency-Key`.
+10. Persist the returned direct execution ID immediately.
+11. Call `GET /api/execute/{executionId}/status`.
+12. Honor `X-Poll-Interval-Hint`.
+13. Persist terminal status, transaction hash, transaction link, gas evidence, and provider request IDs.
+14. Independently verify receipt, finality, canonical block, oracle address, and freshness through Aether’s RPC adapter.
+
+### Unknown outcome
+
+A timeout after submission is not a failure and not permission to resubmit.
+
+- mark execution `unknown`;
+- lock automatic resubmission;
+- query KeeperHub using the persisted execution/correlation/idempotency evidence;
+- query the chain for matching evidence;
+- move to `reconciling`;
+- resolve to failed, submitted, confirmed, partial, or verified.
+
+### Safe limitation
+
+KeeperHub simulation may use the organization EOA rather than Safe `msg.sender` semantics. Aether must show this limitation and must not call a simulation “Safe-accurate” unless it is actually executed from the same authority context.
+
+## RPC
+
+The RPC adapter must:
+
+- validate `eth_chainId`;
+- pin reads to explicit block numbers;
+- bound log ranges;
+- validate JSON-RPC envelopes;
+- verify receipt status;
+- wait for configured confirmations;
+- check canonical block hashes;
+- detect reorgs;
+- re-read `oracleStatus()` at a post-finality block;
+- treat missing receipts as unknown;
+- use a second RPC provider for critical verification when configured.
+
+## GitHub
+
+Preferred production path: GitHub App installation.
+
+Required capabilities:
+
+- OAuth/install flow;
+- signed webhook verification;
+- installation-token generation and rotation;
+- repository selection;
+- default branch metadata;
+- exact 40-character commit SHA;
+- pull-request head/base provenance;
+- release/tag provenance;
+- desired-state file fetch;
+- idempotent webhook delivery handling;
+- delivery-ID audit correlation;
+- read-only permissions unless a separate future feature is approved.
+
+An operator-managed fine-grained token mode may be added only when explicitly
+labelled; it must never be represented as a GitHub App installation.
+
+## OpenAI
+
+The OpenAI adapter must:
+
+- use the current official Responses API;
+- request strict structured output;
+- pass only bounded, redacted evidence;
+- mark every result `advisoryOnly`;
+- separate facts, inferences, uncertainty, and recommended action;
+- reject invalid/refused/missing structured output;
+- never produce or authorize signatures, approvals, provider calls, or verification;
+- never receive provider credentials, raw cookies, private keys, mnemonics, or unredacted logs.
+
+Deterministic code must independently validate every suggested target/function/argument.
+
+## Authentication and email
+
+Authentication is a first-party NestJS capability for this release:
+
+- Argon2id password hashes;
+- access and rotating refresh tokens;
+- hashed refresh sessions;
+- HttpOnly/Secure/SameSite cookies;
+- CSRF protection;
+- email verification;
+- password reset;
+- session revocation;
+- brute-force rate limiting;
+- security audit events.
+
+Mailpit is used locally. Hosted environments require real SMTP credentials.

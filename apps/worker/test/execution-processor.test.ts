@@ -53,6 +53,7 @@ const baseExecution: ExecutionRecord = {
     requireSimulation: true,
     requireIndependentVerification: true,
     approvalThreshold: 1,
+    prohibitSelfApproval: false,
   },
   simulation: {
     simulationId: "sim-1",
@@ -72,6 +73,7 @@ const baseExecution: ExecutionRecord = {
     },
   ],
   retryLocked: false,
+  observationBlockNumber: 17_924_118,
 };
 
 class MemoryExecutionStore implements ExecutionStore {
@@ -120,7 +122,7 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
     submit = vi.fn<KeeperHubProvider["submit"]>(async () => {
       expect(store.intentPersistedBeforeProvider).toBe(true);
       return {
-        workflowId: "KH-8314",
+        directExecutionId: "KH-8314",
         providerCorrelationId: store.execution.providerCorrelationId!,
         status: "unknown" as const,
       };
@@ -130,7 +132,7 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
       submit: async (idempotencyKey, submittedPlanHash, submittedRequest) =>
         submit(idempotencyKey, submittedPlanHash, submittedRequest),
       reconcile: vi.fn(async (providerCorrelationId: string) => ({
-        workflowId: "KH-8314",
+        directExecutionId: "KH-8314",
         providerCorrelationId,
         status: "confirmed" as const,
         transactionHash: `0x${"7".repeat(64)}`,
@@ -205,7 +207,7 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
       providerCorrelationId: "provider-correlation",
     };
     keeperHub.reconcile = vi.fn(async () => ({
-      workflowId: "KH-8314",
+      directExecutionId: "KH-8314",
       providerCorrelationId: "provider-correlation",
       status: "pending" as const,
     }));

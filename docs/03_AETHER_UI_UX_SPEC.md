@@ -29,7 +29,7 @@ Desktop sidebar:
 5. Audit Log
 
 The sidebar includes Aether identity, compact organization/protocol context, environment
-badge, mock realtime state, and current user. The top bar contains breadcrumb, mobile
+badge, durable realtime state, and current user. The top bar contains breadcrumb, mobile
 navigation trigger, and realtime state. There is no global command palette or dedicated
 notification center in the MVP.
 
@@ -132,7 +132,7 @@ Approve and reject actions only appear in valid states and must have explicit la
 
 ## 11. KeeperHub execution
 
-Show workflow ID, network, realtime state, current step, lifecycle timeline, simulation,
+Show direct execution ID, network, realtime state, current step, lifecycle timeline, simulation,
 gas, transaction hash, and verification. Special states:
 
 - simulation failure: no transaction exists;

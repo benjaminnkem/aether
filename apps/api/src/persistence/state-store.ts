@@ -1,8 +1,5 @@
 import {
-  createDashboard,
-  defaultMvpState,
   registerModels,
-  type MvpState,
   type QueueName,
   type RealtimeEnvelope,
   type TenantContext,
@@ -30,12 +27,8 @@ export interface MutationEvent {
 }
 
 export interface StateStore {
-  getState(tenant: TenantContext): Promise<MvpState>;
-  mutate(
-    tenant: TenantContext,
-    event: MutationEvent,
-    change: (state: MvpState) => MvpState,
-  ): Promise<MvpState>;
+  dashboard(tenant: TenantContext): Promise<Dashboard>;
+  append(tenant: TenantContext, event: MutationEvent): Promise<void>;
   events(
     tenant: TenantContext,
     afterSequence: number,
@@ -45,27 +38,21 @@ export interface StateStore {
 
 @Injectable()
 export class MemoryStateStore implements StateStore {
-  private readonly states = new Map<string, MvpState>();
   private readonly outbox: RealtimeEnvelope[] = [];
   private sequence = 0;
 
-  private key(tenant: TenantContext) {
-    return `${tenant.organizationId}:${tenant.protocolId}`;
+  async dashboard(): Promise<Dashboard> {
+    return dashboardSchema.parse({
+      organization: null,
+      protocols: [],
+      records: {},
+      metrics: [],
+      notifications: [],
+      realtime: "connected",
+    });
   }
 
-  async getState(tenant: TenantContext): Promise<MvpState> {
-    return structuredClone(
-      this.states.get(this.key(tenant)) ?? defaultMvpState,
-    );
-  }
-
-  async mutate(
-    tenant: TenantContext,
-    event: MutationEvent,
-    change: (state: MvpState) => MvpState,
-  ): Promise<MvpState> {
-    const next = change(await this.getState(tenant));
-    this.states.set(this.key(tenant), structuredClone(next));
+  async append(tenant: TenantContext, event: MutationEvent): Promise<void> {
     this.sequence += 1;
     this.outbox.push({
       id: `evt-${this.sequence}`,
@@ -77,7 +64,6 @@ export class MemoryStateStore implements StateStore {
       timestamp: new Date().toISOString(),
       payload: event.payload ?? {},
     });
-    return structuredClone(next);
   }
 
   async events(
@@ -106,61 +92,442 @@ export class MongoStateStore implements StateStore, OnModuleInit {
     this.models = registerModels(this.connection);
   }
 
-  async getState(tenant: TenantContext): Promise<MvpState> {
-    const document = await this.models
-      .MvpState!.findOne({
-        organizationId: tenant.organizationId,
-        protocolId: tenant.protocolId,
-      })
-      .lean()
-      .exec();
-    if (!document) return structuredClone(defaultMvpState);
-    const raw = document as unknown as MvpState;
-    return {
-      scenario: raw.scenario,
-      lifecycleStage: raw.lifecycleStage,
-      desiredState: raw.desiredState,
-      setup: raw.setup,
-      approval: raw.approval,
+  async dashboard(tenant: TenantContext): Promise<Dashboard> {
+    const filter = {
+      organizationId: tenant.organizationId,
+      protocolId: tenant.protocolId,
     };
+    const [
+      organization,
+      protocol,
+      networks,
+      contracts,
+      connections,
+      desiredVersions,
+      drift,
+      operations,
+      executions,
+      audit,
+      latestObservation,
+    ] = await Promise.all([
+      this.models
+        .Organization!.findOne({
+          organizationId: tenant.organizationId,
+        })
+        .lean()
+        .exec(),
+      this.models.Protocol!.findOne(filter).lean().exec(),
+      this.models.Network!.find(filter).sort({ createdAt: -1 }).lean().exec(),
+      this.models.Contract!.find(filter).sort({ createdAt: -1 }).lean().exec(),
+      this.models
+        .ProviderConnection!.find(filter)
+        .sort({ createdAt: -1 })
+        .lean()
+        .exec(),
+      this.models
+        .DesiredStateVersion!.find(filter)
+        .sort({ createdAt: -1 })
+        .lean()
+        .exec(),
+      this.models
+        .DriftFinding!.find(filter)
+        .sort({ updatedAt: -1 })
+        .lean()
+        .exec(),
+      this.models.Operation!.find(filter).sort({ updatedAt: -1 }).lean().exec(),
+      this.models.Execution!.find(filter).sort({ updatedAt: -1 }).lean().exec(),
+      this.models
+        .AuditEvent!.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean()
+        .exec(),
+      this.models
+        .Observation!.findOne(filter)
+        .sort({ blockNumber: -1 })
+        .lean()
+        .exec(),
+    ]);
+    if (!organization || !protocol) {
+      return dashboardSchema.parse({
+        organization: null,
+        protocols: [],
+        records: {},
+        metrics: [],
+        notifications: [],
+        realtime: "connected",
+      });
+    }
+    const org = organization as Record<string, unknown>;
+    const pro = protocol as Record<string, unknown>;
+    const timestamp = (value: Record<string, unknown>) =>
+      new Date(
+        (value.updatedAt ?? value.createdAt ?? new Date()) as string | Date,
+      ).toISOString();
+    const makeRecord = (
+      value: Record<string, unknown>,
+      id: string,
+      title: string,
+      subtitle: string,
+      status: string,
+    ) => ({
+      id,
+      title,
+      subtitle,
+      status,
+      timestamp: timestamp(value),
+    });
+    const chainNames = networks.map((item) =>
+      String((item as Record<string, unknown>).chainId ?? ""),
+    );
+    const openDrift = drift.filter(
+      (item) => (item as Record<string, unknown>).status !== "resolved",
+    );
+    const latestOperation = operations[0] as
+      | Record<string, unknown>
+      | undefined;
+    const latestExecution = executions[0] as
+      | Record<string, unknown>
+      | undefined;
+    const [latestPlan, operationApprovals] = latestOperation
+      ? await Promise.all([
+          this.models
+            .OperationPlanVersion!.findOne({
+              ...filter,
+              planVersionId: latestOperation.activePlanVersionId,
+            })
+            .lean()
+            .exec(),
+          this.models
+            .OperationApproval!.find({
+              ...filter,
+              operationId: latestOperation.operationId,
+            })
+            .sort({ createdAt: -1 })
+            .lean()
+            .exec(),
+        ])
+      : [undefined, []];
+    const plan = latestPlan as Record<string, unknown> | undefined;
+    const request = plan?.request as Record<string, unknown> | undefined;
+    const policy = plan?.policy as Record<string, unknown> | undefined;
+    const executionSimulation = latestExecution?.simulation as
+      | Record<string, unknown>
+      | undefined;
+    return dashboardSchema.parse({
+      organization: {
+        id: String(org.organizationId),
+        name: String(org.name),
+        role: tenant.role,
+      },
+      protocols: [
+        {
+          id: String(pro.protocolId),
+          organizationId: String(pro.organizationId),
+          name: String(pro.name),
+          environment: String(pro.environment ?? "Base Sepolia"),
+          health: Number(pro.health ?? 0),
+          status:
+            openDrift.length > 0
+              ? "critical"
+              : latestObservation
+                ? "healthy"
+                : "warning",
+          release: String(pro.release ?? ""),
+          repository: String(pro.repository ?? ""),
+          governance: String(pro.governance ?? ""),
+          chains: chainNames,
+          openDrift: openDrift.length,
+          lastScanAt: latestObservation
+            ? timestamp(latestObservation as Record<string, unknown>)
+            : timestamp(pro),
+        },
+      ],
+      records: {
+        networks: networks.map((item) => {
+          const raw = item as Record<string, unknown>;
+          return makeRecord(
+            raw,
+            String(raw.networkId),
+            String(raw.name ?? `Chain ${raw.chainId ?? ""}`),
+            `Chain ID ${raw.chainId ?? "unavailable"}`,
+            "healthy",
+          );
+        }),
+        contracts: contracts.map((item) => {
+          const raw = item as Record<string, unknown>;
+          return {
+            ...makeRecord(
+              raw,
+              String(raw.contractId),
+              String(raw.name ?? raw.contractId),
+              String(raw.address ?? ""),
+              raw.address ? "healthy" : "warning",
+            ),
+            value: raw.address ? String(raw.address) : undefined,
+          };
+        }),
+        connections: connections.map((item) => {
+          const raw = item as Record<string, unknown>;
+          return makeRecord(
+            raw,
+            String(raw.provider),
+            String(raw.provider),
+            String(raw.status ?? "not configured"),
+            raw.status === "healthy" ? "healthy" : "warning",
+          );
+        }),
+        "desired-state": desiredVersions.map((item) => {
+          const raw = item as Record<string, unknown>;
+          return {
+            ...makeRecord(
+              raw,
+              String(raw.versionId),
+              String(raw.manifestVersion),
+              String(raw.createdBy ?? "Unknown actor"),
+              raw.active ? "healthy" : "resolved",
+            ),
+            value: raw.active ? "Active" : "Superseded",
+            meta: String(raw.manifestHash ?? ""),
+          };
+        }),
+        drift: drift.map((item) => {
+          const raw = item as Record<string, unknown>;
+          return {
+            ...makeRecord(
+              raw,
+              String(raw.findingId),
+              String(raw.title ?? "Desired state drift"),
+              String(raw.networkId ?? "Base Sepolia"),
+              String(raw.status ?? "open"),
+            ),
+            severity: raw.severity ?? "critical",
+            value: typeof raw.observed === "string" ? raw.observed : undefined,
+          };
+        }),
+        operations: operations.map((item) => {
+          const raw = item as Record<string, unknown>;
+          return makeRecord(
+            raw,
+            String(raw.operationId),
+            String(raw.title ?? "Correction operation"),
+            String(raw.activePlanVersionId ?? ""),
+            String(raw.status ?? "plan_ready"),
+          );
+        }),
+        executions: executions.map((item) => {
+          const raw = item as Record<string, unknown>;
+          return makeRecord(
+            raw,
+            String(raw.executionId),
+            "KeeperHub direct execution",
+            String(raw.transactionHash ?? raw.directExecutionId ?? ""),
+            String(raw.status ?? "queued"),
+          );
+        }),
+        "audit-log": audit.map((item) => {
+          const raw = item as Record<string, unknown>;
+          return makeRecord(
+            raw,
+            String(raw.eventId),
+            String(raw.eventType),
+            String(raw.actorId ?? "system"),
+            raw.result === "failed" ? "failed" : "completed",
+          );
+        }),
+      },
+      metrics: [
+        {
+          label: "Open drift",
+          value: String(openDrift.length),
+          detail: "Persisted unresolved findings",
+        },
+        {
+          label: "Networks",
+          value: String(networks.length),
+          detail: "Configured live networks",
+        },
+        {
+          label: "Contracts",
+          value: String(contracts.length),
+          detail: "Validated contract resources",
+        },
+        {
+          label: "Executions",
+          value: String(executions.length),
+          detail: "Durable execution intents",
+        },
+      ],
+      operation:
+        latestOperation && plan
+          ? {
+              id: String(latestOperation.operationId),
+              title: String(latestOperation.title ?? "Restore approved oracle"),
+              summary:
+                "Deterministic setOracle(address) correction bound to immutable evidence.",
+              planVersion: String(plan.planVersionId),
+              planHash: String(plan.planHash),
+              status: String(latestOperation.status ?? "plan_ready"),
+              risk: "high",
+              createdAt: timestamp(latestOperation),
+              evidence: request
+                ? [
+                    `Chain ${String(request.chainId)}`,
+                    `Target ${String(request.target)}`,
+                    `Desired oracle ${String(request.desiredOracle)}`,
+                  ]
+                : [],
+              inference: [],
+              policyChecks: [
+                makeRecord(
+                  plan,
+                  `policy_${String(plan.planVersionId)}`,
+                  "Deterministic policy envelope",
+                  String(
+                    (policy?.allowedFunctions as string[] | undefined)?.[0] ??
+                      "setOracle(address)",
+                  ),
+                  "healthy",
+                ),
+              ],
+              simulation: makeRecord(
+                latestExecution ?? plan,
+                `simulation_${String(plan.planVersionId)}`,
+                "KeeperHub simulation",
+                executionSimulation?.success
+                  ? `Passed · ${String(executionSimulation.gasEstimate ?? "")} gas`
+                  : "Required before approval",
+                executionSimulation?.success ? "healthy" : "queued",
+              ),
+              approvals: operationApprovals.map((item) => {
+                const approval = item as Record<string, unknown>;
+                return makeRecord(
+                  approval,
+                  String(approval.approvalId),
+                  String(approval.decision),
+                  String(approval.actorId),
+                  approval.decision === "approve" ? "approved" : "rejected",
+                );
+              }),
+              steps: [
+                {
+                  id: "plan",
+                  label: "Immutable plan",
+                  type: "check",
+                  status: "completed",
+                  detail: String(plan.planHash),
+                },
+                {
+                  id: "simulation",
+                  label: "KeeperHub simulation",
+                  type: "simulation",
+                  status: executionSimulation?.success ? "completed" : "queued",
+                  detail: executionSimulation?.success
+                    ? "Exact request simulation passed."
+                    : "Simulation has not passed.",
+                },
+                {
+                  id: "approval",
+                  label: "Contextual approval",
+                  type: "approval",
+                  status: operationApprovals.some(
+                    (item) =>
+                      (item as Record<string, unknown>).decision === "approve",
+                  )
+                    ? "approved"
+                    : "awaiting_approval",
+                  detail: "Approval binds the immutable plan and simulation.",
+                },
+                {
+                  id: "verification",
+                  label: "Independent verification",
+                  type: "verification",
+                  status:
+                    latestExecution?.status === "verified"
+                      ? "completed"
+                      : "queued",
+                  detail:
+                    "Receipt finality and oracleStatus are read over RPC.",
+                },
+              ],
+            }
+          : undefined,
+      execution: latestExecution
+        ? {
+            id: String(latestExecution.executionId),
+            operationId: String(latestExecution.operationId),
+            directExecutionId: String(latestExecution.directExecutionId ?? ""),
+            status:
+              latestExecution.status === "verified"
+                ? "completed"
+                : latestExecution.status === "new" ||
+                    latestExecution.status === "intent_persisted"
+                  ? "queued"
+                  : String(latestExecution.status ?? "queued"),
+            network: "Base Sepolia",
+            currentStep:
+              latestExecution.status === "verified"
+                ? "Independent verification complete"
+                : "Provider reconciliation",
+            startedAt: timestamp(latestExecution),
+            updatedAt: timestamp(latestExecution),
+            txHash: latestExecution.transactionHash
+              ? String(latestExecution.transactionHash)
+              : undefined,
+            gasEstimate: String(executionSimulation?.gasEstimate ?? ""),
+            gasUsed: latestExecution.gasUsedWei
+              ? String(latestExecution.gasUsedWei)
+              : undefined,
+            error: latestExecution.error
+              ? String(latestExecution.error)
+              : undefined,
+            reconciliation: latestExecution.retryLocked
+              ? "Automatic resubmission is locked pending reconciliation."
+              : undefined,
+            steps: [
+              {
+                id: "intent",
+                label: "Execution intent",
+                type: "check",
+                status: "completed",
+                detail: String(latestExecution.idempotencyKey),
+              },
+              {
+                id: "provider",
+                label: "KeeperHub direct execution",
+                type: "write",
+                status:
+                  latestExecution.status === "verified"
+                    ? "completed"
+                    : String(latestExecution.status ?? "queued"),
+                detail: String(
+                  latestExecution.directExecutionId ?? "Not submitted",
+                ),
+              },
+              {
+                id: "verify",
+                label: "Independent verification",
+                type: "verification",
+                status:
+                  latestExecution.status === "verified"
+                    ? "completed"
+                    : "queued",
+                detail: latestExecution.transactionHash
+                  ? String(latestExecution.transactionHash)
+                  : "Awaiting a canonical receipt.",
+              },
+            ],
+          }
+        : undefined,
+      notifications: [],
+      realtime: "connected",
+    });
   }
 
-  async mutate(
-    tenant: TenantContext,
-    event: MutationEvent,
-    change: (state: MvpState) => MvpState,
-  ): Promise<MvpState> {
+  async append(tenant: TenantContext, event: MutationEvent): Promise<void> {
     const session = await this.connection.startSession();
-    let next = defaultMvpState;
     try {
       await session.withTransaction(async () => {
-        const current = await this.models
-          .MvpState!.findOne({
-            organizationId: tenant.organizationId,
-            protocolId: tenant.protocolId,
-          })
-          .session(session)
-          .lean()
-          .exec();
-        const state = current
-          ? ({
-              scenario: (current as Record<string, unknown>).scenario,
-              lifecycleStage: (current as Record<string, unknown>)
-                .lifecycleStage,
-              desiredState: (current as Record<string, unknown>).desiredState,
-              setup: (current as Record<string, unknown>).setup,
-              approval: (current as Record<string, unknown>).approval,
-            } as MvpState)
-          : structuredClone(defaultMvpState);
-        next = change(state);
-        await this.models.MvpState!.updateOne(
-          {
-            organizationId: tenant.organizationId,
-            protocolId: tenant.protocolId,
-          },
-          { $set: next },
-          { upsert: true, session },
-        );
         const sequence = await this.nextSequence(session);
         const eventId = `evt-${sequence}`;
         await this.models.AuditEvent!.create(
@@ -199,7 +566,6 @@ export class MongoStateStore implements StateStore, OnModuleInit {
           { session },
         );
       });
-      return next;
     } finally {
       await session.endSession();
     }
@@ -250,7 +616,7 @@ export class MongoStateStore implements StateStore, OnModuleInit {
 @Module({})
 export class PersistenceModule {
   static register(): DynamicModule {
-    const memory = process.env.AETHER_PERSISTENCE_MODE === "memory";
+    const memory = process.env.NODE_ENV === "test" && !process.env.MONGODB_URI;
     if (memory) {
       return {
         module: PersistenceModule,
@@ -264,13 +630,10 @@ export class PersistenceModule {
     return {
       module: PersistenceModule,
       imports: [
-        MongooseModule.forRoot(
-          process.env.MONGODB_URI ?? "mongodb://127.0.0.1:27017/aether",
-          {
-            serverSelectionTimeoutMS: 5_000,
-            autoIndex: process.env.NODE_ENV !== "production",
-          },
-        ),
+        MongooseModule.forRoot(required("MONGODB_URI"), {
+          serverSelectionTimeoutMS: 5_000,
+          autoIndex: process.env.NODE_ENV !== "production",
+        }),
       ],
       providers: [
         MongoStateStore,
@@ -281,6 +644,8 @@ export class PersistenceModule {
   }
 }
 
-export function dashboardFromState(state: MvpState): Dashboard {
-  return dashboardSchema.parse(createDashboard(state));
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required.`);
+  return value;
 }

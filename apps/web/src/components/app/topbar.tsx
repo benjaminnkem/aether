@@ -4,7 +4,13 @@ import { HambergerMenu } from "iconsax-react";
 import { IconButton, Status } from "@aether/ui";
 import { useUiStore } from "@/stores/ui";
 
-export function Topbar({ title }: { title: string }) {
+export function Topbar({
+  title,
+  protocolName,
+}: {
+  title: string;
+  protocolName?: string;
+}) {
   const setSidebar = useUiStore((state) => state.setSidebarOpen);
   return (
     <header className="topbar">
@@ -17,11 +23,12 @@ export function Topbar({ title }: { title: string }) {
           <HambergerMenu size={18} />
         </IconButton>
         <div className="breadcrumbs">
-          Arcadia Markets&nbsp; / &nbsp;<strong>{title}</strong>
+          {protocolName ?? "No protocol loaded"}&nbsp; / &nbsp;
+          <strong>{title}</strong>
         </div>
       </div>
       <div className="topbar__actions">
-        <Status status="connected" label="Mock realtime" />
+        <Status status="warning" label="Live API session" />
       </div>
     </header>
   );

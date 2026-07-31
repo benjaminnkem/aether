@@ -42,7 +42,7 @@ export default function HomePage() {
             <div className="hero-actions">
               <Link href="/app/overview">
                 <Button variant="primary">
-                  Try the live demo <ArrowRight2 size={15} />
+                  Open the live testnet app <ArrowRight2 size={15} />
                 </Button>
               </Link>
               <Link href="#how-it-works">

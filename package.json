@@ -9,7 +9,19 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,md,yml,yaml}\" && pnpm --filter @aether/contracts format:check",
     "check-types": "turbo run check-types",
     "test": "turbo run test",
-    "test:e2e": "pnpm --filter @aether/web test:e2e"
+    "test:e2e": "pnpm --filter @aether/web test:e2e",
+    "test:live": "node scripts/live-acceptance.mjs",
+    "test:integration": "pnpm --filter @aether/api test:integration && pnpm --filter @aether/worker test",
+    "test:security": "pnpm --filter @aether/api security:check && pnpm check:runtime-imports",
+    "env:doctor": "node scripts/env-doctor.mjs",
+    "keeperhub:doctor": "node scripts/provider-doctor.mjs keeperhub",
+    "github:doctor": "node scripts/provider-doctor.mjs github",
+    "openai:doctor": "node scripts/provider-doctor.mjs openai",
+    "chain:doctor": "node scripts/provider-doctor.mjs chain",
+    "chain:deploy:dry": "node scripts/deploy-base-sepolia.mjs",
+    "chain:deploy": "node scripts/deploy-base-sepolia.mjs --broadcast",
+    "check:runtime-imports": "node scripts/check-runtime-imports.mjs",
+    "migrate:legacy": "node scripts/migrate-legacy-state.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4",

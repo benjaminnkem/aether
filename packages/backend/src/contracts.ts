@@ -15,7 +15,7 @@ const commitShaSchema = z.string().regex(/^[a-f0-9]{40}$/i);
 
 export const providerHealthSchema = z.object({
   provider: z.enum(["evm-rpc", "keeperhub", "github", "openai"]),
-  status: z.enum(["healthy", "degraded", "unavailable"]),
+  status: z.enum(["healthy", "degraded", "unavailable", "not_configured"]),
   checkedAt: z.string().datetime(),
   latencyMs: z.number().int().nonnegative().optional(),
   consecutiveFailures: z.number().int().nonnegative(),
@@ -48,6 +48,7 @@ export const policyEnvelopeSchema = z.object({
   requireSimulation: z.literal(true),
   requireIndependentVerification: z.literal(true),
   approvalThreshold: z.number().int().min(1),
+  prohibitSelfApproval: z.boolean().default(false),
 });
 
 export type PolicyEnvelope = z.infer<typeof policyEnvelopeSchema>;
@@ -63,17 +64,27 @@ export const simulationResultSchema = z.object({
 });
 
 export const keeperSubmissionSchema = z.object({
-  workflowId: z.string().min(1),
+  directExecutionId: z.string().min(1),
   providerCorrelationId: z.string().min(1),
   status: z.enum(["accepted", "submitted", "unknown"]),
   transactionHash: bytes32Schema.optional(),
+  transactionLink: z.string().url().optional(),
+  gasUsedWei: z.string().regex(/^\d+$/).optional(),
+  error: z.string().max(1_000).optional(),
+  completedAt: z.string().datetime().optional(),
+  pollIntervalHintMs: z.number().int().min(250).max(60_000).optional(),
 });
 
 export const keeperStatusSchema = z.object({
-  workflowId: z.string().min(1),
+  directExecutionId: z.string().min(1),
   providerCorrelationId: z.string().min(1),
   status: z.enum(["pending", "confirmed", "failed", "unknown"]),
   transactionHash: bytes32Schema.optional(),
+  transactionLink: z.string().url().optional(),
+  gasUsedWei: z.string().regex(/^\d+$/).optional(),
+  error: z.string().max(1_000).optional(),
+  completedAt: z.string().datetime().optional(),
+  pollIntervalHintMs: z.number().int().min(250).max(60_000).optional(),
   blockNumber: z.number().int().positive().optional(),
   confirmations: z.number().int().nonnegative().optional(),
   transactions: z
@@ -105,7 +116,7 @@ export const keeperStatusSchema = z.object({
 
 export const keeperStepLogSchema = z.object({
   logId: z.string().min(1),
-  workflowId: z.string().min(1),
+  directExecutionId: z.string().min(1),
   stepId: z.string().min(1),
   stepName: z.string().min(1),
   stepType: z.string().min(1),
@@ -214,6 +225,11 @@ export const investigationInputSchema = z.object({
 
 export const investigationSuggestionSchema = z.object({
   summary: z.string().min(1).max(2_000),
+  facts: z.array(z.string().min(1).max(500)).min(1).max(30),
+  inferences: z.array(z.string().min(1).max(500)).max(30),
+  confidence: z.number().min(0).max(1),
+  affectedInvariants: z.array(z.string().min(1).max(300)).max(20),
+  recommendedAction: z.string().min(1).max(1_000),
   evidenceReferences: z.array(z.string().min(1)).min(1).max(30),
   suggestedPlan: z
     .object({
@@ -223,7 +239,7 @@ export const investigationSuggestionSchema = z.object({
       desiredOracle: evmAddressSchema,
       rationale: z.string().min(1).max(1_000),
     })
-    .optional(),
+    .nullable(),
   advisoryOnly: z.literal(true),
 });
 
@@ -270,10 +286,10 @@ export interface KeeperHubProvider extends HealthCheckedProvider {
   ): Promise<z.input<typeof keeperSubmissionSchema>>;
   reconcile(
     providerCorrelationId: string,
-    workflowId?: string,
+    directExecutionId?: string,
   ): Promise<z.input<typeof keeperStatusSchema>>;
   getStepLogs(
-    workflowId: string,
+    directExecutionId: string,
   ): Promise<z.input<typeof keeperStepLogSchema>[]>;
 }
 
@@ -304,6 +320,7 @@ export interface InvestigationAssistant extends HealthCheckedProvider {
 export const queueNames = [
   "observation.scan",
   "drift.evaluate",
+  "investigation.run",
   "operation.simulate",
   "execution.submit",
   "execution.reconcile",

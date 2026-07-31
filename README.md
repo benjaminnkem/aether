@@ -1,74 +1,49 @@
 # Aether
 
-Aether is a desired-state control plane for smart-contract protocols. The focused MVP
-covers protocol setup, desired state, drift investigation, deterministic correction
-operations, KeeperHub execution, independent verification, realtime events, and audit
-history.
+Aether is a Base Sepolia control plane for versioned protocol intent, live RPC
+observation, advisory AI investigation, deterministic correction planning, contextual
+approval, KeeperHub Direct Execution, independent verification, and immutable audit.
 
-## Quick Start
+The only application path is:
 
-Requirements: Node.js 20.9+, pnpm 10.15.1, Foundry 1.7+, MongoDB configured as a
-replica set, and Redis 7+.
+```text
+Next.js → @aether/sdk → NestJS API → MongoDB/outbox → BullMQ worker → live providers
+```
+
+There is no browser data mode, provider mode, demo state machine, runtime fixture
+fallback, or normal-startup seed. Missing providers fail closed and the UI shows an
+honest setup or unavailable state.
+
+## Workspace
+
+- `apps/web` — Next.js App Router frontend with TanStack Query and Sonner toasts.
+- `apps/api` — NestJS API, first-party authentication, tenant domain, SSE, GitHub App.
+- `apps/worker` — BullMQ worker for observation, investigation, simulation, execution,
+  reconciliation, and verification.
+- `packages/backend` — Mongoose models, provider contracts, security, calldata, safety.
+- `packages/contracts` — unaudited testnet-only Foundry fixture and scripts.
+- `packages/sdk`, `packages/shared`, `packages/ui` — browser SDK, schemas, UI system.
+
+## Start locally
 
 ```bash
 pnpm install
-cp .env.example .env
+pnpm env:doctor
 docker compose up -d
 pnpm dev
 ```
 
-Open `http://localhost:3000`. Mock mode requires no credentials.
-If the mode variable is omitted, Aether safely defaults to mock mode.
-
-```env
-NEXT_PUBLIC_AETHER_DATA_MODE=mock
-NEXT_PUBLIC_AETHER_API_URL=/v1
-```
-
-The live API switch is:
-
-```env
-NEXT_PUBLIC_AETHER_DATA_MODE=api
-NEXT_PUBLIC_AETHER_API_URL=http://localhost:4000/v1
-```
-
-Components never branch on this mode. They use `@aether/sdk`; mock mode installs a
-deterministic SDK transport and MSW implements the same HTTP paths.
-
-## Workspace
-
-- `apps/web` — Next.js 16 App Router marketing and product UI.
-- `apps/api` — NestJS HTTP API, MongoDB persistence, Swagger, authorization, and SSE.
-- `apps/worker` — standalone NestJS BullMQ worker and provider adapters.
-- `packages/contracts` — unaudited, value-free Foundry fixtures and lifecycle scripts
-  for local Anvil and Base Sepolia.
-- `packages/backend` — server-only schemas, deterministic safety checks, queue contracts,
-  Mongoose models, hashing, and redaction.
-- `packages/ui` — original Aether accessible component library.
-- `packages/shared` — browser-safe Zod schemas and domain types.
-- `packages/sdk` — typed Axios client and realtime contract.
-- `packages/mock-data` — deterministic scenarios and MSW handlers.
-- `packages/eslint-config`, `packages/typescript-config` — shared quality configuration.
-
-The browser still defaults to deterministic mock mode. API mode uses the same SDK
-schemas and requires no component changes. Server provider mode separately selects
-validated mock or live RPC/KeeperHub/GitHub adapters plus an optional advisory-only
-OpenAI evidence assistant. Live mode uses bounded retry, rate-limit handling, redacted
-provider telemetry, health state, and server-only credentials.
-
-## Quality Commands
+Open `http://localhost:3000`; Mailpit is at `http://localhost:8025`. Before any live
+onchain action, follow [manual external actions](docs/MANUAL_EXTERNAL_ACTIONS.md) and
+make every relevant doctor pass.
 
 ```bash
-pnpm format:check
-pnpm lint
-pnpm check-types
-pnpm test
-pnpm test:e2e
-pnpm build
+pnpm chain:doctor
+pnpm keeperhub:doctor
+pnpm github:doctor
+pnpm openai:doctor
 ```
 
-Contract-specific commands, including local deployment, drift, correction, and gas
-snapshot checks, are documented in `docs/TESTING.md` and `docs/OPERATIONS.md`.
-
-Backend-specific focused gates are documented in `docs/TESTING.md`. See
-`docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/IMPLEMENTATION_STATUS.md`.
+The current release verdict and evidence are recorded in
+[live acceptance evidence](docs/LIVE_ACCEPTANCE_EVIDENCE.md). Never interpret a local
+build or a provider doctor as proof of a Base Sepolia transaction.

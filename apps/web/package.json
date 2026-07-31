@@ -13,7 +13,6 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@aether/mock-data": "workspace:*",
     "@aether/sdk": "workspace:*",
     "@aether/shared": "workspace:*",
     "@aether/ui": "workspace:*",
@@ -35,6 +34,7 @@
     "react-dom": "19.2.8",
     "react-hook-form": "7.82.0",
     "recharts": "3.10.1",
+    "sonner": "^2.0.7",
     "tailwind-merge": "3.6.0",
     "three": "0.185.1",
     "yaml": "2.9.0",
@@ -54,7 +54,6 @@
     "@types/three": "0.185.0",
     "eslint": "^9.39.1",
     "jsdom": "28.1.0",
-    "msw": "2.15.0",
     "typescript": "5.9.2",
     "vitest": "4.1.10"
   },

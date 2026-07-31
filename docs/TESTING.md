@@ -1,25 +1,24 @@
 # Testing
 
+## Principle
+
+No runtime mocks are allowed. Test doubles remain valid inside isolated tests.
+
+## Required gates
+
 ```bash
 pnpm format:check
 pnpm lint
 pnpm check-types
 pnpm test
+pnpm test:integration
+pnpm test:security
 pnpm test:e2e
 pnpm build
+pnpm audit --prod
 ```
 
-Focused backend gates:
-
-```bash
-pnpm --filter @aether/api test:integration
-pnpm --filter @aether/api test:contract
-pnpm --filter @aether/api security:check
-pnpm --filter @aether/worker test:idempotency
-pnpm --filter @aether/worker test:retry
-```
-
-Focused contract gates:
+## Contract gates
 
 ```bash
 pnpm --filter @aether/contracts format:check
@@ -29,42 +28,131 @@ pnpm --filter @aether/contracts test:gas
 pnpm --filter @aether/contracts snapshot:check
 ```
 
-The Foundry suite includes unit tests for initialization, roles, emitted evidence,
-contract-address validation, and freshness; 512-case fuzz campaigns for freshness
-boundaries and authorized oracle selection; stateful invariants for oracle code and
-role isolation; deployment/proxy-slot tests; and lifecycle tests for drift, exact
-correction, missing-role simulation, post-write verification failure, and forward
-correction.
+## Required test layers
 
-Backend unit tests cover canonical safety authorization and redaction. API integration
-tests boot a real Nest HTTP application with the in-memory test repository and exercise
-auth, roles, tenancy, validation, scenario state, and approval. Contract tests parse
-responses with the browser Zod schemas and inspect OpenAPI paths. Worker tests prove
-provider correlation is persisted before submit, duplicates do not resubmit unknown
-outcomes, provider timeouts enter reconciliation, and failed verification creates a
-forward correction. JSON-RPC tests additionally cover finality thresholds, canonical
-receipt hashes, reorg-aware reads, unknown receipts, and fresh independent
-postconditions.
+### Unit
 
-Provider adapter tests also cover exact KeeperHub dry-run request parity, idempotent
-workflow submission, status/transaction correlation, redacted step logs, bounded
-rate-limit retry, non-idempotent no-retry behavior, provider health, deterministic
-GitHub/OpenAI mocks, and bounded EVM log reads. Credential tests bind AES-GCM envelopes
-to organization, protocol, and provider.
+- canonical hashing;
+- deterministic authorization;
+- exact calldata encoding;
+- plan/simulation/approval binding;
+- tenant authorization;
+- refresh-token rotation;
+- CSRF;
+- redaction;
+- provider schemas;
+- durable domain transitions;
+- unknown-outcome locks.
 
-The Playwright matrix covers onboarding resume, the healthy-to-verified journey,
-critical evidence drawer and Escape handling, exact approval, missing-role simulation
-failure before submission, partial forward correction, unknown-outcome retry lock,
-audit correlation, legacy redirects, removed-route 404s, reduced motion, and mobile
-operation fallback.
+### Integration
 
-Production startup is smoke-tested from compiled output. Mongo/Redis end-to-end
-infrastructure testing requires the local replica set and Redis from `compose.yaml`;
-the deterministic processor tests do not need external services.
+- real NestJS application;
+- MongoDB replica-set transactions;
+- Redis/BullMQ;
+- transactional outbox;
+- worker restart;
+- SSE resumption;
+- authentication lifecycle;
+- onboarding and desired-state persistence;
+- scan and drift persistence;
+- approval threshold and expiry;
+- audit immutability.
 
-Playwright 1.62.1 is configured. On July 30, 2026,
-`pnpm --filter @aether/web test:e2e` discovered all 20 desktop/mobile cases, but each
-stopped before application launch because the local Chromium headless-shell executable
-was absent from the Playwright cache. This is not a passing result. Run the same command
-after installing the matching Chromium binary; do not alter the tests or claim browser
-execution in the meantime.
+### Local-chain
+
+Using Anvil and test-scope adapters only:
+
+- deploy;
+- observe healthy state;
+- create real drift;
+- detect drift;
+- create advisory investigation;
+- generate deterministic plan;
+- simulate exact call;
+- approve;
+- submit using a local execution adapter only for local integration;
+- verify finality/postcondition;
+- create post-write verification failure;
+- create forward correction.
+
+### KeeperHub contract tests
+
+Provider contract tests must validate current real response envelopes and headers for:
+
+- authentication failure;
+- chain listing;
+- dry-run simulation;
+- idempotent direct execution;
+- idempotency conflict;
+- idempotency in progress;
+- status lookup;
+- rate limiting;
+- wallet not configured;
+- spending cap failure;
+- timeout after submit.
+
+Recorded fixtures may be used only in tests and must be periodically refreshed from official live responses with secrets removed.
+
+### Playwright
+
+Install the browser and pass the full matrix:
+
+- signup;
+- login;
+- onboarding;
+- GitHub connection;
+- KeeperHub connection health;
+- protocol setup;
+- desired-state save;
+- initial scan;
+- real drift appearance;
+- evidence drawer;
+- AI investigation;
+- plan generation;
+- safety checks;
+- approval;
+- simulation;
+- execution progress;
+- transaction link;
+- verification;
+- audit correlation;
+- refresh/reconnect;
+- mobile;
+- reduced motion;
+- keyboard operation;
+- provider-down states;
+- unauthorized role.
+
+### Live-provider acceptance
+
+This is a separate opt-in suite that requires real credentials and Base Sepolia funds.
+
+It must:
+
+1. validate providers;
+2. use the real deployed fixture;
+3. create or detect real drift;
+4. invoke real OpenAI investigation;
+5. simulate with KeeperHub;
+6. submit with KeeperHub;
+7. capture execution ID and transaction hash;
+8. verify through independent RPC;
+9. check audit correlation;
+10. save a redacted evidence report.
+
+## Release evidence
+
+Generate `artifacts/live-acceptance/<timestamp>/` containing no secrets:
+
+- commit SHA;
+- environment variable names/status;
+- contract addresses;
+- provider health summary;
+- KeeperHub execution ID;
+- transaction hash/link;
+- receipt block;
+- verification block;
+- audit correlation IDs;
+- test command results;
+- Playwright report;
+- screenshots with secrets redacted.

@@ -3,20 +3,9 @@ import { notFound, redirect } from "next/navigation";
 
 const legacyRedirects: Record<string, string> = {
   protocols: "/app/protocol-setup",
-  "protocols/arcadia": "/app/protocol-setup",
-  "protocols/arcadia/deployments": "/app/protocol-setup",
-  "protocols/arcadia/contracts": "/app/protocol-setup",
   integrations: "/app/protocol-setup",
   "settings/general": "/app/protocol-setup",
   "settings/execution": "/app/protocol-setup",
-  "protocols/arcadia/desired-state": "/app/desired-state",
-  "protocols/arcadia/drift": "/app/drift",
-  "protocols/arcadia/incidents": "/app/drift",
-  "protocols/arcadia/operations": "/app/operations/op-oracle-restoration",
-  "protocols/arcadia/approvals": "/app/operations/op-oracle-restoration",
-  "protocols/arcadia/invariants": "/app/desired-state",
-  "protocols/arcadia/policies": "/app/desired-state",
-  "keeperhub-runs": "/app/executions/exec-kh-8314",
 };
 
 export default async function AppPage({

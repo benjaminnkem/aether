@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { parse, stringify } from "yaml";
 import { desiredStateSchema, type DesiredState } from "@aether/shared";
@@ -13,34 +14,32 @@ import {
   TabContent,
   Tabs,
   Textarea,
-  ToastRegion,
   ValidationSummary,
 } from "@aether/ui";
 import { aetherClient } from "@aether/sdk";
 
 const defaults: DesiredState = {
-  version: "v2.4.2",
+  version: "v1.0.0",
   networkId: "base-sepolia",
   chainId: 84532,
-  contractId: "arcadia-market",
-  contractVersion: "2.4.2",
-  implementationAddress: "0x7D4A3AfF7c4C51B1726a91c738ACb6F227127C3f",
-  oracleAddress: "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311",
-  administrators: ["0x4eC4816D356B31fD7023d15E2eDF4fC2B5518AB7"],
-  guardians: ["0x6BA4F4C99Aba65Cfa9Ce27Ab981EE33573Ec7Cc1"],
+  contractId: "",
+  contractVersion: "",
+  implementationAddress: "",
+  oracleAddress: "",
+  administrators: [""],
+  guardians: [""],
   paused: false,
   fee: { value: "50", unit: "bps" },
   minimumExecutorGas: { value: "0.1", unit: "ether" },
   maximumAutomaticTransaction: { value: "0", unit: "ether" },
-  release: "arcadia-v2.4.2",
-  source: "github.com/arcadia-labs/markets/pull/482",
+  release: "",
+  source: "",
 };
 
 export default function DesiredStateEditor() {
   const [mode, setMode] = useState("form");
   const [issues, setIssues] = useState<string[]>([]);
   const [validatedFingerprint, setValidatedFingerprint] = useState("");
-  const [saved, setSaved] = useState(false);
   const [yamlDraft, setYamlDraft] = useState(() => stringify(defaults));
   const { register, handleSubmit, watch, reset } = useForm<DesiredState>({
     defaultValues: defaults,
@@ -139,7 +138,6 @@ export default function DesiredStateEditor() {
               <Field label="Network">
                 <Select {...register("networkId")}>
                   <option value="base-sepolia">Base Sepolia</option>
-                  <option value="ethereum-sepolia">Ethereum Sepolia</option>
                 </Select>
               </Field>
               <Field label="Chain ID">
@@ -240,7 +238,21 @@ export default function DesiredStateEditor() {
                 type="button"
                 variant="primary"
                 disabled={!validated}
-                onClick={() => setSaved(true)}
+                onClick={() => {
+                  const parsed = desiredStateSchema.safeParse(values);
+                  if (!parsed.success || !validated) {
+                    toast.error(
+                      "Validate the current desired state before saving.",
+                    );
+                    return;
+                  }
+                  void aetherClient
+                    .saveDesiredState(parsed.data)
+                    .then(() => toast.success("Desired state version saved."))
+                    .catch(() =>
+                      toast.error("The API could not save this desired state."),
+                    );
+                }}
               >
                 Save new version
               </Button>
@@ -272,17 +284,10 @@ export default function DesiredStateEditor() {
       </Tabs>
       <div style={{ marginTop: 16 }}>
         <DiffBlock
-          before={
-            "version: v2.4.1\noracleAddress: 0x2C8A…44311\nminimumExecutorGas: 0.08 ETH"
-          }
+          before={"No previous desired-state version loaded."}
           after={`version: ${values.version}\noracleAddress: ${values.oracleAddress.slice(0, 12)}…\nminimumExecutorGas: ${values.minimumExecutorGas.value} ETH`}
         />
       </div>
-      <ToastRegion
-        message={
-          saved ? "Desired state version saved in mock mode." : undefined
-        }
-      />
     </div>
   );
 }

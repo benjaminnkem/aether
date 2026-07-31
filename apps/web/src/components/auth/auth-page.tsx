@@ -2,6 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
+import { toast } from "sonner";
+import { aetherClient } from "@aether/sdk";
 import { Button, Field, Input } from "@aether/ui";
 
 const copy = {
@@ -12,12 +15,13 @@ const copy = {
   ],
   signup: [
     "Create your Aether account",
-    "Start in mock mode. Connect live providers only when ready.",
+    "Create a real account. Provider actions remain disabled until configured.",
     "Create account",
   ],
 } as const;
 export function AuthPage({ kind }: { kind: keyof typeof copy }) {
   const [title, description, action] = copy[kind];
+  const [pending, setPending] = useState(false);
   return (
     <main id="main-content" className="auth-shell">
       <section className="auth-art">
@@ -34,17 +38,37 @@ export function AuthPage({ kind }: { kind: keyof typeof copy }) {
           AI investigates and proposes. Deterministic policy authorizes. Humans
           approve. KeeperHub executes. Aether verifies.
         </blockquote>
-        <span className="a-status a-status--success">
-          Mock control plane ready
-        </span>
+        <span className="a-status">Live API · Base Sepolia only</span>
       </section>
       <section className="auth-panel">
         <form
           className="auth-form"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault();
-            window.location.href =
-              kind === "signup" ? "/onboarding" : "/app/overview";
+            setPending(true);
+            const form = new FormData(event.currentTarget);
+            try {
+              const email = String(form.get("email") ?? "");
+              const password = String(form.get("password") ?? "");
+              if (kind === "signup") {
+                await aetherClient.signup(email, password);
+                toast.success(
+                  "Account created. Check your email to verify it.",
+                );
+                window.location.href = "/login";
+              } else {
+                await aetherClient.login(email, password);
+                window.location.href = "/app/overview";
+              }
+            } catch {
+              toast.error(
+                kind === "signup"
+                  ? "Account creation failed. Check the form and email service."
+                  : "Sign in failed. Check your credentials and verification status.",
+              );
+            } finally {
+              setPending(false);
+            }
           }}
         >
           <Image src="/brand/aether-mark.svg" alt="" width={38} height={38} />
@@ -81,17 +105,19 @@ export function AuthPage({ kind }: { kind: keyof typeof copy }) {
                 required
               />
             </Field>
-            <Button type="submit" variant="primary">
+            <Button type="submit" variant="primary" disabled={pending}>
               {action}
             </Button>
           </div>
           <div className="auth-links">
             {kind === "login" ? (
-              <Link href="/signup">Create account</Link>
+              <>
+                <Link href="/signup">Create account</Link>
+                <Link href="/forgot-password">Forgot password?</Link>
+              </>
             ) : (
               <Link href="/login">Back to sign in</Link>
             )}
-            <Link href="/app/overview">Explore demo</Link>
           </div>
         </form>
       </section>

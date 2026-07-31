@@ -6,8 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   HttpKeeperHubProvider,
   HttpSimulator,
-  MockGitHubProvider,
-  MockInvestigationAssistant,
 } from "../src/providers/providers";
 
 const request: TransactionRequest = {
@@ -30,18 +28,19 @@ function response(body: unknown, status = 200) {
   });
 }
 
-describe("live and mock provider adapters", () => {
+describe("live provider adapters", () => {
   beforeEach(() => {
     process.env.KEEPERHUB_BASE_URL = "https://keeperhub.invalid/api";
-    process.env.KEEPERHUB_API_TOKEN = "kh_server_only";
-    process.env.KEEPERHUB_WORKFLOW_ID = "wf-aether-oracle";
+    process.env.KEEPERHUB_API_KEY = "kh_server_only";
+    process.env.AETHER_EXECUTOR_ADDRESS =
+      "0x1111111111111111111111111111111111111111";
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     delete process.env.KEEPERHUB_BASE_URL;
-    delete process.env.KEEPERHUB_API_TOKEN;
-    delete process.env.KEEPERHUB_WORKFLOW_ID;
+    delete process.env.KEEPERHUB_API_KEY;
+    delete process.env.AETHER_EXECUTOR_ADDRESS;
   });
 
   it("simulates the exact semantic request without broadcasting", async () => {
@@ -61,6 +60,9 @@ describe("live and mock provider adapters", () => {
         status: "simulated",
         gasEstimate: "284211",
         wouldRevert: false,
+        from: process.env.AETHER_EXECUTOR_ADDRESS,
+        to: request.target,
+        value: "0",
       });
     });
     vi.stubGlobal("fetch", fetcher);
@@ -94,48 +96,26 @@ describe("live and mock provider adapters", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("submits one idempotent workflow and correlates status and step logs", async () => {
+  it("submits one idempotent direct execution and reconciles status", async () => {
     const fetcher = vi
       .fn()
       .mockResolvedValueOnce(
-        response({ executionId: "exec-123", status: "running" }),
+        response([{ chainId: 84_532, isEnabled: true, isTestnet: true }]),
       )
       .mockResolvedValueOnce(
         response({
-          status: "success",
-          nodeStatuses: [
-            {
-              nodeId: "write-oracle",
-              nodeName: "Set oracle",
-              status: "success",
-            },
-          ],
-          transactionHashes: [
-            {
-              hash: transactionHash,
-              nodeId: "write-oracle",
-              nodeName: "Set oracle",
-              chainId: 84_532,
-            },
-          ],
+          executionId: "direct-123",
+          status: "completed",
         }),
       )
       .mockResolvedValueOnce(
         response({
-          logs: [
-            {
-              id: "log-1",
-              nodeId: "write-oracle",
-              nodeName: "Set oracle",
-              nodeType: "web3/write-contract",
-              status: "success",
-              output: { transactionHash, authorization: "must-redact" },
-              error: null,
-              duration: "1200",
-              startedAt: "2026-07-30T00:00:00.000Z",
-              completedAt: "2026-07-30T00:00:01.200Z",
-            },
-          ],
+          executionId: "direct-123",
+          status: "completed",
+          transactionHash,
+          transactionLink: `https://sepolia.basescan.org/tx/${transactionHash}`,
+          gasUsedWei: "1200",
+          error: null,
         }),
       );
     vi.stubGlobal("fetch", fetcher);
@@ -147,56 +127,27 @@ describe("live and mock provider adapters", () => {
       request,
     );
     expect(submission).toMatchObject({
-      workflowId: "exec-123",
+      directExecutionId: "direct-123",
       providerCorrelationId: "correlation-123456",
-      status: "accepted",
+      status: "submitted",
     });
-    const firstRequest = fetcher.mock.calls[0];
-    expect(firstRequest?.[0]).toContain("/workflows/wf-aether-oracle/execute");
-    expect(new Headers(firstRequest?.[1]?.headers).get("idempotency-key")).toBe(
-      "correlation-123456",
-    );
+    expect(fetcher.mock.calls[0]?.[0]).toContain("/chains");
+    const submitRequest = fetcher.mock.calls[1];
+    expect(submitRequest?.[0]).toContain("/execute/contract-call");
+    expect(
+      new Headers(submitRequest?.[1]?.headers).get("idempotency-key"),
+    ).toBe("correlation-123456");
 
     const status = await provider.reconcile(
       submission.providerCorrelationId,
-      submission.workflowId,
+      submission.directExecutionId,
     );
     expect(status).toMatchObject({
       status: "confirmed",
       transactionHash,
     });
-    const logs = await provider.getStepLogs(submission.workflowId);
-    expect(logs[0]).toMatchObject({
-      status: "success",
-      transactionHash,
-    });
-    expect(logs[0]?.evidence.authorization).toBe("[REDACTED]");
-  });
-
-  it("keeps deterministic GitHub and AI mocks advisory-only", async () => {
-    const github = new MockGitHubProvider();
-    const assistant = new MockInvestigationAssistant();
-    const release = await github.getRelease(
-      "arcadia-labs/markets",
-      "arcadia-v2.4.2",
+    expect(await provider.getStepLogs(submission.directExecutionId)).toEqual(
+      [],
     );
-    expect(release.commitSha).toHaveLength(40);
-
-    const suggestion = await assistant.suggest({
-      findingId: "drift-oracle",
-      observedFacts: [`Observed ${"0x3".padEnd(42, "3")}`],
-      desiredStateFacts: [`Desired ${request.desiredOracle}`],
-      allowedChainIds: [request.chainId],
-      allowedTargets: [request.target],
-      allowedFunctions: ["setOracle(address)"],
-    });
-    expect(suggestion).toMatchObject({
-      advisoryOnly: true,
-      suggestedPlan: {
-        chainId: request.chainId,
-        target: request.target,
-        desiredOracle: request.desiredOracle,
-      },
-    });
   });
 });

@@ -1,0 +1,10 @@
+{
+  "AETHER_RPC_URL": "invalid_chain",
+  "KEEPERHUB_API_KEY": "authenticated",
+  "KEEPERHUB_BASE_SEPOLIA": "enabled_testnet",
+  "KEEPERHUB_ORGANIZATION_WALLET": "configured",
+  "GITHUB_APP": "missing_external_action",
+  "OPENAI_API_KEY": "missing_external_action",
+  "FOUNDRY_SIGNER": "missing_external_action",
+  "BASE_SEPOLIA_DEPLOYMENT": "not_deployed"
+}

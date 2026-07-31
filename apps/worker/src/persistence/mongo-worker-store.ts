@@ -1,8 +1,4 @@
 import {
-  mvpOperationRequest,
-  mvpPlanHash,
-  mvpPolicy,
-  boundApprovalSchema,
   registerModels,
   stableIdempotencyKey,
   type DurableJob,
@@ -41,44 +37,9 @@ export class MongoWorkerStore implements ExecutionStore, OnModuleInit {
       .lean()
       .exec();
     if (document) return document as unknown as ExecutionRecord;
-
-    const state = await this.models
-      .MvpState!.findOne({
-        organizationId: job.organizationId,
-        protocolId: job.protocolId,
-      })
-      .lean()
-      .exec();
-    const rawState = state as Record<string, unknown> | null;
-    const approved =
-      rawState?.scenario === "approval-execution" &&
-      Number(rawState.lifecycleStage ?? 0) >= 3;
-    const approval = approved
-      ? boundApprovalSchema.safeParse(rawState?.approval)
-      : undefined;
-    const simulationId = `sim-${mvpPlanHash.slice(2, 10)}`;
-    const seeded: ExecutionRecord = {
-      executionId: job.resourceId,
-      organizationId: job.organizationId,
-      protocolId: job.protocolId,
-      status: "new",
-      idempotencyKey: job.idempotencyKey,
-      planHash: mvpPlanHash,
-      request: mvpOperationRequest,
-      policy: mvpPolicy,
-      simulation: {
-        simulationId,
-        planHash: mvpPlanHash,
-        success: true,
-        gasEstimate: "284211",
-        postconditionMatched: true,
-        blockNumber: 17_924_118,
-      },
-      approvals: approval?.success ? [approval.data] : [],
-      retryLocked: false,
-    };
-    await this.models.Execution!.create(seeded);
-    return seeded;
+    throw new Error(
+      `Execution ${job.resourceId} must be persisted before a worker job is queued.`,
+    );
   }
 
   async persistIntent(

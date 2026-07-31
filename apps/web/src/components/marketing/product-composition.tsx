@@ -8,7 +8,7 @@ export function ProductComposition() {
         <i />
         <i />
         <i />
-        <span>Aether control plane · Arcadia Markets</span>
+        <span>Aether control plane · Base Sepolia</span>
       </div>
       <div className="hero-product">
         <aside className="hero-product__side">
@@ -28,7 +28,7 @@ export function ProductComposition() {
           ))}
         </aside>
         <div className="hero-product__main">
-          <div className="eyebrow">Arcadia Markets · production</div>
+          <div className="eyebrow">Configured protocol · testnet</div>
           <h2
             style={{
               color: "var(--paper)",
@@ -53,7 +53,7 @@ export function ProductComposition() {
             <div className="hero-metric">
               <span>Last observed</span>
               <strong>18s</strong>
-              <span>Block 17,924,118</span>
+              <span>Pinned block evidence</span>
             </div>
           </div>
           <div className="hero-alert">

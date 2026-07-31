@@ -59,7 +59,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
                 window.location.href = "/app/overview";
               }}
             >
-              Try the demo <ArrowRight2 size={13} />
+              Open the testnet app <ArrowRight2 size={13} />
             </Button>
           </div>
         </nav>
@@ -92,7 +92,7 @@ export function Footer() {
           <Link href="/login">Sign in</Link>
         </div>
         <span className="a-status a-status--success">
-          <i /> Mock systems operational
+          <i /> Live providers fail closed
         </span>
       </div>
       <div className="footer-word" aria-hidden="true">

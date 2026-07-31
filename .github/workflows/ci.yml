@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      live_testnet:
+        description: Run protected Base Sepolia acceptance
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  NODE_ENV: test
+  AETHER_ACCESS_TOKEN_SECRET: ci-only-access-secret-at-least-32-characters
+  AETHER_REFRESH_TOKEN_SECRET: ci-only-refresh-secret-at-least-32-characters
+  AETHER_COOKIE_SECRET: ci-only-cookie-secret-at-least-32-characters
+  NEXT_PUBLIC_AETHER_API_URL: http://127.0.0.1:4000/v1
+
+jobs:
+  static-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:runtime-imports
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm check-types
+      - run: pnpm test
+      - run: pnpm build
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/aether_ci
+      REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:integration
+      - run: pnpm test:security
+
+  foundry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge test --root packages/contracts -vvv
+
+  playwright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @aether/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+
+  live-testnet:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.live_testnet == true &&
+      github.ref == 'refs/heads/main'
+    environment: live-base-sepolia
+    runs-on: ubuntu-latest
+    env:
+      AETHER_RPC_URL: ${{ secrets.AETHER_RPC_URL }}
+      KEEPERHUB_API_KEY: ${{ secrets.KEEPERHUB_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
+      GITHUB_PRIVATE_KEY_BASE64: ${{ secrets.GITHUB_PRIVATE_KEY_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm chain:doctor
+      - run: pnpm keeperhub:doctor
+      - run: pnpm openai:doctor
+      - run: pnpm test:live

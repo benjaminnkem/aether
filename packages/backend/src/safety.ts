@@ -15,6 +15,7 @@ export interface SafetyInput {
   planHash: string;
   simulation: unknown;
   approvals: BoundApproval[];
+  planCreatedBy?: string;
   now?: Date;
 }
 
@@ -103,6 +104,8 @@ export class ExecutionSafety {
             approval.decision === "approve" &&
             approval.planHash === input.planHash &&
             approval.simulationId === simulation.simulationId &&
+            (!policy.prohibitSelfApproval ||
+              approval.actorId !== input.planCreatedBy) &&
             new Date(approval.expiresAt) > now,
         )
         .map((approval) => approval.actorId),

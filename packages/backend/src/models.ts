@@ -33,8 +33,83 @@ export const modelDefinitions = [
     name: "User",
     collection: "users",
     schema: new Schema(
-      { userId: { type: String, required: true, unique: true }, email: String },
+      {
+        userId: { type: String, required: true, unique: true },
+        email: { type: String, required: true, unique: true, lowercase: true },
+        passwordHash: { type: String, required: true, select: false },
+        emailVerifiedAt: Date,
+        failedLoginCount: { type: Number, default: 0 },
+        lockedUntil: Date,
+      },
       { timestamps: true },
+    ),
+  },
+  {
+    name: "RefreshSession",
+    collection: "refresh_sessions",
+    schema: new Schema(
+      {
+        sessionId: { type: String, required: true, unique: true },
+        userId: { type: String, required: true, index: true },
+        tokenHash: { type: String, required: true, select: false },
+        familyId: { type: String, required: true, index: true },
+        replacedBySessionId: String,
+        expiresAt: { type: Date, required: true },
+        revokedAt: Date,
+        revokeReason: String,
+        userAgentHash: String,
+        ipHash: String,
+        lastUsedAt: Date,
+      },
+      { timestamps: true },
+    ).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+  },
+  {
+    name: "AuthChallenge",
+    collection: "auth_challenges",
+    schema: new Schema(
+      {
+        challengeId: { type: String, required: true, unique: true },
+        userId: { type: String, required: true, index: true },
+        purpose: {
+          type: String,
+          required: true,
+          enum: ["email_verification", "password_reset"],
+        },
+        tokenHash: { type: String, required: true, select: false },
+        expiresAt: { type: Date, required: true },
+        consumedAt: Date,
+      },
+      { timestamps: true },
+    ).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+  },
+  {
+    name: "AuthRateLimit",
+    collection: "auth_rate_limits",
+    schema: new Schema(
+      {
+        key: { type: String, required: true, unique: true },
+        count: { type: Number, required: true, default: 0 },
+        expiresAt: { type: Date, required: true },
+      },
+      { timestamps: true },
+    ).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+  },
+  {
+    name: "AuthAuditEvent",
+    collection: "auth_audit_events",
+    schema: new Schema(
+      {
+        eventId: { type: String, required: true, unique: true },
+        userId: String,
+        eventType: { type: String, required: true },
+        result: { type: String, required: true },
+        emailHash: String,
+        ipHash: String,
+        userAgentHash: String,
+        evidence: Schema.Types.Mixed,
+      },
+      { timestamps: { createdAt: true, updatedAt: false } },
     ),
   },
   {
@@ -68,6 +143,7 @@ export const modelDefinitions = [
     collection: "networks",
     schema: tenantSchema({
       networkId: { type: String, required: true },
+      name: String,
       chainId: Number,
       rpcMetadata: Schema.Types.Mixed,
     }).index(
@@ -80,8 +156,10 @@ export const modelDefinitions = [
     collection: "contracts",
     schema: tenantSchema({
       contractId: { type: String, required: true },
+      name: String,
       address: String,
       proxyType: String,
+      implementationAddress: String,
       abiProvenance: String,
       owner: String,
     }).index(
@@ -95,6 +173,11 @@ export const modelDefinitions = [
     schema: tenantSchema({
       provider: { type: String, required: true },
       status: String,
+      mode: String,
+      installationId: String,
+      repository: String,
+      defaultBranch: String,
+      desiredStatePath: String,
       encryptedCredentials: { type: String, select: false },
       metadata: Schema.Types.Mixed,
     }).index(
@@ -152,9 +235,12 @@ export const modelDefinitions = [
     collection: "operations",
     schema: tenantSchema({
       operationId: { type: String, required: true },
+      findingId: String,
+      title: String,
       status: String,
       activePlanVersionId: String,
       desiredStateVersionId: String,
+      createdBy: String,
     }).index(
       { organizationId: 1, protocolId: 1, operationId: 1 },
       { unique: true },
@@ -167,6 +253,7 @@ export const modelDefinitions = [
       planVersionId: { type: String, required: true },
       operationId: String,
       planHash: String,
+      planCreatedBy: String,
       request: Schema.Types.Mixed,
       policy: Schema.Types.Mixed,
       evidenceSnapshot: Schema.Types.Mixed,
@@ -201,13 +288,20 @@ export const modelDefinitions = [
       status: String,
       idempotencyKey: String,
       planHash: String,
+      requestHash: String,
+      observationBlockNumber: Number,
       request: Schema.Types.Mixed,
       policy: Schema.Types.Mixed,
       simulation: Schema.Types.Mixed,
       approvals: [Schema.Types.Mixed],
       providerCorrelationId: String,
-      workflowId: String,
+      directExecutionId: String,
       transactionHash: String,
+      transactionLink: String,
+      gasUsedWei: String,
+      providerRequestId: String,
+      submittedAt: Date,
+      completedAt: Date,
       retryLocked: Boolean,
       providerStepLogs: [Schema.Types.Mixed],
     })
@@ -220,6 +314,39 @@ export const modelDefinitions = [
         { unique: true, sparse: true },
       )
       .index({ providerCorrelationId: 1 }, { sparse: true }),
+  },
+  {
+    name: "Investigation",
+    collection: "investigations",
+    schema: tenantSchema({
+      investigationId: { type: String, required: true },
+      findingId: { type: String, required: true },
+      facts: [String],
+      inferences: [String],
+      confidence: Number,
+      affectedInvariants: [String],
+      recommendedAction: String,
+      suggestion: Schema.Types.Mixed,
+      advisoryOnly: { type: Boolean, required: true },
+      providerCorrelationId: String,
+    }).index(
+      { organizationId: 1, protocolId: 1, investigationId: 1 },
+      { unique: true },
+    ),
+  },
+  {
+    name: "WebhookDelivery",
+    collection: "webhook_deliveries",
+    schema: new Schema(
+      {
+        provider: { type: String, required: true },
+        deliveryId: { type: String, required: true },
+        event: String,
+        receivedAt: Date,
+        processedAt: Date,
+      },
+      { timestamps: true },
+    ).index({ provider: 1, deliveryId: 1 }, { unique: true }),
   },
   {
     name: "ExecutionStep",
@@ -283,17 +410,6 @@ export const modelDefinitions = [
       providerCorrelationId: String,
       lockedReason: String,
     }).index({ organizationId: 1, protocolId: 1, key: 1 }, { unique: true }),
-  },
-  {
-    name: "MvpState",
-    collection: "mvp_state",
-    schema: tenantSchema({
-      scenario: String,
-      lifecycleStage: Number,
-      desiredState: Schema.Types.Mixed,
-      setup: Schema.Types.Mixed,
-      approval: Schema.Types.Mixed,
-    }).index({ organizationId: 1, protocolId: 1 }, { unique: true }),
   },
 ] as const;
 

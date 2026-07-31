@@ -13,14 +13,14 @@ contract DeployArcadia is ScriptBase {
     function run() external returns (Deployment memory deployment) {
         _requireSupportedChain();
 
-        address admin = vm.envOr("AETHER_CONTRACT_ADMIN_ADDRESS", tx.origin);
-        address executor = vm.envOr(
+        address admin = _deploymentAddress("AETHER_CONTRACT_ADMIN_ADDRESS", tx.origin);
+        address executor = _deploymentAddress(
             "AETHER_EXECUTOR_ADDRESS", address(0xA11CE00000000000000000000000000000000002)
         );
-        address driftActor = vm.envOr(
+        address driftActor = _deploymentAddress(
             "AETHER_DRIFT_ACTOR_ADDRESS", address(0xA11Ce00000000000000000000000000000000003)
         );
-        address fixtureAdmin = vm.envOr(
+        address fixtureAdmin = _deploymentAddress(
             "AETHER_FIXTURE_ADMIN_ADDRESS", address(0xa11CE00000000000000000000000000000000004)
         );
         uint256 maxOracleAge = vm.envOr("AETHER_MAX_ORACLE_AGE", DEFAULT_MAX_ORACLE_AGE);
@@ -59,12 +59,27 @@ contract DeployArcadia is ScriptBase {
         vm.serializeAddress(object, "marketProxy", deployment.marketProxy);
         vm.serializeAddress(object, "approvedOracle", deployment.approvedOracle);
         vm.serializeAddress(object, "unauthorizedOracle", deployment.unauthorizedOracle);
+        vm.serializeAddress(object, "staleOracle", deployment.unauthorizedOracle);
         vm.serializeAddress(object, "admin", deployment.admin);
         vm.serializeAddress(object, "executor", deployment.executor);
         vm.serializeAddress(object, "driftActor", deployment.driftActor);
         vm.serializeAddress(object, "fixtureAdmin", deployment.fixtureAdmin);
         vm.serializeUint(object, "maxOracleAge", deployment.maxOracleAge);
+        vm.serializeUint(object, "deploymentBlock", block.number);
+        vm.serializeAddress(object, "deployer", tx.origin);
+        vm.serializeString(
+            object, "sourceCommit", vm.envOr("AETHER_SOURCE_COMMIT", string("unrecorded"))
+        );
         string memory json = vm.serializeBool(object, "deployed", true);
         vm.writeJson(json, _deploymentPath());
+    }
+
+    function _deploymentAddress(string memory name, address localFallback)
+        internal
+        view
+        returns (address)
+    {
+        if (block.chainid == LOCAL_ANVIL_CHAIN_ID) return vm.envOr(name, localFallback);
+        return vm.envAddress(name);
     }
 }

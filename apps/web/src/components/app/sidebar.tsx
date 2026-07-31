@@ -20,7 +20,13 @@ const items = [
   ["Audit Log", "/app/audit-log", ArchiveBook],
 ] as const;
 
-export function Sidebar() {
+export function Sidebar({
+  organization,
+  protocol,
+}: {
+  organization?: { name: string; role: string };
+  protocol?: { name: string; environment: string };
+}) {
   const pathname = usePathname();
   const open = useUiStore((state) => state.sidebarOpen);
   const setOpen = useUiStore((state) => state.setSidebarOpen);
@@ -42,10 +48,12 @@ export function Sidebar() {
       </div>
       <button className="sidebar__switcher" onClick={() => setOpen(false)}>
         <span>
-          <strong>Arcadia Labs</strong>
-          <span>Arcadia Markets</span>
+          <strong>{organization?.name ?? "No organization loaded"}</strong>
+          <span>{protocol?.name ?? "No protocol loaded"}</span>
         </span>
-        <span className="a-badge">PROD</span>
+        <span className="a-badge">
+          {protocol?.environment?.toUpperCase() ?? "SETUP"}
+        </span>
       </button>
       <nav className="sidebar__nav">
         {items.map(([label, href, Icon]) => (
@@ -62,7 +70,7 @@ export function Sidebar() {
       </nav>
       <div className="sidebar__footer">
         <div className="connection">
-          <i /> Mock realtime connected
+          <i /> Live API required
         </div>
         <div
           style={{
@@ -72,7 +80,16 @@ export function Sidebar() {
             marginTop: 12,
           }}
         >
-          <div className="a-badge">MC</div>
+          <div className="a-badge" aria-hidden="true">
+            {organization?.name
+              ? organization.name
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((part) => part[0])
+                  .join("")
+                  .toUpperCase()
+              : "—"}
+          </div>
           <span>
             <strong
               style={{
@@ -82,10 +99,10 @@ export function Sidebar() {
                 fontWeight: 500,
               }}
             >
-              Mina Chen
+              {organization ? "Tenant session" : "Sign in required"}
             </strong>
             <span style={{ color: "var(--ash)", fontSize: 9 }}>
-              Organization owner
+              {organization?.role ?? "No membership loaded"}
             </span>
           </span>
         </div>

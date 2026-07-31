@@ -9,7 +9,14 @@ import {
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { JwtService } from "@nestjs/jwt";
-import { tenantContextSchema, type TenantContext } from "@aether/backend";
+import {
+  registerModels,
+  safeEqual,
+  tenantContextSchema,
+  type TenantContext,
+} from "@aether/backend";
+import { InjectConnection } from "@nestjs/mongoose";
+import type { Connection, Model } from "mongoose";
 import type { Request } from "express";
 
 export const IS_PUBLIC = "aether:public";
@@ -30,10 +37,15 @@ export const Actor = createParamDecorator(
 
 @Injectable()
 export class AuthGuard implements CanActivate {
+  private readonly models: Record<string, Model<unknown>>;
+
   constructor(
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
-  ) {}
+    @InjectConnection() connection: Connection,
+  ) {
+    this.models = registerModels(connection);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (
@@ -46,42 +58,52 @@ export class AuthGuard implements CanActivate {
     }
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const authorization = request.headers.authorization;
-    const development =
-      (process.env.AETHER_AUTH_MODE ?? "development") === "development";
-
+    const token =
+      authorization?.match(/^Bearer (.+)$/)?.[1] ??
+      (request.cookies?.aether_access as string | undefined);
+    if (!token) throw new UnauthorizedException("Authentication required.");
     let tenant: TenantContext;
-    if (!authorization && development) {
-      tenant = {
-        actorId: "user-mina",
-        organizationId: "org-arcadia",
-        protocolId: "arcadia",
-        role: "owner",
-      };
-    } else {
-      const token = authorization?.match(/^Bearer (.+)$/)?.[1];
-      if (!token) throw new UnauthorizedException("Bearer token required.");
-      try {
-        tenant = tenantContextSchema.parse(
-          await this.jwt.verifyAsync(token, {
-            audience: "aether-api",
-            issuer: "aether",
-          }),
-        );
-      } catch {
-        throw new UnauthorizedException("Invalid access token.");
-      }
+    try {
+      const claims = await this.jwt.verifyAsync(token, {
+        secret: process.env.AETHER_ACCESS_TOKEN_SECRET,
+        audience: "aether-api",
+        issuer: "aether",
+      });
+      tenant = tenantContextSchema.parse({
+        ...claims,
+        actorId: claims.actorId ?? claims.sub,
+      });
+    } catch {
+      throw new UnauthorizedException("Invalid access token.");
     }
+    const membership = await this.models
+      .Membership!.findOne({
+        organizationId: tenant.organizationId,
+        userId: tenant.actorId,
+      })
+      .lean()
+      .exec();
+    const protocolExists = await this.models.Protocol!.exists({
+      organizationId: tenant.organizationId,
+      protocolId: tenant.protocolId,
+    });
+    if (!membership || !protocolExists) {
+      throw new ForbiddenException("Membership is no longer active.");
+    }
+    tenant = tenantContextSchema.parse({
+      ...tenant,
+      role: String((membership as Record<string, unknown>).role),
+    });
 
-    const configuredOrganization =
-      process.env.AETHER_ORGANIZATION_ID ?? "org-arcadia";
-    const configuredProtocol = process.env.AETHER_PROTOCOL_ID ?? "arcadia";
     if (
-      tenant.organizationId !== configuredOrganization ||
-      tenant.protocolId !== configuredProtocol
+      !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
+      request.cookies?.aether_access
     ) {
-      throw new ForbiddenException(
-        "Actor is not a member of the configured MVP context.",
-      );
+      const cookie = request.cookies?.aether_csrf as string | undefined;
+      const header = request.get("x-csrf-token");
+      if (!cookie || !header || !safeEqual(cookie, header)) {
+        throw new ForbiddenException("CSRF validation failed.");
+      }
     }
 
     const requestedOrganization =

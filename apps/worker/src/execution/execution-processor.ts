@@ -34,14 +34,20 @@ export interface ExecutionRecord {
   status: ExecutionStatus;
   idempotencyKey: string;
   planHash: string;
+  planCreatedBy?: string;
   request: TransactionRequest;
   policy: PolicyEnvelope;
   simulation: unknown;
   approvals: BoundApproval[];
   providerCorrelationId?: string;
-  workflowId?: string;
+  directExecutionId?: string;
   transactionHash?: string;
+  transactionLink?: string;
+  gasUsedWei?: string;
+  error?: string;
+  completedAt?: Date | string;
   retryLocked: boolean;
+  observationBlockNumber: number;
   correctionOperationId?: string;
   providerStepLogs?: KeeperStepLog[];
 }
@@ -65,6 +71,10 @@ export interface ExecutionStore {
 
 export class ExecutionProcessor {
   private readonly safety = new ExecutionSafety();
+  private readonly finalityConfirmations = positiveIntegerEnv(
+    "AETHER_FINALITY_CONFIRMATIONS",
+    12,
+  );
 
   constructor(
     private readonly store: ExecutionStore,
@@ -79,7 +89,7 @@ export class ExecutionProcessor {
     const result = await this.simulator.simulate(
       execution.planHash,
       execution.request,
-      17_924_118,
+      execution.observationBlockNumber,
     );
     return this.store.update(
       job,
@@ -116,6 +126,7 @@ export class ExecutionProcessor {
       planHash: execution.planHash,
       simulation: execution.simulation,
       approvals: execution.approvals,
+      planCreatedBy: execution.planCreatedBy,
     });
 
     const providerCorrelationId =
@@ -143,7 +154,7 @@ export class ExecutionProcessor {
             status: "unknown",
             retryLocked: true,
             providerCorrelationId: submission.providerCorrelationId,
-            workflowId: submission.workflowId,
+            directExecutionId: submission.directExecutionId,
             transactionHash: submission.transactionHash,
           },
           "execution.outcome_unknown",
@@ -157,7 +168,7 @@ export class ExecutionProcessor {
           status: "submitted",
           retryLocked: false,
           providerCorrelationId: submission.providerCorrelationId,
-          workflowId: submission.workflowId,
+          directExecutionId: submission.directExecutionId,
           transactionHash: submission.transactionHash,
         },
         "execution.submitted",
@@ -165,6 +176,37 @@ export class ExecutionProcessor {
       await this.store.enqueue("execution.reconcile", job);
       return submitted;
     } catch (error) {
+      const httpStatus =
+        error instanceof Error &&
+        "status" in error &&
+        typeof (error as Error & { status?: unknown }).status === "number"
+          ? (error as Error & { status: number }).status
+          : undefined;
+      if (httpStatus === 429) {
+        await this.store.update(
+          job,
+          { status: "intent_persisted", retryLocked: false },
+          "execution.rate_limited",
+        );
+        const retryAfterMs =
+          typeof error === "object" &&
+          error !== null &&
+          "retryAfterMs" in error &&
+          typeof (error as { retryAfterMs?: unknown }).retryAfterMs === "number"
+            ? (error as Error & { retryAfterMs: number }).retryAfterMs
+            : 1_000;
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(Math.max(retryAfterMs, 0), 60_000)),
+        );
+        throw error;
+      }
+      if (httpStatus && [400, 401, 403, 422].includes(httpStatus)) {
+        return this.store.update(
+          job,
+          { status: "failed", retryLocked: false },
+          "execution.provider_rejected",
+        );
+      }
       const unknown = await this.store.update(
         job,
         { status: "unknown", retryLocked: true },
@@ -191,7 +233,7 @@ export class ExecutionProcessor {
     const status = keeperStatusSchema.parse(
       await this.keeperHub.reconcile(
         execution.providerCorrelationId,
-        execution.workflowId,
+        execution.directExecutionId,
       ),
     );
     if (status.status === "unknown" || status.status === "pending") {
@@ -199,6 +241,9 @@ export class ExecutionProcessor {
         job,
         { status: "reconciling", retryLocked: true },
         "execution.reconciliation_pending",
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, status.pollIntervalHintMs ?? 2_000),
       );
       const pending = new Error(
         "Reconciliation is pending; retry status lookup without resubmitting.",
@@ -208,7 +253,7 @@ export class ExecutionProcessor {
     }
     if (status.status === "failed") {
       const providerStepLogs = await this.keeperHub.getStepLogs(
-        status.workflowId,
+        status.directExecutionId,
       );
       return this.store.update(
         job,
@@ -217,7 +262,7 @@ export class ExecutionProcessor {
       );
     }
     const providerStepLogs = await this.keeperHub.getStepLogs(
-      status.workflowId,
+      status.directExecutionId,
     );
     const confirmed = await this.store.update(
       job,
@@ -225,6 +270,10 @@ export class ExecutionProcessor {
         status: "confirmed",
         retryLocked: false,
         transactionHash: status.transactionHash,
+        transactionLink: status.transactionLink,
+        gasUsedWei: status.gasUsedWei,
+        error: status.error,
+        completedAt: status.completedAt,
         providerStepLogs,
       },
       "execution.confirmed",
@@ -244,7 +293,7 @@ export class ExecutionProcessor {
       verification = verificationResultSchema.parse(
         await this.chainReader.verifyOracle(
           execution.request,
-          12,
+          this.finalityConfirmations,
           execution.transactionHash,
         ),
       );
@@ -270,7 +319,7 @@ export class ExecutionProcessor {
       verification.verified &&
       verification.fresh &&
       verification.canonical &&
-      verification.confirmations >= 12 &&
+      verification.confirmations >= this.finalityConfirmations &&
       verification.oracle.toLowerCase() ===
         execution.request.desiredOracle.toLowerCase()
     ) {
@@ -290,4 +339,12 @@ export class ExecutionProcessor {
       "execution.forward_correction_required",
     );
   }
+}
+
+function positiveIntegerEnv(name: string, fallback: number): number {
+  const parsed = Number.parseInt(process.env[name] ?? String(fallback), 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return parsed;
 }

@@ -102,7 +102,7 @@ export const operationSchema = z.object({
 export const executionSchema = z.object({
   id: z.string(),
   operationId: z.string(),
-  workflowId: z.string(),
+  directExecutionId: z.string(),
   status: statusSchema,
   network: z.string(),
   currentStep: z.string(),
@@ -117,7 +117,7 @@ export const executionSchema = z.object({
 });
 
 export const dashboardSchema = z.object({
-  organization: organizationSchema,
+  organization: organizationSchema.nullable(),
   protocols: z.array(protocolSchema),
   records: z.record(z.string(), z.array(recordSchema)),
   metrics: z.array(
@@ -128,19 +128,17 @@ export const dashboardSchema = z.object({
       trend: z.string().optional(),
     }),
   ),
-  operation: operationSchema,
-  execution: executionSchema,
+  operation: operationSchema.optional(),
+  execution: executionSchema.optional(),
   notifications: z.array(recordSchema),
-  scenario: z.string(),
-  lifecycleStage: z.number().int().nonnegative(),
   realtime: z.enum(["connected", "reconnecting", "offline"]),
 });
 
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 export const desiredStateSchema = z.object({
   version: z.string().regex(/^v\d+\.\d+\.\d+$/),
-  networkId: z.string().min(1),
-  chainId: z.coerce.number().int().positive(),
+  networkId: z.literal("base-sepolia"),
+  chainId: z.coerce.number().pipe(z.literal(84532)),
   contractId: z.string().min(1),
   contractVersion: z.string().min(1),
   implementationAddress: addressSchema,
@@ -164,15 +162,6 @@ export const desiredStateSchema = z.object({
   source: z.string().min(1),
 });
 
-export const scenarioSchema = z.enum([
-  "healthy",
-  "unauthorized-oracle",
-  "approval-execution",
-  "missing-role",
-  "partial-execution",
-  "unknown-outcome",
-]);
-
 export type Organization = z.infer<typeof organizationSchema>;
 export type Protocol = z.infer<typeof protocolSchema>;
 export type AetherRecord = z.infer<typeof recordSchema>;
@@ -181,7 +170,6 @@ export type Operation = z.infer<typeof operationSchema>;
 export type Execution = z.infer<typeof executionSchema>;
 export type Dashboard = z.infer<typeof dashboardSchema>;
 export type DesiredState = z.infer<typeof desiredStateSchema>;
-export type Scenario = z.infer<typeof scenarioSchema>;
 
 export const routeTitles: Record<string, string> = {
   overview: "Overview",

@@ -1,60 +1,139 @@
 # Environment
 
-Browser-safe variables:
+Aether has one runtime mode: **live application mode**. Local development may use local infrastructure such as MongoDB, Redis, Mailpit, and Anvil, but the application never fabricates provider success.
 
-| Variable                          | Values        | Purpose                                    |
-| --------------------------------- | ------------- | ------------------------------------------ |
-| `NEXT_PUBLIC_AETHER_DATA_MODE`    | `mock`, `api` | Defaults to mock; only `api` enables HTTP. |
-| `NEXT_PUBLIC_AETHER_API_URL`      | URL/path      | API base URL; defaults to `/v1`.           |
-| `NEXT_PUBLIC_AETHER_GITHUB_URL`   | Public URL    | Optional repository link.                  |
-| `NEXT_PUBLIC_AETHER_EXPLORER_URL` | Public URL    | Explorer links.                            |
+## Rules
 
-Server variables:
+- `.env` is never committed.
+- Codex must read the existing `.env` without printing secret values.
+- Existing non-empty user values must be preserved unless invalid.
+- Codex may generate local cryptographic secrets.
+- Codex must create `.env.example` with names and descriptions only.
+- Startup validates the environment with a strict schema.
+- Production and testnet startup fail on missing required variables.
+- Secrets must be redacted from logs, errors, audit records, screenshots, and final reports.
 
-| Variable                           | Purpose                                                                      |
-| ---------------------------------- | ---------------------------------------------------------------------------- |
-| `PORT`                             | API port, default `4000`.                                                    |
-| `AETHER_AUTH_MODE`                 | `development` supplies the fixed local owner; any other value requires JWT.  |
-| `AETHER_JWT_SECRET`                | JWT verification secret; required and at least 32 characters in production.  |
-| `AETHER_PERSISTENCE_MODE`          | `mongo` by default; `memory` is restricted to API tests and smoke startup.   |
-| `MONGODB_URI`                      | MongoDB replica-set URI used by API and worker.                              |
-| `REDIS_URL`                        | Redis URI used by BullMQ.                                                    |
-| `AETHER_WEB_ORIGINS`               | Comma-separated exact CORS origins.                                          |
-| `AETHER_ORGANIZATION_ID`           | Fixed MVP organization identifier, default `org-arcadia`.                    |
-| `AETHER_PROTOCOL_ID`               | Fixed MVP protocol identifier, default `arcadia`.                            |
-| `AETHER_PROVIDER_MODE`             | `mock` or `live`, independent from browser data mode.                        |
-| `AETHER_RPC_URL`                   | Server-only EVM RPC URL in live provider mode.                               |
-| `AETHER_ORACLE_READ_CALLDATA`      | Optional `oracleStatus()` calldata override; defaults to generated selector. |
-| `KEEPERHUB_BASE_URL`               | KeeperHub API origin.                                                        |
-| `KEEPERHUB_API_TOKEN`              | Server-only KeeperHub bearer credential.                                     |
-| `KEEPERHUB_WORKFLOW_ID`            | Pre-reviewed testnet workflow receiving the exact authorized request.        |
-| `GITHUB_READ_TOKEN`                | Optional server-only read token for release provenance.                      |
-| `AETHER_OPENAI_ENABLED`            | `true` enables the optional advisory assistant in live provider mode.        |
-| `OPENAI_API_KEY`                   | Server-only OpenAI credential; required only when the assistant is enabled.  |
-| `OPENAI_MODEL`                     | Optional Responses API model override; defaults to `gpt-5.6-sol`.            |
-| `AETHER_CREDENTIAL_ENCRYPTION_KEY` | Base64-encoded 32-byte AES-256-GCM key for stored credentials.               |
+## Values Codex may generate automatically
 
-Foundry script variables are public configuration, not secrets:
+Codex may safely generate and write these when absent:
 
-| Variable                        | Purpose                                                     |
-| ------------------------------- | ----------------------------------------------------------- |
-| `AETHER_CONTRACT_ADMIN_ADDRESS` | Default admin receiving role-administration authority.      |
-| `AETHER_EXECUTOR_ADDRESS`       | KeeperHub executor receiving `ORACLE_ADMIN_ROLE`.           |
-| `AETHER_DRIFT_ACTOR_ADDRESS`    | Fixture actor able to create an out-of-policy oracle state. |
-| `AETHER_FIXTURE_ADMIN_ADDRESS`  | Fixture-only freshness writer.                              |
-| `AETHER_UNPRIVILEGED_ADDRESS`   | Caller used by the missing-role simulation.                 |
-| `AETHER_MAX_ORACLE_AGE`         | Freshness window in seconds; defaults to `3600`.            |
-| `AETHER_RECORD_DEPLOYMENT`      | Writes the selected chain deployment artifact when `true`.  |
+- `AETHER_ACCESS_TOKEN_SECRET`
+- `AETHER_REFRESH_TOKEN_SECRET`
+- `AETHER_COOKIE_SECRET`
+- `AETHER_CSRF_SECRET`
+- `AETHER_CREDENTIAL_ENCRYPTION_KEY`
+- `GITHUB_WEBHOOK_SECRET`
+- local database names
+- local service URLs
+- local Mailpit settings
+- cryptographically random internal IDs
 
-No server variable may use a `NEXT_PUBLIC_` prefix. Provider tokens, RPC credentials,
-and signing material must not be passed through protocol setup payloads. A production
-deployment should source secrets from its secret manager and rotate them independently
-of application images.
+Use suitable lengths and encodings. Never print generated values in the final response.
 
-`KEEPERHUB_BASE_URL` must include the documented `/api` prefix, for example
-`https://app.keeperhub.com/api`. Mainnet chain ID `1` remains prohibited regardless of
-provider configuration.
+## Browser-safe variables
 
-The contract scripts deliberately define no private-key environment variable. Use
-Foundry's keystore, hardware-wallet, or unlocked local-account CLI options. Generated
-deployment files contain public addresses only.
+| Variable                                | Purpose                    |
+| --------------------------------------- | -------------------------- |
+| `NEXT_PUBLIC_AETHER_API_URL`            | NestJS API URL.            |
+| `NEXT_PUBLIC_AETHER_APP_URL`            | Canonical web URL.         |
+| `NEXT_PUBLIC_BASE_SEPOLIA_EXPLORER_URL` | Transaction/address links. |
+
+There is no browser mock-mode variable.
+
+## Core server variables
+
+| Variable                           | Purpose                                             |
+| ---------------------------------- | --------------------------------------------------- |
+| `NODE_ENV`                         | `development`, `test`, or `production`.             |
+| `PORT`                             | API port.                                           |
+| `AETHER_WEB_ORIGINS`               | Exact comma-separated CORS origins.                 |
+| `MONGODB_URI`                      | MongoDB replica-set URI.                            |
+| `REDIS_URL`                        | BullMQ Redis URI.                                   |
+| `AETHER_ACCESS_TOKEN_SECRET`       | Access JWT signing secret.                          |
+| `AETHER_REFRESH_TOKEN_SECRET`      | Refresh JWT signing secret.                         |
+| `AETHER_COOKIE_SECRET`             | Cookie signing/encryption secret.                   |
+| `AETHER_CSRF_SECRET`               | CSRF token secret.                                  |
+| `AETHER_CREDENTIAL_ENCRYPTION_KEY` | Base64 32-byte AES-256-GCM key.                     |
+| `AETHER_ACCESS_TOKEN_TTL_SECONDS`  | Short access-token lifetime.                        |
+| `AETHER_REFRESH_TOKEN_TTL_SECONDS` | Refresh-session lifetime.                           |
+| `AETHER_FINALITY_CONFIRMATIONS`    | Base Sepolia confirmation threshold.                |
+| `AETHER_MAX_ORACLE_AGE`            | Oracle freshness invariant and deployment fixture.  |
+| `AETHER_MAINNET_DISABLED`          | Must be `true` for this release.                    |
+| `AETHER_SECONDARY_RPC_URL`         | Optional independent Base Sepolia verification RPC. |
+
+Remove fixed organization and protocol IDs from runtime configuration. IDs are created in MongoDB through onboarding.
+
+## KeeperHub variables
+
+| Variable                       | Purpose                                                                                  |
+| ------------------------------ | ---------------------------------------------------------------------------------------- |
+| `KEEPERHUB_BASE_URL`           | Must be `https://app.keeperhub.com/api` unless explicitly using an approved alternative. |
+| `KEEPERHUB_API_KEY`            | Organization key beginning with `kh_`.                                                   |
+| `KEEPERHUB_REQUEST_TIMEOUT_MS` | Bounded provider timeout.                                                                |
+
+The canonical MVP uses KeeperHub Direct Execution and therefore does not require `KEEPERHUB_WORKFLOW_ID`.
+
+Codex must validate the key with real KeeperHub calls and derive/store the KeeperHub organization wallet address through the supported API. It must not infer an executor address.
+
+## Chain variables
+
+| Variable                          | Purpose                                                              |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `AETHER_CHAIN_ID`                 | Must be `84532`.                                                     |
+| `AETHER_RPC_URL`                  | Reliable Base Sepolia RPC.                                           |
+| `AETHER_DEPLOYMENT_REGISTRY_PATH` | Generated live deployment artifact.                                  |
+| `AETHER_CONTRACT_ADMIN_ADDRESS`   | Address receiving admin authority.                                   |
+| `AETHER_EXECUTOR_ADDRESS`         | KeeperHub organization wallet receiving the narrow correction role.  |
+| `AETHER_DRIFT_ACTOR_ADDRESS`      | Test-fixture actor authorized only to create an out-of-policy state. |
+| `AETHER_FIXTURE_ADMIN_ADDRESS`    | Test-fixture freshness controller.                                   |
+
+Signing keys must not be plain `.env` variables. Use Foundry keystore, hardware wallet, or an explicitly approved secret-manager signer.
+
+## GitHub App variables
+
+| Variable                    | Purpose                                |
+| --------------------------- | -------------------------------------- |
+| `GITHUB_APP_ID`             | GitHub App numeric ID.                 |
+| `GITHUB_CLIENT_ID`          | OAuth client ID.                       |
+| `GITHUB_CLIENT_SECRET`      | OAuth client secret.                   |
+| `GITHUB_PRIVATE_KEY_BASE64` | Base64-encoded GitHub App private key. |
+| `GITHUB_WEBHOOK_SECRET`     | Webhook signature secret.              |
+| `GITHUB_CALLBACK_URL`       | OAuth callback URL.                    |
+
+For a temporary single-user testnet deployment, Codex may support a server-only fine-grained read token only when the GitHub App cannot be configured, but the UI must state that this is an operator-managed connection and must not pretend to perform OAuth.
+
+## OpenAI variables
+
+| Variable                    | Purpose                                                                          |
+| --------------------------- | -------------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`            | Server-only API key.                                                             |
+| `OPENAI_MODEL`              | Supported structured-output model selected after checking current official docs. |
+| `OPENAI_REQUEST_TIMEOUT_MS` | Provider timeout.                                                                |
+
+AI remains advisory-only. Deterministic code builds calldata and controls authorization.
+
+## Email variables
+
+| Variable                           | Purpose                          |
+| ---------------------------------- | -------------------------------- |
+| `SMTP_HOST`                        | SMTP provider or local Mailpit.  |
+| `SMTP_PORT`                        | SMTP port.                       |
+| `SMTP_USER`                        | Provider username when required. |
+| `SMTP_PASSWORD`                    | Provider password when required. |
+| `SMTP_FROM`                        | Verified sender.                 |
+| `AUTH_EMAIL_VERIFICATION_REQUIRED` | `true` in hosted environments.   |
+
+## External values the user must obtain
+
+Codex cannot fabricate these:
+
+1. KeeperHub account, organization API key, configured organization wallet, and testnet wallet funds.
+2. Reliable Base Sepolia RPC URL.
+3. Foundry deployer keystore or hardware-wallet access and Base Sepolia funds.
+4. GitHub App credentials, or an explicitly approved temporary fine-grained read token.
+5. OpenAI API key.
+6. SMTP provider credentials and verified sender for hosted email.
+7. WalletConnect project ID only when browser-wallet test tooling is retained.
+8. Hosted URLs and DNS/TLS configuration.
+
+Codex must list only missing items in `docs/MANUAL_EXTERNAL_ACTIONS.md`.

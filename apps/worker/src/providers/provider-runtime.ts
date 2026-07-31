@@ -23,6 +23,7 @@ export interface ProviderRequestOptions {
   idempotent?: boolean;
   timeoutMs?: number;
   acceptedStatuses?: number[];
+  onResponseHeaders?: (headers: Headers) => void;
 }
 
 interface ProviderRuntimeOptions {
@@ -59,10 +60,10 @@ export class ProviderRuntime {
     this.observe = options.observe ?? (() => undefined);
     this.health = providerHealthSchema.parse({
       provider: options.provider,
-      status: "healthy",
+      status: "unavailable",
       checkedAt: this.now().toISOString(),
       consecutiveFailures: 0,
-      detail: "Provider has not been contacted yet.",
+      detail: "Provider health has not been verified.",
     });
   }
 
@@ -90,6 +91,7 @@ export class ProviderRuntime {
           response.headers?.get("x-request-id") ??
           response.headers?.get("x-github-request-id") ??
           undefined;
+        options.onResponseHeaders?.(response.headers);
         if (
           !response.ok &&
           !options.acceptedStatuses?.includes(response.status)

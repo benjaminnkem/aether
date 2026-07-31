@@ -3,6 +3,9 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { useMutation } from "@tanstack/react-query";
+import { aetherClient } from "@aether/sdk";
 import {
   Activity,
   Add,
@@ -35,7 +38,6 @@ import {
   TabContent,
   Tabs,
   Timeline,
-  ToastRegion,
 } from "@aether/ui";
 import { AppShell } from "./app-shell";
 import { useDashboard } from "@/features/dashboard/use-dashboard";
@@ -125,7 +127,7 @@ function AppPage({
       <AppShell title={title}>
         <EmptyState
           title="Dashboard data is unavailable"
-          description="The typed mock API did not return a valid response. Retry without losing the current organization context."
+          description="The live API did not return a valid response. Check authentication, tenant setup, and provider health, then retry."
           action={
             <Button onClick={() => void dashboard.refetch()}>
               <Refresh size={14} /> Retry
@@ -138,7 +140,11 @@ function AppPage({
 
   const data = dashboard.data;
   return (
-    <AppShell title={title}>
+    <AppShell
+      title={title}
+      organization={data.organization ?? undefined}
+      protocol={data.protocols[0]}
+    >
       {route === "overview" ? <Overview data={data} /> : null}
       {route === "protocol-setup" ? <ProtocolSetup data={data} /> : null}
       {route === "desired-state" ? <DesiredState data={data} /> : null}
@@ -147,16 +153,16 @@ function AppPage({
         <OperationDetail
           data={data}
           resourceId={resourceId}
-          approve={(decision) => dashboard.approval.mutate(decision)}
+          approve={(decision) =>
+            dashboard.approval.mutate({
+              operationId: resourceId ?? data.operation?.id ?? "",
+              decision,
+            })
+          }
         />
       ) : null}
       {route === "executions" ? (
-        <ExecutionDetail
-          data={data}
-          resourceId={resourceId}
-          advance={() => dashboard.advance.mutate()}
-          advancing={dashboard.advance.isPending}
-        />
+        <ExecutionDetail data={data} resourceId={resourceId} />
       ) : null}
       {route === "audit-log" ? <AuditLog data={data} /> : null}
     </AppShell>
@@ -237,39 +243,53 @@ function Overview({
           ) : (
             <EmptyState
               title="No active drift"
-              description="The latest independent observation matches desired state v2.4.2."
+              description="The latest independent observation matches the active desired state."
             />
           )}
         </Panel>
-        <Panel
-          title="Active operation"
-          action={
-            <Link href={`/app/operations/${data.operation.id}`}>
-              Inspect plan
-            </Link>
-          }
-        >
-          <div className="operation-header">
-            <div>
-              <Status status={data.operation.status} />
-              <h3>{data.operation.title}</h3>
-              <p>{data.operation.summary}</p>
+        {data.operation ? (
+          <Panel
+            title="Active operation"
+            action={
+              <Link href={`/app/operations/${data.operation.id}`}>
+                Inspect plan
+              </Link>
+            }
+          >
+            <div className="operation-header">
+              <div>
+                <Status status={data.operation.status} />
+                <h3>{data.operation.title}</h3>
+                <p>{data.operation.summary}</p>
+              </div>
+              <Badge tone={tone(data.operation.risk)}>
+                {data.operation.risk} risk
+              </Badge>
             </div>
-            <Badge tone={tone(data.operation.risk)}>
-              {data.operation.risk} risk
-            </Badge>
-          </div>
-          <RecordList records={operations} />
-        </Panel>
-        <Panel
-          title="KeeperHub execution"
-          action={
-            <Link href={`/app/executions/${data.execution.id}`}>
-              Open execution
-            </Link>
-          }
-        >
-          <RecordList records={executions} />
+            <RecordList records={operations} />
+          </Panel>
+        ) : (
+          <Panel title="Active operation">
+            <EmptyState
+              title="No operation"
+              description="Run a scan and investigate a persisted drift finding before generating a correction plan."
+            />
+          </Panel>
+        )}
+        <Panel title="KeeperHub execution">
+          {data.execution ? (
+            <>
+              <Link href={`/app/executions/${data.execution.id}`}>
+                Open execution
+              </Link>
+              <RecordList records={executions} />
+            </>
+          ) : (
+            <EmptyState
+              title="No execution"
+              description="A real execution appears only after a plan is simulated and approved."
+            />
+          )}
         </Panel>
         <Panel title="Network health">
           <RecordList records={data.records.networks ?? []} />
@@ -286,8 +306,22 @@ function ProtocolSetup({
 }) {
   const [tab, setTab] = useState("general");
   const [dialog, setDialog] = useState<"network" | "contract" | null>(null);
-  const [toast, setToast] = useState<string>();
+  const [resourceValue, setResourceValue] = useState("");
   const protocol = data.protocols[0]!;
+  const [protocolName, setProtocolName] = useState(protocol.name);
+  const [governance, setGovernance] = useState(protocol.governance);
+  const setupMutation = useMutation({
+    mutationFn: ({
+      section,
+      input,
+    }: {
+      section: "general" | "networks" | "contracts";
+      input: Record<string, unknown>;
+    }) => aetherClient.updateProtocolSetup(section, input),
+    onSuccess: ({ section }) => toast.success(`${section} settings saved.`),
+    onError: () =>
+      toast.error("The API could not persist these settings. Nothing changed."),
+  });
   const tabs = [
     { value: "general", label: "General" },
     { value: "networks", label: "Networks" },
@@ -306,21 +340,36 @@ function ProtocolSetup({
           <div className="settings-form a-card">
             <div className="form-row">
               <Field label="Protocol name">
-                <Input defaultValue={protocol.name} />
+                <Input
+                  value={protocolName}
+                  onChange={(event) => setProtocolName(event.target.value)}
+                />
               </Field>
               <Field label="Environment">
                 <Select defaultValue={protocol.environment}>
-                  <option>Testnet</option>
-                  <option>Production</option>
+                  <option>Base Sepolia</option>
                 </Select>
               </Field>
             </div>
             <Field label="Governance authority">
-              <Input defaultValue={protocol.governance} />
+              <Input
+                value={governance}
+                onChange={(event) => setGovernance(event.target.value)}
+              />
             </Field>
             <Button
               variant="primary"
-              onClick={() => setToast("Protocol settings saved in mock mode.")}
+              disabled={setupMutation.isPending}
+              onClick={() =>
+                setupMutation.mutate({
+                  section: "general",
+                  input: {
+                    name: protocolName,
+                    environment: protocol.environment,
+                    governanceAuthority: governance,
+                  },
+                })
+              }
             >
               Save settings
             </Button>
@@ -346,14 +395,18 @@ function ProtocolSetup({
           <ConnectionPanel
             title="GitHub release provenance"
             description="Aether reads release and pull-request metadata. It never receives repository write permission in the MVP."
-            record={(data.records.connections ?? [])[0]}
+            record={(data.records.connections ?? []).find(
+              (item) => item.id === "github",
+            )}
           />
         </TabContent>
         <TabContent value="keeperhub">
           <ConnectionPanel
             title="KeeperHub execution adapter"
             description="KeeperHub is the configured third-party execution path. Aether independently controls policy, approvals, and post-execution verification."
-            record={(data.records.connections ?? [])[1]}
+            record={(data.records.connections ?? []).find(
+              (item) => item.id === "keeperhub",
+            )}
           />
         </TabContent>
       </Tabs>
@@ -361,31 +414,46 @@ function ProtocolSetup({
         open={dialog !== null}
         onOpenChange={(open) => !open && setDialog(null)}
         title={`Add ${dialog ?? "resource"}`}
-        description="This frontend-only action demonstrates the typed setup boundary."
+        description="The API validates and persists this resource for the selected protocol."
       >
         <div className="form-stack">
           <Field label="Display name">
             <Input
+              value={
+                dialog === "network" ? "Base Sepolia" : "Contract resource"
+              }
+              readOnly
               placeholder={
                 dialog === "network" ? "Base Sepolia" : "OracleAdapter"
               }
             />
           </Field>
           <Field label={dialog === "network" ? "Chain ID" : "Contract address"}>
-            <Input placeholder={dialog === "network" ? "84532" : "0x…"} />
+            <Input
+              value={dialog === "network" ? "84532" : resourceValue}
+              readOnly={dialog === "network"}
+              onChange={(event) => setResourceValue(event.target.value)}
+              placeholder={dialog === "network" ? "84532" : "0x…"}
+            />
           </Field>
           <Button
             variant="primary"
             onClick={() => {
+              if (!dialog) return;
+              setupMutation.mutate({
+                section: dialog === "network" ? "networks" : "contracts",
+                input:
+                  dialog === "network"
+                    ? { chainId: 84532, name: "Base Sepolia" }
+                    : { address: resourceValue, name: "Contract resource" },
+              });
               setDialog(null);
-              setToast(`${dialog} validated in mock mode.`);
             }}
           >
             Validate and add
           </Button>
         </div>
       </Dialog>
-      <ToastRegion message={toast} />
     </>
   );
 }
@@ -440,6 +508,23 @@ function ConnectionPanel({
   description: string;
   record?: AetherRecord;
 }) {
+  const connect = useMutation({
+    mutationFn: async () => {
+      if (title.toLowerCase().includes("github")) {
+        const { url } = await aetherClient.getGitHubInstallUrl();
+        window.location.assign(url);
+        return;
+      }
+      await aetherClient.validateProvider("keeperhub");
+    },
+    onSuccess: () => {
+      if (!title.toLowerCase().includes("github")) {
+        toast.success("Live connection state refreshed.");
+      }
+    },
+    onError: () =>
+      toast.error("The live provider is not configured or unavailable."),
+  });
   return (
     <div className="settings-form a-card">
       <div className="panel__head">
@@ -447,7 +532,7 @@ function ConnectionPanel({
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
-        <Status status={connection?.status ?? "healthy"} />
+        <Status status={connection?.status ?? "warning"} />
       </div>
       <Field label="Connection">
         <Input readOnly value={connection?.subtitle ?? "Not configured"} />
@@ -459,7 +544,11 @@ function ConnectionPanel({
           <p>{connection?.meta}</p>
         </div>
       </div>
-      <Button>Test mock connection</Button>
+      <Button disabled={connect.isPending} onClick={() => connect.mutate()}>
+        {title.toLowerCase().includes("github")
+          ? "Install GitHub App"
+          : "Validate live connection"}
+      </Button>
     </div>
   );
 }
@@ -469,12 +558,18 @@ function DesiredState({
 }: {
   data: ReturnType<typeof useDashboard>["data"] & {};
 }) {
+  const versions = data.records["desired-state"] ?? [];
+  const active = versions.find((item) => item.value === "Active");
   return (
     <>
       <PageHeader
         title="Desired State"
         description={descriptions["desired-state"]}
-        actions={<Badge tone="success">v2.4.2 active</Badge>}
+        actions={
+          active ? (
+            <Badge tone="success">{active.title} active</Badge>
+          ) : undefined
+        }
       />
       <div className="dashboard-grid">
         <div>
@@ -482,27 +577,23 @@ function DesiredState({
         </div>
         <div className="panel-stack">
           <Panel title="Active version">
-            <RecordList
-              records={[
-                {
-                  id: "v242",
-                  title: "v2.4.2",
-                  subtitle: "GitHub PR #482 · Mina Chen",
-                  status: "healthy",
-                  value: "Active",
-                  meta: "Manifest hash 0x81b2…8d02",
-                  timestamp: data.protocols[0]!.lastScanAt,
-                },
-              ]}
-            />
+            {active ? (
+              <RecordList records={[active]} />
+            ) : (
+              <p className="record-subtitle">
+                No desired-state version has been persisted.
+              </p>
+            )}
           </Panel>
           <Panel title="Safety policy">
             <Timeline
               items={[
                 {
                   title: "Approved targets only",
-                  detail: "Three registered contracts",
-                  status: "healthy",
+                  detail: `${(data.records.contracts ?? []).length} registered contract(s)`,
+                  status: (data.records.contracts ?? []).length
+                    ? "healthy"
+                    : "warning",
                 },
                 {
                   title: "Approval threshold",
@@ -518,20 +609,17 @@ function DesiredState({
             />
           </Panel>
           <Panel title="Version history">
-            <Timeline
-              items={[
-                {
-                  title: "v2.4.2 activated",
-                  detail: "Oracle heartbeat reduced to 30 minutes",
-                  status: "healthy",
-                },
-                {
-                  title: "v2.4.1 superseded",
-                  detail: "Active for 18 days",
-                  status: "resolved",
-                },
-              ]}
-            />
+            {versions.length ? (
+              <Timeline
+                items={versions.map((item) => ({
+                  title: item.title,
+                  detail: item.meta ?? item.subtitle,
+                  status: item.status,
+                }))}
+              />
+            ) : (
+              <p className="record-subtitle">No version history.</p>
+            )}
           </Panel>
         </div>
       </div>
@@ -547,6 +635,31 @@ function Drift({
   const [selected, setSelected] = useState<AetherRecord>();
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("all");
+  const scan = useMutation({
+    mutationFn: () => aetherClient.runScan(),
+    onSuccess: () => toast.success("Live observation scan queued."),
+    onError: () =>
+      toast.error("The live observation scan could not be queued."),
+  });
+  const investigate = useMutation({
+    mutationFn: (findingId: string) =>
+      aetherClient.investigateFinding(findingId),
+    onSuccess: () => toast.success("OpenAI investigation queued."),
+    onError: () =>
+      toast.error("Investigation is unavailable. Check OpenAI configuration."),
+  });
+  const plan = useMutation({
+    mutationFn: (findingId: string) => aetherClient.generatePlan(findingId),
+    onSuccess: (operation: { id?: string }) => {
+      toast.success("Immutable correction plan created.");
+      if (operation.id)
+        window.location.assign(`/app/operations/${operation.id}`);
+    },
+    onError: () =>
+      toast.error(
+        "A correction plan could not be generated from this finding.",
+      ),
+  });
   const drift = useMemo(
     () =>
       (data.records.drift ?? []).filter(
@@ -564,7 +677,7 @@ function Drift({
         title="Drift"
         description={descriptions.drift}
         actions={
-          <Button>
+          <Button disabled={scan.isPending} onClick={() => scan.mutate()}>
             <Refresh size={14} /> Run observation scan
           </Button>
         }
@@ -619,7 +732,7 @@ function Drift({
         ) : (
           <EmptyState
             title="No active drift"
-            description="Observed state matches desired state v2.4.2 across both configured networks."
+            description="No unresolved persisted findings are present."
           />
         )}
       </Panel>
@@ -638,34 +751,61 @@ function Drift({
             </div>
             <Panel title="Observed fact">
               <p className="record-subtitle">
-                At block 17,924,118, <strong>ArcadiaMarketProxy</strong>{" "}
-                returned an oracle address that does not match the active
-                manifest.
+                {selected.subtitle}. Evidence is loaded from the persisted
+                observation and desired-state version.
               </p>
-              <ChainValue value="0x91A6D4bF5c0A8dF0E9F12D78771133796a33B741" />
+              {selected.value ? <ChainValue value={selected.value} /> : null}
             </Panel>
             <Panel title="Desired value">
-              <ChainValue value="0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311" />
               <p className="record-meta">
-                Source: desired state v2.4.2 · GitHub PR #482
+                {selected.meta ?? "No desired-state provenance is available."}
               </p>
+            </Panel>
+            <Panel title="Testnet-only drift action">
+              <p className="record-subtitle">
+                Aether never stores a signing key. From an authorized local
+                Foundry account, run the fixture drift script on chain 84532,
+                then use Run observation scan.
+              </p>
+              <CodeBlock
+                language="bash"
+                code={
+                  'pnpm --filter @aether/contracts exec forge script script/CreateUnauthorizedOracleDrift.s.sol:CreateUnauthorizedOracleDrift --rpc-url "$AETHER_RPC_URL" --account aether-base-sepolia-drift --broadcast'
+                }
+              />
             </Panel>
             <div className="a-callout">
               <Warning2 size={18} />
               <div>
                 <strong>Analysis, not proof</strong>
                 <p>
-                  No configured release explains this change. A privileged
-                  direct call is likely, but actor attribution requires
-                  transaction review.
+                  Investigation is advisory. Actor attribution and corrective
+                  calldata are determined independently from RPC and approved
+                  desired state.
                 </p>
               </div>
             </div>
-            <Link href={`/app/operations/${data.operation.id}`}>
-              <Button variant="primary">
-                Generate correction plan <ArrowRight2 size={14} />
+            <Button
+              disabled={investigate.isPending}
+              onClick={() => investigate.mutate(selected.id)}
+            >
+              Investigate with OpenAI
+            </Button>
+            {data.operation ? (
+              <Link href={`/app/operations/${data.operation.id}`}>
+                <Button variant="primary">
+                  Open correction plan <ArrowRight2 size={14} />
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                variant="primary"
+                disabled={plan.isPending}
+                onClick={() => plan.mutate(selected.id)}
+              >
+                Generate correction plan
               </Button>
-            </Link>
+            )}
           </div>
         ) : null}
       </Drawer>
@@ -684,11 +824,35 @@ function OperationDetail({
 }) {
   const [selectedStep, setSelectedStep] = useState<OperationStep>();
   const operation = data.operation;
+  const simulate = useMutation({
+    mutationFn: () =>
+      aetherClient.simulateOperation(resourceId ?? operation?.id ?? ""),
+    onSuccess: () => toast.success("KeeperHub simulation queued."),
+    onError: () => toast.error("KeeperHub simulation could not be queued."),
+  });
+  const execute = useMutation({
+    mutationFn: () =>
+      aetherClient.executeOperation(resourceId ?? operation?.id ?? ""),
+    onSuccess: ({ id }) => {
+      toast.success("KeeperHub direct execution queued.");
+      window.location.assign(`/app/executions/${id}`);
+    },
+    onError: () =>
+      toast.error("Execution was not queued. Verify simulation and approval."),
+  });
+  if (!operation) {
+    return (
+      <EmptyState
+        title="Operation not found"
+        description="Generate a deterministic plan from a persisted drift finding first."
+      />
+    );
+  }
   if (resourceId !== operation.id) {
     return (
       <EmptyState
         title="Operation not found"
-        description="This mock workspace contains one immutable correction operation."
+        description="Correction operations appear here after a persisted drift finding is investigated and planned."
         action={
           <Link href={`/app/operations/${operation.id}`}>Open operation</Link>
         }
@@ -759,11 +923,21 @@ function OperationDetail({
             <RecordList
               records={[...operation.policyChecks, operation.simulation]}
             />
+            {operation.simulation.status !== "healthy" ? (
+              <Button
+                className="mt-4"
+                disabled={simulate.isPending}
+                onClick={() => simulate.mutate()}
+              >
+                Simulate exact request
+              </Button>
+            ) : null}
           </Panel>
           <Panel title="Approval">
             <RecordList records={operation.approvals} />
-            {operation.status === "awaiting_approval" ||
-            operation.status === "plan_ready" ? (
+            {(operation.status === "awaiting_approval" ||
+              operation.status === "plan_ready") &&
+            operation.simulation.status === "healthy" ? (
               <div className="page-actions">
                 <Button variant="danger" onClick={() => approve("reject")}>
                   Reject
@@ -772,12 +946,19 @@ function OperationDetail({
                   Approve exact plan
                 </Button>
               </div>
+            ) : data.execution && operation.status === "approved" ? (
+              <Button
+                variant="primary"
+                className="mt-4"
+                disabled={execute.isPending}
+                onClick={() => execute.mutate()}
+              >
+                Execute with KeeperHub <ArrowRight2 size={14} />
+              </Button>
             ) : (
-              <Link href={`/app/executions/${data.execution.id}`}>
-                <Button variant="primary" className="mt-4">
-                  Open KeeperHub execution <ArrowRight2 size={14} />
-                </Button>
-              </Link>
+              <p className="record-subtitle">
+                No execution intent has been persisted.
+              </p>
             )}
           </Panel>
         </div>
@@ -815,20 +996,24 @@ function OperationDetail({
 function ExecutionDetail({
   data,
   resourceId,
-  advance,
-  advancing,
 }: {
   data: ReturnType<typeof useDashboard>["data"] & {};
   resourceId?: string;
-  advance: () => void;
-  advancing: boolean;
 }) {
   const execution = data.execution;
+  if (!execution) {
+    return (
+      <EmptyState
+        title="Execution not found"
+        description="No persisted KeeperHub direct execution exists."
+      />
+    );
+  }
   if (resourceId !== execution.id) {
     return (
       <EmptyState
         title="Execution not found"
-        description="This mock workspace contains one KeeperHub execution."
+        description="No persisted KeeperHub execution exists with this identifier."
         action={
           <Link href={`/app/executions/${execution.id}`}>Open execution</Link>
         }
@@ -838,7 +1023,7 @@ function ExecutionDetail({
   return (
     <>
       <PageHeader
-        title={`KeeperHub ${execution.workflowId}`}
+        title={`KeeperHub ${execution.directExecutionId || "direct execution"}`}
         description={descriptions.executions}
         actions={<Status status={execution.status} />}
       />
@@ -915,14 +1100,6 @@ function ExecutionDetail({
               safe to retry.
             </p>
           </Panel>
-          {execution.status !== "completed" &&
-          execution.status !== "unknown" &&
-          execution.status !== "partial" &&
-          execution.status !== "failed" ? (
-            <Button variant="primary" disabled={advancing} onClick={advance}>
-              Advance mock lifecycle <ArrowRight2 size={14} />
-            </Button>
-          ) : null}
           <Link href="/app/audit-log">
             <Button>Review audit evidence</Button>
           </Link>

@@ -20,12 +20,12 @@ Swagger at `/v1/docs` and `/v1/openapi.json`, enforces authenticated tenant cont
 and contextual roles, writes mutation audit/outbox records transactionally, and
 serves tenant-safe resumable SSE from durable outbox sequence numbers.
 
-`apps/worker` is a standalone NestJS application context. It owns the seven queues
+`apps/worker` is a standalone NestJS application context. It owns the eight queues
 from the system architecture, publishes unpublished outbox records to BullMQ, and
 processes simulation, submit, reconciliation, and verification. Consumers use stable
 job IDs and durable execution state. An uncertain submit never throws into automatic
 submit retry; it becomes `unknown`, takes the retry lock, and enqueues reconciliation.
-KeeperHub correlation is persisted before submission. Workflow execution IDs,
+KeeperHub correlation is persisted before submission. Direct execution IDs,
 transaction correlations, and redacted step logs are persisted before independent RPC
 verification. The shared provider runtime enforces timeouts, bounded retry only for
 read/idempotent calls, `Retry-After`, redacted telemetry, and health state.
@@ -39,8 +39,8 @@ indexes. Execution intent, provider correlation, state transitions, audit eviden
 and outbox events are durable. MongoDB transactions require a replica set. Redis is
 transport, not canonical state.
 
-The retained MVP is deliberately one organization and one protocol, but every
-protocol-scoped record, query, event, and job retains both tenant identifiers.
+The UI selects one organization and protocol at a time, while every protected query
+revalidates persisted membership and every scoped record/job carries both identifiers.
 
 `packages/contracts` contains only the chain fixture needed to prove this lifecycle.
 `ArcadiaMarket` holds an oracle pointer behind an ERC-1967 proxy, requires
@@ -51,7 +51,7 @@ and exposes `oracleStatus()` with the source timestamp and freshness result.
 Foundry generates the ABI, selectors, and deployment registry into
 `packages/contracts/artifacts/server`. Only the server-side backend package imports
 that export. The browser contract remains `packages/shared` and `packages/sdk`, so
-mock/API switching still requires no component changes.
+browser bundles never import server artifacts.
 
 Live verification is receipt-aware and block-pinned. It confirms the receipt is
 canonical after the configured finality threshold, rereads `oracleStatus()` at a

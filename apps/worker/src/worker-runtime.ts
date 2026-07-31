@@ -14,12 +14,19 @@ import {
 import { InjectConnection } from "@nestjs/mongoose";
 import { Queue, Worker, type Job } from "bullmq";
 import IORedis from "ioredis";
+import { randomUUID } from "node:crypto";
 import type { Connection } from "mongoose";
 import { ExecutionProcessor } from "./execution/execution-processor";
 import { MongoWorkerStore } from "./persistence/mongo-worker-store";
-import { CHAIN_READER, KEEPER_HUB, SIMULATOR } from "./providers/providers";
+import {
+  CHAIN_READER,
+  INVESTIGATION_ASSISTANT,
+  KEEPER_HUB,
+  SIMULATOR,
+} from "./providers/providers";
 import type {
   ChainReader,
+  InvestigationAssistant,
   KeeperHubProvider,
   Simulator,
 } from "@aether/backend";
@@ -33,6 +40,8 @@ export class WorkerRuntime
   private readonly workers: Worker[] = [];
   private outboxTimer?: NodeJS.Timeout;
   private readonly processor: ExecutionProcessor;
+  private readonly chainReader: ChainReader;
+  private readonly investigationAssistant: InvestigationAssistant;
 
   constructor(
     @InjectConnection() private readonly connection: Connection,
@@ -40,7 +49,11 @@ export class WorkerRuntime
     @Inject(KEEPER_HUB) keeperHub: KeeperHubProvider,
     @Inject(CHAIN_READER) chainReader: ChainReader,
     @Inject(SIMULATOR) simulator: Simulator,
+    @Inject(INVESTIGATION_ASSISTANT)
+    investigationAssistant: InvestigationAssistant,
   ) {
+    this.chainReader = chainReader;
+    this.investigationAssistant = investigationAssistant;
     this.redis = new IORedis(
       process.env.REDIS_URL ?? "redis://127.0.0.1:6379",
       {
@@ -96,7 +109,11 @@ export class WorkerRuntime
       case "execution.verify":
         return this.processor.verify(data);
       case "observation.scan":
+        return this.scan(data);
       case "drift.evaluate":
+        return this.evaluateDrift(data);
+      case "investigation.run":
+        return this.investigate(data);
       case "audit.dispatch":
         return {
           status: "completed",
@@ -104,6 +121,177 @@ export class WorkerRuntime
           resourceId: data.resourceId,
         };
     }
+  }
+
+  private async scan(job: DurableJob) {
+    const tenant = {
+      organizationId: job.organizationId,
+      protocolId: job.protocolId,
+    };
+    const [network, contract, desired] = await Promise.all([
+      this.connection.collection("networks").findOne(tenant),
+      this.connection.collection("contracts").findOne(tenant),
+      this.connection
+        .collection("desired_state_versions")
+        .findOne({ ...tenant, active: true }),
+    ]);
+    if (!network || !contract || !desired) {
+      throw new Error(
+        "A network, validated contract, and active desired state are required before scanning.",
+      );
+    }
+    if (Number(network.chainId) !== 84532) {
+      throw new Error("Observation is restricted to Base Sepolia chain 84532.");
+    }
+    const observation = await this.chainReader.observeOracle(
+      84532,
+      String(contract.address),
+    );
+    const observationId = `obs_${observation.blockHash.slice(2, 18)}`;
+    await this.connection.collection("observations").updateOne(
+      { ...tenant, observationId },
+      {
+        $setOnInsert: {
+          ...tenant,
+          observationId,
+          networkId: String(network.networkId),
+          blockNumber: observation.blockNumber,
+          blockHash: observation.blockHash,
+          values: {
+            oracle: observation.oracle,
+            oracleUpdatedAt: observation.oracleUpdatedAt,
+            fresh: observation.fresh,
+            canonical: observation.canonical,
+          },
+          providerCorrelationId: `rpc-${observation.blockHash.slice(2, 14)}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true },
+    );
+    await this.queues.get("drift.evaluate")!.add(
+      "drift.evaluate",
+      { ...job, resourceId: observationId },
+      {
+        jobId: stableIdempotencyKey(job.idempotencyKey, "drift.evaluate"),
+      },
+    );
+    return {
+      status: "completed",
+      observationId,
+      blockNumber: observation.blockNumber,
+    };
+  }
+
+  private async evaluateDrift(job: DurableJob) {
+    const tenant = {
+      organizationId: job.organizationId,
+      protocolId: job.protocolId,
+    };
+    const [observation, desired] = await Promise.all([
+      this.connection
+        .collection("observations")
+        .findOne({ ...tenant, observationId: job.resourceId }),
+      this.connection
+        .collection("desired_state_versions")
+        .findOne({ ...tenant, active: true }),
+    ]);
+    if (!observation || !desired) {
+      throw new Error("Observation or desired state is unavailable.");
+    }
+    const observedOracle = String(
+      (observation.values as Record<string, unknown>).oracle,
+    );
+    const desiredOracle = String(
+      (desired.manifest as Record<string, unknown>).oracleAddress,
+    );
+    const findingKey = stableIdempotencyKey(
+      job.organizationId,
+      job.protocolId,
+      "oracle-address",
+      desiredOracle.toLowerCase(),
+    );
+    const findingId = `drift_${findingKey.slice(0, 20)}`;
+    const matches =
+      observedOracle.toLowerCase() === desiredOracle.toLowerCase();
+    await this.connection.collection("drift_findings").updateOne(
+      { ...tenant, findingId },
+      {
+        $set: {
+          status: matches ? "resolved" : "open",
+          severity: "critical",
+          observed: observedOracle,
+          desired: desiredOracle,
+          evidence: {
+            observationId: job.resourceId,
+            blockNumber: observation.blockNumber,
+            blockHash: observation.blockHash,
+          },
+          updatedAt: new Date(),
+        },
+        $setOnInsert: {
+          ...tenant,
+          findingId,
+          createdAt: new Date(),
+        },
+      },
+      { upsert: true },
+    );
+    return { status: matches ? "resolved" : "open", findingId };
+  }
+
+  private async investigate(job: DurableJob) {
+    const tenant = {
+      organizationId: job.organizationId,
+      protocolId: job.protocolId,
+    };
+    const [finding, desired, contract] = await Promise.all([
+      this.connection
+        .collection("drift_findings")
+        .findOne({ ...tenant, findingId: job.resourceId }),
+      this.connection
+        .collection("desired_state_versions")
+        .findOne({ ...tenant, active: true }),
+      this.connection.collection("contracts").findOne(tenant),
+    ]);
+    if (!finding || !desired || !contract) {
+      throw new Error(
+        "Finding, desired state, and contract evidence are required.",
+      );
+    }
+    const evidence = finding.evidence as Record<string, unknown>;
+    const suggestion = await this.investigationAssistant.suggest({
+      findingId: job.resourceId,
+      observedFacts: [
+        `Observed oracle: ${String(finding.observed)}`,
+        `Pinned block: ${String(evidence.blockNumber)}`,
+      ],
+      desiredStateFacts: [
+        `Desired oracle: ${String(finding.desired)}`,
+        `Desired state version: ${String(desired.versionId)}`,
+      ],
+      allowedChainIds: [84532],
+      allowedTargets: [String(contract.address)],
+      allowedFunctions: ["setOracle(address)"],
+    });
+    const investigationId = `inv_${randomUUID()}`;
+    await this.connection.collection("investigations").insertOne({
+      ...tenant,
+      investigationId,
+      findingId: job.resourceId,
+      facts: suggestion.facts,
+      inferences: suggestion.inferences,
+      confidence: suggestion.confidence,
+      affectedInvariants: suggestion.affectedInvariants,
+      recommendedAction: suggestion.recommendedAction,
+      suggestion,
+      advisoryOnly: true,
+      providerCorrelationId: job.correlationId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    return { status: "completed", investigationId };
   }
 
   private async publishOutbox() {

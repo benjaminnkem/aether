@@ -1,10 +1,13 @@
 # Security
 
-The API authenticates a signed tenant context and rejects organization/protocol
-mismatches before controller work. Roles are enforced server-side at contextual
+The API issues short-lived access cookies and rotating refresh cookies after Argon2id
+credential verification. Refresh token hashes, families, expiry, replay revocation,
+login lockout/rate limits, one-time verification/reset challenges, and auth audit
+events are stored in MongoDB. Cookie mutations require a double-submit CSRF token.
+Every protected request revalidates membership/protocol records and rejects
+organization/protocol mismatches before controller work. Roles are enforced at
 mutations: owners/operators configure and execute; owners/reviewers approve; viewers
-are read-only. The development identity is unavailable unless
-`AETHER_AUTH_MODE=development`.
+are read-only. There is no development identity bypass.
 
 Execution authorization is deterministic. It validates the exact transaction schema,
 chain, target, `setOracle(address)` function, zero value, configured maximum value,
@@ -38,10 +41,6 @@ Confirmed writes that fail verification become `partial` with a linked
 forward-correction operation. No endpoint or event claims rollback. CORS is an exact
 origin list, Helmet supplies HTTP hardening headers, production requires a strong JWT
 secret, and MongoDB transactions require a replica set.
-
-Current MVP limitation: authentication uses a locally verified JWT boundary rather
-than a selected external identity provider. Production deployments must integrate
-token issuance and revocation at that boundary.
 
 Provider HTTP retries are bounded and allowed only for reads or explicitly idempotent
 requests. KeeperHub submission carries a persisted idempotency key. A 429 honors

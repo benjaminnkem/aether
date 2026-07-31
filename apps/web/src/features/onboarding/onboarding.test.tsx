@@ -1,19 +1,18 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Onboarding } from "./onboarding";
-import { useUiStore } from "@/stores/ui";
 
 describe("onboarding", () => {
-  beforeEach(() => useUiStore.setState({ onboardingStep: 0 }));
-  it("progresses and resumes from persisted step state", async () => {
-    const user = userEvent.setup();
-    const { unmount } = render(<Onboarding />);
-    expect(screen.getByText("Set up organization.")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText("Set up protocol.")).toBeVisible();
-    unmount();
+  it("starts with honest empty persisted-record fields", () => {
     render(<Onboarding />);
-    expect(screen.getByText("Set up protocol.")).toBeVisible();
+    expect(screen.getByText("Create your operating context.")).toBeVisible();
+    expect(screen.getByLabelText("Organization name")).toHaveValue("");
+    expect(screen.getByLabelText("Protocol name")).toHaveValue("");
+    expect(
+      screen.getByRole("button", {
+        name: "Create organization and protocol",
+      }),
+    ).toBeVisible();
+    expect(screen.queryByText(/Arcadia/i)).not.toBeInTheDocument();
   });
 });

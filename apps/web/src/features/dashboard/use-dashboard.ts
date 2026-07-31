@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { aetherClient, queryKeys } from "@aether/sdk";
 import { useUiStore } from "@/stores/ui";
@@ -8,25 +9,41 @@ export function useDashboard() {
   const organizationId = useUiStore((state) => state.organizationId);
   const protocolId = useUiStore((state) => state.protocolId);
   const queryClient = useQueryClient();
-  const key = queryKeys.dashboard(organizationId, protocolId);
+  const key = useMemo(
+    () => queryKeys.dashboard(organizationId, protocolId),
+    [organizationId, protocolId],
+  );
+  useEffect(() => {
+    const cursorKey = `aether:sse-cursor:${organizationId}:${protocolId}`;
+    const afterSequence = Number(sessionStorage.getItem(cursorKey) ?? 0);
+    return aetherClient.subscribeEvents(afterSequence, (event) => {
+      if (organizationId && event.organizationId !== organizationId) return;
+      if (protocolId && event.protocolId !== protocolId) return;
+      sessionStorage.setItem(cursorKey, String(event.sequence));
+      void queryClient.invalidateQueries({ queryKey: key });
+    });
+  }, [key, organizationId, protocolId, queryClient]);
   const query = useQuery({
     queryKey: key,
     queryFn: () => aetherClient.getDashboard(organizationId, protocolId),
+    retry: false,
   });
   const update = (
     data: Awaited<ReturnType<typeof aetherClient.getDashboard>>,
   ) => queryClient.setQueryData(key, data);
-  const scenario = useMutation({
-    mutationFn: aetherClient.setScenario.bind(aetherClient),
-    onSuccess: update,
-  });
-  const advance = useMutation({
-    mutationFn: aetherClient.advanceLifecycle.bind(aetherClient),
-    onSuccess: update,
-  });
   const approval = useMutation({
-    mutationFn: aetherClient.approveOperation.bind(aetherClient),
+    mutationFn: ({
+      operationId,
+      decision,
+    }: {
+      operationId: string;
+      decision: "approve" | "reject";
+    }) => aetherClient.approveOperation(operationId, decision),
     onSuccess: update,
   });
-  return { ...query, scenario, advance, approval, organizationId, protocolId };
+  const scan = useMutation({
+    mutationFn: () => aetherClient.runScan(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+  });
+  return { ...query, approval, scan, organizationId, protocolId };
 }

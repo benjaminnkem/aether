@@ -32,6 +32,7 @@ const policy = {
   requireSimulation: true as const,
   requireIndependentVerification: true as const,
   approvalThreshold: 1,
+  prohibitSelfApproval: false,
 };
 
 describe("ExecutionSafety", () => {
