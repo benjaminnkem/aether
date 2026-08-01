@@ -30,9 +30,17 @@ function selector(signature: string): string {
 }
 
 export const arcadiaSelectors = Object.freeze({
+  hasRole: selector("hasRole(bytes32,address)"),
+  oracleAdminRole: selector("ORACLE_ADMIN_ROLE()"),
   oracle: selector("oracle()"),
   oracleStatus: selector("oracleStatus()"),
   setOracle: selector("setOracle(address)"),
+  createFixtureDrift: selector("createFixtureDrift(address)"),
+});
+
+export const arcadiaTopics = Object.freeze({
+  oracleConfigured:
+    "0x7e3678ab0ac8ca80fe3fcc6f09955dcb2f428690c51de59c986d31c278bd9ba2",
 });
 
 export function encodeSetOracleCalldata(oracle: string): string {

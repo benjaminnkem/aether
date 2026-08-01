@@ -21,7 +21,7 @@ const job: DurableJob = {
   correlationId: "request-1",
 };
 const request = {
-  chainId: 84532,
+  chainId: 11155111,
   target: "0x7D4A3AfF7c4C51B1726a91c738ACb6F227127C3f",
   functionSignature: "setOracle(address)" as const,
   calldata: encodeSetOracleCalldata(
@@ -46,7 +46,7 @@ const baseExecution: ExecutionRecord = {
   planHash,
   request,
   policy: {
-    allowedChainIds: [84532],
+    allowedChainIds: [11155111],
     allowedTargets: [request.target],
     allowedFunctions: ["setOracle(address)"],
     maximumValueWei: "0",
@@ -144,6 +144,7 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
     chainReader = {
       getHealth: () => ({ provider: "evm-rpc", ...providerHealth }),
       observeOracle: vi.fn(),
+      getTransactionActor: vi.fn(),
       getLogs: vi.fn(async () => []),
       getReceipt: vi.fn(),
       verifyOracle: vi.fn(async () => ({

@@ -64,7 +64,7 @@ The fifth step deliberately makes the corrected oracle stale. The sixth is a new
 forward write that restores freshness; it does not undo or claim to roll back the
 confirmed oracle-pointer transaction.
 
-Base Sepolia (`84532`) uses the same deployment and lifecycle scripts with an
+Ethereum Sepolia (`11155111`) uses the same deployment and lifecycle scripts with an
 operator-managed RPC and Foundry keystore or hardware wallet. First run without
 `--broadcast`, review the exact transactions, then broadcast from authorized role
 accounts. Never use chain ID 1 or record an artifact from a simulation-only run.

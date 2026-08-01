@@ -6,7 +6,7 @@
 2. Confirm the execution row is `unknown` or `reconciling` with `retryLocked=true`.
 3. Query `GET /api/execute/{executionId}/status` using the persisted direct execution
    ID. Honor `X-Poll-Interval-Hint`.
-4. Query Base Sepolia independently for the persisted target/request evidence.
+4. Query Ethereum Sepolia independently for the persisted target/request evidence.
 5. Resolve only to failed, submitted, confirmed, partial, or verified based on real
    evidence. A missing receipt remains unknown.
 

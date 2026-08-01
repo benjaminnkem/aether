@@ -21,6 +21,19 @@
     },
     {
       "type": "function",
+      "name": "DRIFT_FIXTURE_ROLE",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "ORACLE_ADMIN_ROLE",
       "inputs": [],
       "outputs": [
@@ -31,6 +44,19 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "createFixtureDrift",
+      "inputs": [
+        {
+          "name": "newOracle",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -384,6 +410,17 @@
     },
     {
       "type": "error",
+      "name": "FixtureChainOnly",
+      "inputs": [
+        {
+          "name": "chainId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "InvalidAddress",
       "inputs": []
     },
@@ -406,7 +443,9 @@
   ],
   "methodIdentifiers": {
     "DEFAULT_ADMIN_ROLE()": "a217fddf",
+    "DRIFT_FIXTURE_ROLE()": "0cb564e0",
     "ORACLE_ADMIN_ROLE()": "8003a94f",
+    "createFixtureDrift(address)": "f2df2f37",
     "getRoleAdmin(bytes32)": "248a9ca3",
     "grantRole(bytes32,address)": "2f2ff15d",
     "hasRole(bytes32,address)": "91d14854",

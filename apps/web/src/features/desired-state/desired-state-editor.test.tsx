@@ -76,7 +76,7 @@ describe("desired state editor", () => {
     await fillValidDraft(user);
     await user.click(screen.getByRole("tab", { name: "YAML" }));
     const yaml = screen.getByLabelText("Canonical YAML");
-    expect((yaml as HTMLTextAreaElement).value).toContain("chainId: 84532");
+    expect((yaml as HTMLTextAreaElement).value).toContain("chainId: 11155111");
     await user.click(screen.getByRole("button", { name: "Validate YAML" }));
     await waitFor(() => expect(validate).toHaveBeenCalled());
   });

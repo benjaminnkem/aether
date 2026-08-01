@@ -1,6 +1,6 @@
 # Aether Live Testnet UI Test Flow
 
-This guide validates the complete product using real API, database, queues, providers, and Base Sepolia transactions.
+This guide validates the complete product using real API, database, queues, providers, and Ethereum Sepolia transactions.
 
 ## Preconditions
 
@@ -9,7 +9,7 @@ Before opening the UI:
 - all services are healthy;
 - no runtime mock flag exists;
 - MongoDB and Redis are running;
-- Base Sepolia fixture contracts are deployed;
+- Ethereum Sepolia fixture contracts are deployed;
 - KeeperHub organization key is valid;
 - KeeperHub organization wallet is funded;
 - GitHub is connected;
@@ -53,7 +53,7 @@ Expected:
 
 1. Create an organization.
 2. Create the protocol.
-3. Choose Base Sepolia.
+3. Choose Ethereum Sepolia.
 4. Enter the live deployed proxy/market address.
 5. Allow the server to load the generated ABI or verified ABI.
 6. Complete onboarding.
@@ -96,7 +96,7 @@ Expected:
 
 - API calls real KeeperHub.
 - UI shows the real organization/wallet status.
-- Base Sepolia is reported as supported.
+- Ethereum Sepolia is reported as supported.
 - Wallet balance is shown or summarized without exposing credentials.
 - Missing wallet or low balance produces an actionable error.
 - No transaction is sent by the health check.
@@ -131,7 +131,7 @@ Expected:
 Expected:
 
 - API creates a scan job.
-- Worker reads Base Sepolia at a pinned block.
+- Worker reads Ethereum Sepolia at a pinned block.
 - SSE shows progress.
 - Observed oracle matches desired oracle.
 - No critical drift exists.
@@ -142,7 +142,7 @@ Expected:
 
 ## Stage 7 — Create real testnet drift
 
-Use the repository’s approved Base Sepolia fixture tool. This may be:
+Use the repository’s approved Ethereum Sepolia fixture tool. This may be:
 
 - a protected Testnet Lab UI action signed by a connected test wallet; or
 - the exact Foundry script shown by the UI.
@@ -153,7 +153,7 @@ Create a real change from the approved oracle to the designated stale/out-of-pol
 
 Expected:
 
-- A real Base Sepolia transaction is produced.
+- A real Ethereum Sepolia transaction is produced.
 - The explorer shows the changed state.
 - The transaction is not the correction transaction.
 - The application does not update until it observes the chain.
@@ -215,7 +215,7 @@ Expected:
 Expected:
 
 - Real `POST /api/execute/contract-call` is sent with `simulate: true`.
-- The request uses chain ID `84532`, exact contract, exact ABI/function/args, and zero value.
+- The request uses chain ID `11155111`, exact contract, exact ABI/function/args, and zero value.
 - Response shows real sender, gas estimate, and `wouldRevert`.
 - Simulation evidence is bound to the operation.
 - A failed/reverting simulation blocks execution.
@@ -251,7 +251,7 @@ Expected:
 - A real KeeperHub direct execution ID is shown.
 - Double-click/reload does not create a second transaction.
 - UI transitions from submitted to confirming based on real status.
-- A real Base Sepolia transaction hash and explorer link appear.
+- A real Ethereum Sepolia transaction hash and explorer link appear.
 
 Record:
 
@@ -339,7 +339,7 @@ The flow passes only when:
 
 - every stage uses real runtime services;
 - no demo controls or scenario IDs are involved;
-- at least one correction transaction was executed through KeeperHub on Base Sepolia;
+- at least one correction transaction was executed through KeeperHub on Ethereum Sepolia;
 - the transaction is independently verified;
 - audit correlation is complete;
 - refresh/restart does not duplicate the transaction;

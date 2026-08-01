@@ -38,6 +38,14 @@ pnpm migrate:legacy
 pnpm migrate:legacy -- --apply
 ```
 
+Historical Base Sepolia records are never relabelled. After the Ethereum deployment
+registry exists, preview and optionally create a parallel persisted environment:
+
+```bash
+pnpm migrate:ethereum-sepolia
+pnpm migrate:ethereum-sepolia -- --apply --source-protocol-id=<PERSISTED_PROTOCOL_ID>
+```
+
 ## 3. Start the application
 
 ```bash
@@ -67,9 +75,9 @@ pnpm --filter @aether/contracts exec forge test
 
 The application must use the real API, database, queues, RPC, and onchain fixture.
 
-## 5. Base Sepolia deployment
+## 5. Ethereum Sepolia deployment
 
-1. Confirm `AETHER_CHAIN_ID=84532`.
+1. Confirm `AETHER_CHAIN_ID=11155111`.
 2. Confirm a reliable RPC URL.
 3. Create/select a Foundry keystore or hardware wallet.
 4. Fund the deployer.
@@ -83,8 +91,10 @@ The application must use the real API, database, queues, RPC, and onchain fixtur
 12. run provider health checks.
 
 Run `pnpm chain:deploy:dry`, review the output, then run `pnpm chain:deploy`. Both
-commands validate chain `84532`; the broadcast command records Foundry transaction
-evidence in the deployment registry.
+commands validate chain `11155111`; the broadcast command records Foundry transaction
+evidence in the deployment registry. Before deployment, `pnpm chain:doctor` is
+expected to stop at `ethereum_sepolia_not_deployed` after all RPC/chain checks pass;
+run it again after broadcast for bytecode, proxy, and `oracleStatus()` verification.
 
 ## 6. GitHub App
 
@@ -106,7 +116,7 @@ The user must:
 - create or select a KeeperHub organization;
 - configure its organization wallet;
 - generate an organization API key beginning with `kh_`;
-- fund the organization wallet with Base Sepolia ETH.
+- fund the organization wallet with Ethereum Sepolia ETH.
 
 Then run:
 
@@ -118,7 +128,7 @@ The command must:
 
 - validate authentication;
 - fetch chains;
-- confirm Base Sepolia support;
+- confirm Ethereum Sepolia support;
 - read the organization wallet;
 - verify balance;
 - perform a read-only or simulation-only health check;

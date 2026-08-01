@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ExecutionSafety, SafetyViolation } from "../src/safety";
+import { validateRuntimeChainEnvironment } from "../src/chains";
 import {
   arcadiaSelectors,
   buildSetOracleTransactionRequest,
@@ -7,9 +8,10 @@ import {
   getArcadiaDeployment,
 } from "../src/contract-artifacts";
 import { CredentialCipher } from "../src/security";
+import { activeLiveChain } from "@aether/shared";
 
 const request = buildSetOracleTransactionRequest({
-  chainId: 84532,
+  chainId: activeLiveChain.chainId,
   market: "0x7D4A3AfF7c4C51B1726a91c738ACb6F227127C3f",
   desiredOracle: "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311",
 });
@@ -25,7 +27,7 @@ const simulation = {
   blockNumber: 17_924_118,
 };
 const policy = {
-  allowedChainIds: [84532],
+  allowedChainIds: [activeLiveChain.chainId],
   allowedTargets: [request.target],
   allowedFunctions: ["setOracle(address)" as const],
   maximumValueWei: "0",
@@ -84,6 +86,68 @@ describe("ExecutionSafety", () => {
     ).toThrowError(SafetyViolation);
   });
 
+  it("rejects Base Sepolia as an active execution chain", () => {
+    expect(() =>
+      safety.authorize({
+        request: { ...request, chainId: 84532 },
+        policy,
+        planHash,
+        simulation,
+        approvals: [],
+      }),
+    ).toThrowError(/not allowlisted/);
+  });
+
+  it("rejects mainnet even when all other request fields are valid", () => {
+    expect(() =>
+      safety.authorize({
+        request: { ...request, chainId: 1 },
+        policy,
+        planHash,
+        simulation,
+        approvals: [],
+      }),
+    ).toThrowError(/not allowlisted/);
+  });
+
+  it("cannot reuse a Base simulation or approval for Ethereum Sepolia", () => {
+    const baseRequest = { ...request, chainId: 84532 };
+    const basePlanHash = ExecutionSafety.planHash(baseRequest, "dsv-base");
+    expect(() =>
+      safety.authorize({
+        request,
+        policy,
+        planHash,
+        simulation: { ...simulation, planHash: basePlanHash },
+        approvals: [
+          {
+            actorId: "user-owner",
+            planHash: basePlanHash,
+            simulationId: "sim-1",
+            decision: "approve",
+            expiresAt: "2099-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    ).toThrowError(/exact-request simulation/);
+  });
+
+  it("changes the immutable plan hash when chain or deployment address changes", () => {
+    const basePlanHash = ExecutionSafety.planHash(
+      { ...request, chainId: 84532 },
+      "dsv-1",
+    );
+    const newAddressPlanHash = ExecutionSafety.planHash(
+      {
+        ...request,
+        target: "0x1111111111111111111111111111111111111111",
+      },
+      "dsv-1",
+    );
+    expect(basePlanHash).not.toBe(planHash);
+    expect(newAddressPlanHash).not.toBe(planHash);
+  });
+
   it("rejects value transfer even if a wider policy is supplied", () => {
     expect(() =>
       safety.authorize({
@@ -111,6 +175,24 @@ describe("ExecutionSafety", () => {
         approvals: [],
       }),
     ).toThrowError(/exact approved/);
+  });
+});
+
+describe("runtime chain environment", () => {
+  const valid = {
+    AETHER_CHAIN_ID: "11155111",
+    AETHER_MAINNET_DISABLED: "true",
+    AETHER_RPC_URL: "https://rpc.example.invalid",
+  } as NodeJS.ProcessEnv;
+
+  it("accepts only the canonical Ethereum Sepolia live configuration", () => {
+    expect(() => validateRuntimeChainEnvironment(valid)).not.toThrow();
+    expect(() =>
+      validateRuntimeChainEnvironment({ ...valid, AETHER_CHAIN_ID: "84532" }),
+    ).toThrow(/Ethereum Sepolia/);
+    expect(() =>
+      validateRuntimeChainEnvironment({ ...valid, AETHER_CHAIN_ID: "1" }),
+    ).toThrow(/prohibited/);
   });
 });
 

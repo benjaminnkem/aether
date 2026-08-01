@@ -9,7 +9,7 @@ contract CreateUnauthorizedOracleDrift is ScriptBase {
         _requireSupportedChain();
         Deployment memory deployment = _readDeployment();
         vm.startBroadcast();
-        ArcadiaMarket(deployment.marketProxy).setOracle(deployment.unauthorizedOracle);
+        ArcadiaMarket(deployment.marketProxy).createFixtureDrift(deployment.unauthorizedOracle);
         vm.stopBroadcast();
     }
 }

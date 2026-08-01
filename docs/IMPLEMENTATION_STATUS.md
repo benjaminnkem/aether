@@ -1,14 +1,14 @@
 # Implementation Status
 
-Evidence date: 2026-07-31.
+Evidence date: 2026-08-01.
 
 ## Release verdict
 
-`LOCAL INTEGRATION READY`
+`ETHEREUM SEPOLIA MIGRATION CODE-COMPLETE — LIVE BROADCAST BLOCKED`
 
 There is no runtime mock path. This is not yet a live-testnet release candidate:
-the configured RPC is not chain `84532`, no authorized signer is installed, the
-fixture is not deployed, GitHub/OpenAI credentials are absent, protected live
+the configured RPC is not chain `11155111`, no usable authorized signer matching the
+configured administrator is available, the fixture is not deployed, protected live
 Playwright/provider acceptance has not run, and no transaction evidence exists.
 
 ## Implemented
@@ -25,23 +25,31 @@ Playwright/provider acceptance has not run, and no transaction evidence exists.
 - testnet-only fixture scripts that require explicit live role addresses;
 - Sonner-only toasts, subtle blur/reduced motion, and no demo controls;
 - environment/provider doctors and protected live CI.
+- centralized Ethereum Sepolia/Anvil metadata and fail-closed startup validation;
+- additive dry-run database migration that preserves historical Base records;
+- dedicated testnet-only `DRIFT_FIXTURE_ROLE`, separate from KeeperHub's narrow
+  `ORACLE_ADMIN_ROLE`;
+- chain-bound desired state, contract resources, plans, simulations, approvals, and
+  drift-origin RPC evidence.
 
 ## Observed verification
 
-- `pnpm check-types`: passed.
-- `pnpm format:check` and `pnpm lint`: passed.
-- Foundry: 15 passed.
-- backend: 6 passed.
-- worker: 16 passed.
+- `pnpm check-types`, `pnpm format:check`, and `pnpm lint`: passed.
+- Foundry: 16 passed.
+- Foundry gas report and updated snapshot check: passed.
+- backend: 11 passed.
+- worker: 19 passed.
 - API contract/security: passed.
 - isolated Mongo replica-set API integration: 2 passed.
 - frontend: 9 passed.
 - Playwright: 8 desktop/mobile checks passed; 2 protected live checks skipped.
 - production build: passed.
 - `pnpm audit --prod`: no known vulnerabilities.
-- KeeperHub doctor: authenticated, Base Sepolia enabled, wallet derived.
+- KeeperHub doctor: key, Ethereum Sepolia chain, and wallet validation reached the
+  fail-closed RPC mismatch; balance, role, and simulation were therefore not claimed.
 - chain doctor: failed because the supplied RPC reports another chain.
-- GitHub/OpenAI doctors: blocked by absent external credentials.
+- GitHub App doctor: authenticated and identity matched.
+- OpenAI doctor: authenticated and configured model available.
 
-No Base Sepolia deployment, simulation, execution, transaction, or live independent
+No Ethereum Sepolia deployment, simulation, execution, transaction, or live independent
 verification is claimed.

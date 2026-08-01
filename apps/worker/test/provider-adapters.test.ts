@@ -2,6 +2,7 @@ import {
   encodeSetOracleCalldata,
   type TransactionRequest,
 } from "@aether/backend";
+import { activeLiveChain } from "@aether/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   HttpKeeperHubProvider,
@@ -9,7 +10,7 @@ import {
 } from "../src/providers/providers";
 
 const request: TransactionRequest = {
-  chainId: 84_532,
+  chainId: activeLiveChain.chainId,
   target: "0x7D4A3AfF7c4C51B1726a91c738ACb6F227127C3f",
   functionSignature: "setOracle(address)",
   calldata: encodeSetOracleCalldata(
@@ -100,7 +101,13 @@ describe("live provider adapters", () => {
     const fetcher = vi
       .fn()
       .mockResolvedValueOnce(
-        response([{ chainId: 84_532, isEnabled: true, isTestnet: true }]),
+        response([
+          {
+            chainId: activeLiveChain.chainId,
+            isEnabled: true,
+            isTestnet: true,
+          },
+        ]),
       )
       .mockResolvedValueOnce(
         response({
@@ -113,7 +120,7 @@ describe("live provider adapters", () => {
           executionId: "direct-123",
           status: "completed",
           transactionHash,
-          transactionLink: `https://sepolia.basescan.org/tx/${transactionHash}`,
+          transactionLink: `https://sepolia.etherscan.io/tx/${transactionHash}`,
           gasUsedWei: "1200",
           error: null,
         }),
@@ -149,5 +156,22 @@ describe("live provider adapters", () => {
     expect(await provider.getStepLogs(submission.directExecutionId)).toEqual(
       [],
     );
+  });
+
+  it("rejects Base Sepolia even when KeeperHub reports it enabled", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          response([{ chainId: 84532, isEnabled: true, isTestnet: true }]),
+        ),
+    );
+    await expect(
+      new HttpKeeperHubProvider().submit("correlation-base", planHash, {
+        ...request,
+        chainId: 84532,
+      }),
+    ).rejects.toThrow(/only permits KeeperHub execution on Ethereum Sepolia/);
   });
 });

@@ -10,6 +10,23 @@ declare const process: {
   env: Record<string, string | undefined>;
 };
 
+export function getAetherErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  if (!axios.isAxiosError(error)) return fallback;
+  const data = error.response?.data as
+    | { message?: unknown; error?: unknown }
+    | undefined;
+  const message =
+    typeof data?.message === "string"
+      ? data.message
+      : typeof data?.error === "string"
+        ? data.error
+        : undefined;
+  return message && message.length <= 240 ? message : fallback;
+}
+
 export class AetherClient {
   private readonly http: AxiosInstance;
   private readonly baseURL: string;

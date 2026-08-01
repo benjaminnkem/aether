@@ -9,8 +9,10 @@ import { AppModule } from "./app.module";
 import type { AuthenticatedRequest } from "./auth/auth";
 import { StructuredLogger } from "./observability/logger";
 import { ZodExceptionFilter } from "./http/zod-exception.filter";
+import { validateRuntimeChainEnvironment } from "@aether/backend";
 
 export async function createApplication() {
+  validateRuntimeChainEnvironment();
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
     rawBody: true,

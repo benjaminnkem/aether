@@ -16,6 +16,8 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   buildSetOracleTransactionRequest,
+  arcadiaMarketAbi,
+  arcadiaSelectors,
   durableJobSchema,
   registerModels,
   stableHash,
@@ -23,6 +25,7 @@ import {
   type TenantContext,
 } from "@aether/backend";
 import {
+  activeLiveChain,
   desiredStateSchema,
   type Execution,
   type Operation,
@@ -155,7 +158,7 @@ export class ProtocolSetupController {
       const parsed = z
         .object({
           name: z.string().trim().min(2).max(100),
-          environment: z.literal("Base Sepolia"),
+          environment: z.literal(activeLiveChain.displayName),
           governanceAuthority: z.string().trim().min(1).max(200),
         })
         .parse(input);
@@ -176,13 +179,16 @@ export class ProtocolSetupController {
     }
     if (section === "networks") {
       const parsed = z
-        .object({ chainId: z.literal(84532), name: z.string().min(1) })
+        .object({
+          chainId: z.literal(activeLiveChain.chainId),
+          name: z.literal(activeLiveChain.displayName),
+        })
         .parse(input);
-      await assertBaseSepoliaRpc();
+      await assertLiveRpc();
       const value = {
         organizationId: tenant.organizationId,
         protocolId: tenant.protocolId,
-        networkId: "base-sepolia",
+        networkId: activeLiveChain.slug,
         chainId: parsed.chainId,
         name: parsed.name,
         rpcMetadata: { validatedAt: new Date().toISOString() },
@@ -191,7 +197,7 @@ export class ProtocolSetupController {
         {
           organizationId: tenant.organizationId,
           protocolId: tenant.protocolId,
-          networkId: "base-sepolia",
+          networkId: activeLiveChain.slug,
         },
         { $set: value },
         { upsert: true },
@@ -211,6 +217,8 @@ export class ProtocolSetupController {
         organizationId: tenant.organizationId,
         protocolId: tenant.protocolId,
         contractId,
+        networkId: activeLiveChain.slug,
+        chainId: activeLiveChain.chainId,
         name: parsed.name,
         address: parsed.address,
         proxyType: evidence.implementation ? "ERC1967" : "none_detected",
@@ -233,9 +241,30 @@ export class ProtocolSetupController {
   ) {
     const allowed = z.enum(["keeperhub", "openai", "evm-rpc"]).parse(provider);
     const started = performance.now();
-    if (allowed === "keeperhub") await validateKeeperHub();
+    let providerEvidence: Record<string, unknown> = {};
+    if (allowed === "keeperhub") {
+      const contract = await this.models
+        .Contract!.findOne({
+          organizationId: tenant.organizationId,
+          protocolId: tenant.protocolId,
+          networkId: activeLiveChain.slug,
+          chainId: activeLiveChain.chainId,
+        })
+        .sort({ createdAt: -1 })
+        .lean()
+        .exec();
+      const target = String(
+        (contract as Record<string, unknown> | null)?.address ?? "",
+      );
+      if (!/^0x[a-fA-F0-9]{40}$/.test(target)) {
+        throw new BadRequestException(
+          "A validated Ethereum Sepolia contract is required before KeeperHub readiness checks.",
+        );
+      }
+      providerEvidence = await validateKeeperHub(target);
+    }
     if (allowed === "openai") await validateOpenAi();
-    if (allowed === "evm-rpc") await assertBaseSepoliaRpc();
+    if (allowed === "evm-rpc") await assertLiveRpc();
     const status = {
       organizationId: tenant.organizationId,
       protocolId: tenant.protocolId,
@@ -244,6 +273,7 @@ export class ProtocolSetupController {
       metadata: {
         checkedAt: new Date().toISOString(),
         latencyMs: Math.round(performance.now() - started),
+        ...providerEvidence,
       },
     };
     await this.models.ProviderConnection!.updateOne(
@@ -297,6 +327,33 @@ export class DesiredStateController {
     @Body() body: unknown,
   ) {
     const manifest = desiredStateSchema.parse(body);
+    const contract = await this.models
+      .Contract!.findOne({
+        organizationId: tenant.organizationId,
+        protocolId: tenant.protocolId,
+        contractId: manifest.contractId,
+        networkId: activeLiveChain.slug,
+        chainId: activeLiveChain.chainId,
+      })
+      .lean()
+      .exec();
+    if (!contract) {
+      throw new BadRequestException(
+        "Desired state must reference a validated Ethereum Sepolia contract resource.",
+      );
+    }
+    const recordedImplementation = String(
+      (contract as Record<string, unknown>).implementationAddress ?? "",
+    );
+    if (
+      recordedImplementation &&
+      recordedImplementation.toLowerCase() !==
+        manifest.implementationAddress.toLowerCase()
+    ) {
+      throw new BadRequestException(
+        "Desired-state implementation does not match the validated proxy resource.",
+      );
+    }
     const idempotencyKey =
       suppliedKey ??
       stableIdempotencyKey(
@@ -503,7 +560,11 @@ export class ObservationController {
         .lean()
         .exec(),
       this.models
-        .Contract!.findOne(filter)
+        .Contract!.findOne({
+          ...filter,
+          networkId: activeLiveChain.slug,
+          chainId: activeLiveChain.chainId,
+        })
         .sort({ createdAt: -1 })
         .lean()
         .exec(),
@@ -515,18 +576,33 @@ export class ObservationController {
     }
     const desired = (desiredVersion as Record<string, unknown>).manifest as {
       oracleAddress?: string;
+      chainId?: number;
+      networkId?: string;
+      contractId?: string;
     };
+    const contractRecord = contract as Record<string, unknown>;
+    if (
+      desired.chainId !== activeLiveChain.chainId ||
+      desired.networkId !== activeLiveChain.slug ||
+      desired.contractId !== contractRecord.contractId ||
+      Number(contractRecord.chainId) !== activeLiveChain.chainId ||
+      contractRecord.networkId !== activeLiveChain.slug
+    ) {
+      throw new BadRequestException(
+        "Finding, desired state, and contract must share the active Ethereum Sepolia deployment boundary.",
+      );
+    }
     const target = String((contract as Record<string, unknown>).address ?? "");
     if (!desired.oracleAddress) {
       throw new BadRequestException("Desired oracle is unavailable.");
     }
     const requestBody = buildSetOracleTransactionRequest({
-      chainId: 84532,
+      chainId: activeLiveChain.chainId,
       market: target,
       desiredOracle: desired.oracleAddress,
     });
     const policy = {
-      allowedChainIds: [84532],
+      allowedChainIds: [activeLiveChain.chainId],
       allowedTargets: [target],
       allowedFunctions: ["setOracle(address)"],
       maximumValueWei: "0",
@@ -1020,11 +1096,11 @@ export class RealtimeController {
   }
 }
 
-async function assertBaseSepoliaRpc(): Promise<void> {
+async function assertLiveRpc(): Promise<void> {
   const chainId = await rpc("eth_chainId", []);
-  if (Number.parseInt(String(chainId), 16) !== 84532) {
+  if (Number.parseInt(String(chainId), 16) !== activeLiveChain.chainId) {
     throw new BadRequestException(
-      "Configured RPC must report Base Sepolia chain ID 84532.",
+      `Configured RPC must report ${activeLiveChain.displayName} chain ID ${activeLiveChain.chainId}.`,
     );
   }
 }
@@ -1032,8 +1108,9 @@ async function assertBaseSepoliaRpc(): Promise<void> {
 async function inspectContract(address: string): Promise<{
   implementation?: string;
 }> {
-  await assertBaseSepoliaRpc();
-  const code = String(await rpc("eth_getCode", [address, "latest"]));
+  await assertLiveRpc();
+  const blockTag = String(await rpc("eth_blockNumber", []));
+  const code = String(await rpc("eth_getCode", [address, blockTag]));
   if (!/^0x[a-fA-F0-9]+$/.test(code) || code === "0x") {
     throw new BadRequestException(
       "No contract bytecode exists at this address.",
@@ -1042,7 +1119,7 @@ async function inspectContract(address: string): Promise<{
   const slot =
     "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
   const storage = String(
-    await rpc("eth_getStorageAt", [address, slot, "latest"]),
+    await rpc("eth_getStorageAt", [address, slot, blockTag]),
   );
   const implementation = `0x${storage.slice(-40)}`;
   return /^0x0{40}$/i.test(implementation) ? {} : { implementation };
@@ -1074,7 +1151,7 @@ async function rpc(method: string, params: unknown[]): Promise<unknown> {
   return envelope.result;
 }
 
-async function validateKeeperHub() {
+async function validateKeeperHub(market: string) {
   const key = process.env.KEEPERHUB_API_KEY;
   if (!key?.startsWith("kh_")) {
     throw new BadRequestException("KeeperHub is not configured.");
@@ -1122,13 +1199,16 @@ async function validateKeeperHub() {
     .parse(unwrap(walletRaw));
   if (
     !chains.some(
-      (chain) => chain.chainId === 84532 && chain.isEnabled && chain.isTestnet,
+      (chain) =>
+        chain.chainId === activeLiveChain.chainId &&
+        chain.isEnabled &&
+        chain.isTestnet,
     ) ||
     !wallet.hasWallet ||
     !wallet.walletAddress
   ) {
     throw new BadRequestException(
-      "KeeperHub Base Sepolia or organization wallet is not ready.",
+      `KeeperHub ${activeLiveChain.displayName} or organization wallet is not ready.`,
     );
   }
   if (
@@ -1140,6 +1220,92 @@ async function validateKeeperHub() {
       "KeeperHub wallet does not match the configured executor.",
     );
   }
+  await assertLiveRpc();
+  const balance = String(
+    await rpc("eth_getBalance", [wallet.walletAddress, "latest"]),
+  );
+  if (BigInt(balance) === 0n) {
+    throw new BadRequestException(
+      "KeeperHub wallet has no Sepolia ETH for execution gas.",
+    );
+  }
+  const role = String(
+    await rpc("eth_call", [
+      { to: market, data: arcadiaSelectors.oracleAdminRole },
+      "latest",
+    ]),
+  );
+  const hasRoleCalldata = `${arcadiaSelectors.hasRole}${role
+    .replace(/^0x/, "")
+    .padStart(64, "0")}${wallet.walletAddress.slice(2).padStart(64, "0")}`;
+  const hasRole = String(
+    await rpc("eth_call", [{ to: market, data: hasRoleCalldata }, "latest"]),
+  );
+  if (BigInt(hasRole) !== 1n) {
+    throw new BadRequestException(
+      "KeeperHub wallet is missing the Ethereum Sepolia ORACLE_ADMIN_ROLE.",
+    );
+  }
+  const oracleStatus = String(
+    await rpc("eth_call", [
+      { to: market, data: arcadiaSelectors.oracleStatus },
+      "latest",
+    ]),
+  );
+  const words = oracleStatus.replace(/^0x/, "").match(/.{64}/g);
+  if (!words?.[0]) {
+    throw new BadRequestException("oracleStatus() returned malformed data.");
+  }
+  const currentOracle = `0x${words[0].slice(-40)}`;
+  const simulationResponse = await fetch(`${base}/execute/contract-call`, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "content-type": "application/json",
+      "x-request-id": `health-${randomUUID()}`,
+    },
+    body: JSON.stringify({
+      contractAddress: market,
+      chainId: activeLiveChain.chainId,
+      functionName: "setOracle",
+      functionArgs: JSON.stringify([currentOracle]),
+      abi: JSON.stringify(arcadiaMarketAbi),
+      value: "0",
+      simulate: true,
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!simulationResponse.ok) {
+    throw new BadRequestException(
+      "KeeperHub Ethereum Sepolia simulation is unavailable.",
+    );
+  }
+  const simulation = z
+    .object({
+      success: z.boolean(),
+      wouldRevert: z.boolean(),
+      from: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+      to: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    })
+    .parse(unwrap(await simulationResponse.json()));
+  if (
+    !simulation.success ||
+    simulation.wouldRevert ||
+    simulation.from.toLowerCase() !== wallet.walletAddress.toLowerCase() ||
+    simulation.to.toLowerCase() !== market.toLowerCase()
+  ) {
+    throw new BadRequestException(
+      "KeeperHub simulation sender/target/readiness validation failed.",
+    );
+  }
+  return {
+    chainId: activeLiveChain.chainId,
+    chainReady: true,
+    walletReady: true,
+    balanceReady: true,
+    oracleAdminRoleReady: true,
+    simulationReady: true,
+  };
 }
 
 async function validateOpenAi() {
@@ -1265,7 +1431,7 @@ function executionView(raw: Record<string, unknown>): Execution {
     operationId: String(raw.operationId),
     directExecutionId: String(raw.directExecutionId ?? ""),
     status,
-    network: "Base Sepolia",
+    network: activeLiveChain.displayName,
     currentStep:
       status === "completed"
         ? "Independent verification complete"

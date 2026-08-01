@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { toast } from "sonner";
 import { aetherClient } from "@aether/sdk";
+import { activeLiveChain } from "@aether/shared";
 import { Button, Field, Input, Status } from "@aether/ui";
 import { useUiStore } from "@/stores/ui";
 
@@ -95,9 +96,10 @@ export function Onboarding() {
               />
             </Field>
             <div className="a-callout">
-              Base Sepolia (84532) is the only live network permitted in this
-              release. Configure RPC, contracts, GitHub, OpenAI, and KeeperHub
-              after this record is created.
+              {activeLiveChain.displayName} ({activeLiveChain.chainId}) is the
+              only live network permitted in this release. Configure RPC,
+              contracts, GitHub, OpenAI, and KeeperHub after this record is
+              created.
             </div>
             <Button type="submit" variant="primary" disabled={pending}>
               Create organization and protocol

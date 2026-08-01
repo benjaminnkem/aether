@@ -1,6 +1,6 @@
 # Assumptions and decisions
 
-1. Chain `84532` is the only hosted/live chain. Chain `31337` is test infrastructure.
+1. Chain `11155111` is the only hosted/live chain. Chain `31337` is test infrastructure.
 2. The existing Arcadia fixture remains unaudited and testnet-only.
 3. KeeperHub Direct Execution, not workflows, is the canonical correction path.
 4. The organization KeeperHub wallet receives only the oracle correction role.

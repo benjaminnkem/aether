@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
-import { aetherClient } from "@aether/sdk";
+import { aetherClient, getAetherErrorMessage } from "@aether/sdk";
 import {
   Activity,
   Add,
@@ -17,6 +17,7 @@ import {
   Warning2,
 } from "iconsax-react";
 import {
+  activeLiveChain,
   routeTitles,
   type AetherRecord,
   type OperationStep,
@@ -347,7 +348,7 @@ function ProtocolSetup({
               </Field>
               <Field label="Environment">
                 <Select defaultValue={protocol.environment}>
-                  <option>Base Sepolia</option>
+                  <option>{activeLiveChain.displayName}</option>
                 </Select>
               </Field>
             </div>
@@ -420,20 +421,30 @@ function ProtocolSetup({
           <Field label="Display name">
             <Input
               value={
-                dialog === "network" ? "Base Sepolia" : "Contract resource"
+                dialog === "network"
+                  ? activeLiveChain.displayName
+                  : "Contract resource"
               }
               readOnly
               placeholder={
-                dialog === "network" ? "Base Sepolia" : "OracleAdapter"
+                dialog === "network"
+                  ? activeLiveChain.displayName
+                  : "OracleAdapter"
               }
             />
           </Field>
           <Field label={dialog === "network" ? "Chain ID" : "Contract address"}>
             <Input
-              value={dialog === "network" ? "84532" : resourceValue}
+              value={
+                dialog === "network"
+                  ? String(activeLiveChain.chainId)
+                  : resourceValue
+              }
               readOnly={dialog === "network"}
               onChange={(event) => setResourceValue(event.target.value)}
-              placeholder={dialog === "network" ? "84532" : "0x…"}
+              placeholder={
+                dialog === "network" ? String(activeLiveChain.chainId) : "0x…"
+              }
             />
           </Field>
           <Button
@@ -444,7 +455,10 @@ function ProtocolSetup({
                 section: dialog === "network" ? "networks" : "contracts",
                 input:
                   dialog === "network"
-                    ? { chainId: 84532, name: "Base Sepolia" }
+                    ? {
+                        chainId: activeLiveChain.chainId,
+                        name: activeLiveChain.displayName,
+                      }
                     : { address: resourceValue, name: "Contract resource" },
               });
               setDialog(null);
@@ -522,8 +536,13 @@ function ConnectionPanel({
         toast.success("Live connection state refreshed.");
       }
     },
-    onError: () =>
-      toast.error("The live provider is not configured or unavailable."),
+    onError: (error) =>
+      toast.error(
+        getAetherErrorMessage(
+          error,
+          "The live provider is not configured or unavailable.",
+        ),
+      ),
   });
   return (
     <div className="settings-form a-card">
@@ -747,7 +766,7 @@ function Drift({
             <div className="context-strip">
               <Badge tone="danger">{selected.severity}</Badge>
               <Status status={selected.status} />
-              <span>Base Sepolia</span>
+              <span>{activeLiveChain.displayName}</span>
             </div>
             <Panel title="Observed fact">
               <p className="record-subtitle">
@@ -764,13 +783,13 @@ function Drift({
             <Panel title="Testnet-only drift action">
               <p className="record-subtitle">
                 Aether never stores a signing key. From an authorized local
-                Foundry account, run the fixture drift script on chain 84532,
-                then use Run observation scan.
+                Foundry account, run the fixture drift script on chain{" "}
+                {activeLiveChain.chainId}, then use Run observation scan.
               </p>
               <CodeBlock
                 language="bash"
                 code={
-                  'pnpm --filter @aether/contracts exec forge script script/CreateUnauthorizedOracleDrift.s.sol:CreateUnauthorizedOracleDrift --rpc-url "$AETHER_RPC_URL" --account aether-base-sepolia-drift --broadcast'
+                  'pnpm --filter @aether/contracts exec forge script script/CreateUnauthorizedOracleDrift.s.sol:CreateUnauthorizedOracleDrift --rpc-url "$AETHER_RPC_URL" --account aether-ethereum-sepolia-drift --broadcast'
                 }
               />
             </Panel>
@@ -1070,7 +1089,7 @@ function ExecutionDetail({
               <ChainValue
                 value={execution.txHash}
                 kind="transaction"
-                href={`https://sepolia.basescan.org/tx/${execution.txHash}`}
+                href={`${activeLiveChain.explorerUrl}/tx/${execution.txHash}`}
               />
             ) : (
               <p className="record-subtitle">

@@ -2,7 +2,7 @@
 
 ## Product outcome
 
-Aether detects when a configured Base Sepolia protocol diverges from immutable desired
+Aether detects when a configured Ethereum Sepolia protocol diverges from immutable desired
 state and safely carries one allowlisted `setOracle(address)` correction from evidence
 to independently verified finality.
 
@@ -33,11 +33,13 @@ password recovery, onboarding, and session management support those areas.
 
 ## Acceptance
 
-Acceptance requires actual chain `84532` deployment evidence, a real drift transaction,
+Acceptance requires actual chain `11155111` deployment evidence, a real drift transaction,
 a valid OpenAI structured investigation, a successful KeeperHub simulation, a real
 direct execution and transaction link, finality, an independent postcondition read, a
-correlated audit trail, restart recovery, and passing Playwright. Local-only work is
-reported as `LOCAL INTEGRATION READY`, never as a live release.
+correlated audit trail, restart recovery, and passing Playwright. A code-complete
+migration blocked by external signing, funding, or RPC authority is reported as
+`ETHEREUM SEPOLIA MIGRATION CODE-COMPLETE — LIVE BROADCAST BLOCKED`, never as a live
+release.
 
 Enterprise administration, billing, SSO, customer webhooks, generic workflows,
 non-EVM chains, mainnet, and compliance reporting remain deferred.

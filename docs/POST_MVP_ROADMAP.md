@@ -15,7 +15,7 @@ deployment and acceptance evidence remain open:
 - real authentication and session lifecycle;
 - real organization/protocol onboarding;
 - real MongoDB/Redis/worker persistence;
-- Base Sepolia deployment;
+- Ethereum Sepolia deployment;
 - real RPC observation;
 - real GitHub provenance;
 - real OpenAI advisory investigation;

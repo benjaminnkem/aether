@@ -31,10 +31,33 @@ copyFileSync(envPath, join(backupDirectory, `.env.${stamp}.bak`));
 
 const generated = new Set();
 const derived = new Set();
+const migrated = new Set();
+
+if (
+  !values.get("NEXT_PUBLIC_AETHER_EXPLORER_URL") &&
+  values.has("NEXT_PUBLIC_BASE_SEPOLIA_EXPLORER_URL")
+) {
+  values.set("NEXT_PUBLIC_AETHER_EXPLORER_URL", "https://sepolia.etherscan.io");
+  migrated.add("NEXT_PUBLIC_AETHER_EXPLORER_URL");
+}
+if (values.get("AETHER_CHAIN_ID") === "84532") {
+  values.set("AETHER_CHAIN_ID", "11155111");
+  migrated.add("AETHER_CHAIN_ID");
+}
+if (
+  values.get("AETHER_DEPLOYMENT_REGISTRY_PATH") ===
+  "packages/contracts/deployments/84532.json"
+) {
+  values.set(
+    "AETHER_DEPLOYMENT_REGISTRY_PATH",
+    "packages/contracts/deployments/11155111.json",
+  );
+  migrated.add("AETHER_DEPLOYMENT_REGISTRY_PATH");
+}
 const localDefaults = {
   NEXT_PUBLIC_AETHER_API_URL: "http://localhost:4000/v1",
   NEXT_PUBLIC_AETHER_APP_URL: "http://localhost:3000",
-  NEXT_PUBLIC_BASE_SEPOLIA_EXPLORER_URL: "https://sepolia.basescan.org",
+  NEXT_PUBLIC_AETHER_EXPLORER_URL: "https://sepolia.etherscan.io",
   GITHUB_CALLBACK_URL: "http://localhost:4000/v1/github/callback",
   AETHER_WEB_ORIGINS: "http://localhost:3000",
   MONGODB_URI: "mongodb://127.0.0.1:27017/aether?replicaSet=rs0",
@@ -45,7 +68,9 @@ const localDefaults = {
   AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
   AETHER_ACCESS_TOKEN_TTL_SECONDS: "900",
   AETHER_REFRESH_TOKEN_TTL_SECONDS: "2592000",
-  AETHER_CHAIN_ID: "84532",
+  AETHER_CHAIN_ID: "11155111",
+  AETHER_DEPLOYMENT_REGISTRY_PATH:
+    "packages/contracts/deployments/11155111.json",
   AETHER_MAINNET_DISABLED: "true",
   AETHER_FINALITY_CONFIRMATIONS: "12",
   AETHER_MAX_ORACLE_AGE: "3600",
@@ -103,7 +128,7 @@ const remove = new Set([
   "KEEPERHUB_API_TOKEN",
   "KEEPERHUB_WORKFLOW_ID",
   "GITHUB_READ_TOKEN",
-  "NEXT_PUBLIC_AETHER_EXPLORER_URL",
+  "NEXT_PUBLIC_BASE_SEPOLIA_EXPLORER_URL",
   "NEXT_PUBLIC_AETHER_GITHUB_URL",
 ]);
 const preserved = source
@@ -149,12 +174,14 @@ for (const name of [...new Set([...values.keys(), ...external])].sort()) {
   if (remove.has(name)) continue;
   const status = generated.has(name)
     ? "generated"
-    : derived.has(name)
-      ? "derived"
-      : values.get(name)
-        ? "ready"
-        : external.includes(name)
-          ? "missing_external_action"
-          : "optional";
+    : migrated.has(name)
+      ? "migrated_from_base_sepolia"
+      : derived.has(name)
+        ? "derived"
+        : values.get(name)
+          ? "ready"
+          : external.includes(name)
+            ? "missing_external_action"
+            : "optional";
   console.log(`${name}: ${status}`);
 }

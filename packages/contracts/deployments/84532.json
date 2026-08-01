@@ -1,5 +1,7 @@
 {
   "chainId": 84532,
   "deployed": false,
-  "note": "Base Sepolia is supported by DeployArcadia.s.sol; addresses are generated only after an authorized deployment."
+  "active": false,
+  "network": "Base Sepolia",
+  "note": "Historical inactive registry. Base Sepolia is not an active Aether deployment target."
 }

@@ -1,5 +1,8 @@
 # Live Completion Plan
 
+> Superseded for chain targeting by `ETHEREUM_SEPOLIA_MIGRATION_PLAN.md`. The current
+> verdict is `ETHEREUM SEPOLIA MIGRATION CODE-COMPLETE — LIVE BROADCAST BLOCKED`.
+
 ## Implementation update — 2026-07-31
 
 The inventories below capture the repository at the start of this pass. The runtime
@@ -97,13 +100,13 @@ after they are moved out of runtime imports.
   enter/exit motion with reduced-motion fallbacks;
 - add environment/provider doctors and a runtime-import CI guard.
 
-## External blockers observed on 2026-07-31
+## External blockers observed on 2026-08-01
 
-Environment values were inspected by name/status only. The current environment has a
-Base Sepolia RPC value and a legacy KeeperHub token value. It has no Foundry keystore,
-GitHub App credentials, OpenAI key, or SMTP configuration. No chain broadcast or live
-provider success is assumed. Exact external actions are maintained in
-`docs/MANUAL_EXTERNAL_ACTIONS.md`.
+Environment values were inspected by name/status only. KeeperHub, GitHub App, and
+OpenAI credentials are configured; GitHub App identity and OpenAI model availability
+passed. The configured RPC reports a chain other than Ethereum Sepolia, no usable
+Foundry signer matches the configured administrator, and no deployment or transaction
+exists. Exact external actions are maintained in `docs/MANUAL_EXTERNAL_ACTIONS.md`.
 
 ## Verification plan
 
@@ -116,6 +119,6 @@ provider success is assumed. Exact external actions are maintained in
 5. Foundry and local Anvil cover real observation, drift, correction, partial
    verification, and forward correction.
 6. Playwright covers signup through audit at desktop/mobile/reduced-motion/keyboard.
-7. Opt-in live acceptance records only real Base Sepolia/OpenAI/GitHub/KeeperHub/RPC
+7. Opt-in live acceptance records only real Ethereum Sepolia/OpenAI/GitHub/KeeperHub/RPC
    evidence. Until those provider and signer requirements exist, the maximum honest
-   verdict is `LOCAL INTEGRATION READY`.
+   verdict is `ETHEREUM SEPOLIA MIGRATION CODE-COMPLETE — LIVE BROADCAST BLOCKED`.

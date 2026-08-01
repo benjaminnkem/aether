@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { activeLiveChain } from "./chains";
+
+export * from "./chains";
 
 export const severitySchema = z.enum([
   "critical",
@@ -137,8 +140,8 @@ export const dashboardSchema = z.object({
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 export const desiredStateSchema = z.object({
   version: z.string().regex(/^v\d+\.\d+\.\d+$/),
-  networkId: z.literal("base-sepolia"),
-  chainId: z.coerce.number().pipe(z.literal(84532)),
+  networkId: z.literal(activeLiveChain.slug),
+  chainId: z.coerce.number().pipe(z.literal(activeLiveChain.chainId)),
   contractId: z.string().min(1),
   contractVersion: z.string().min(1),
   implementationAddress: addressSchema,

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@aether/backend": "workspace:*",
+    "@aether/shared": "workspace:*",
     "@nestjs/common": "11.1.28",
     "@nestjs/core": "11.1.28",
     "@nestjs/mongoose": "11.0.3",

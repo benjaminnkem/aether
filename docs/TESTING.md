@@ -43,6 +43,10 @@ pnpm --filter @aether/contracts snapshot:check
 - provider schemas;
 - durable domain transitions;
 - unknown-outcome locks.
+- Ethereum Sepolia accepted while Base Sepolia and mainnet are rejected;
+- chain/address changes invalidate old simulations and approvals;
+- KeeperHub Sepolia request/explorer binding and RPC mismatch rejection;
+- KeeperHub balance/role readiness and testnet-only drift-role separation.
 
 ### Integration
 
@@ -125,7 +129,7 @@ Install the browser and pass the full matrix:
 
 ### Live-provider acceptance
 
-This is a separate opt-in suite that requires real credentials and Base Sepolia funds.
+This is a separate opt-in suite that requires real credentials and Ethereum Sepolia funds.
 
 It must:
 

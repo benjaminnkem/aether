@@ -15,6 +15,9 @@ process.env.SMTP_HOST = "127.0.0.1";
 process.env.SMTP_PORT = "1025";
 process.env.SMTP_FROM = "aether-integration@example.invalid";
 process.env.AUTH_EMAIL_VERIFICATION_REQUIRED = "false";
+process.env.AETHER_CHAIN_ID = "11155111";
+process.env.AETHER_MAINNET_DISABLED = "true";
+process.env.AETHER_RPC_URL = "http://127.0.0.1:8545";
 
 describe.runIf(enabled)("Aether API integration", () => {
   let app: INestApplication;
@@ -70,7 +73,7 @@ describe.runIf(enabled)("Aether API integration", () => {
     const dashboard = await agent.get("/v1/dashboard").expect(200);
     expect(dashboard.body.organization.id).toBe(onboarding.body.organizationId);
     expect(dashboard.body.protocols[0].id).toBe(onboarding.body.protocolId);
-  });
+  }, 20_000);
 
   it("rejects provider secrets submitted from the browser", async () => {
     const response = await agent

@@ -2,6 +2,7 @@ import {
   encodeSetOracleCalldata,
   type TransactionRequest,
 } from "@aether/backend";
+import { activeLiveChain } from "@aether/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   JsonRpcChainReader,
@@ -9,7 +10,7 @@ import {
   UnknownReceiptOutcomeError,
 } from "../src/providers/providers";
 
-const chainId = 84_532;
+const chainId = activeLiveChain.chainId;
 const market = "0x7D4A3AfF7c4C51B1726a91c738ACb6F227127C3f";
 const approvedOracle = "0x2C8A7E78B8d6909A2171B8449A3C1b8D64f44311";
 const transactionHash = `0x${"7".repeat(64)}`;
@@ -49,10 +50,17 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
     delete process.env.AETHER_RPC_URL;
   });
 
+  it("rejects a Base Sepolia RPC for an Ethereum Sepolia observation", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response("0x14a34")));
+    await expect(
+      new JsonRpcChainReader().observeOracle(chainId, market),
+    ).rejects.toThrow(/RPC chain mismatch/);
+  });
+
   it("keeps an unavailable receipt in the unknown-outcome path", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(response("0x14a34"))
+      .mockResolvedValueOnce(response("0xaa36a7"))
       .mockResolvedValueOnce(response(null));
     vi.stubGlobal("fetch", fetchMock);
     const reader = new JsonRpcChainReader();
@@ -64,7 +72,7 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
   it("waits for the configured confirmation threshold", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(response("0x14a34"))
+      .mockResolvedValueOnce(response("0xaa36a7"))
       .mockResolvedValueOnce(
         response({
           transactionHash,
@@ -87,7 +95,7 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
   it("rejects a block-pinned read when the canonical hash changes", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(response("0x14a34"))
+      .mockResolvedValueOnce(response("0xaa36a7"))
       .mockResolvedValueOnce(response("0x64"))
       .mockResolvedValueOnce(
         response({ hash: receiptBlockHash, number: "0x64" }),
@@ -106,7 +114,7 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
   it("reads and validates bounded block logs", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(response("0x14a34"))
+      .mockResolvedValueOnce(response("0xaa36a7"))
       .mockResolvedValueOnce(
         response([
           {
@@ -136,10 +144,30 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
     });
   });
 
+  it("attributes the drift transaction actor on Ethereum Sepolia", async () => {
+    const actor = "0x1111111111111111111111111111111111111111";
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(response(activeLiveChain.hexChainId))
+        .mockResolvedValueOnce(
+          response({
+            hash: transactionHash,
+            from: actor,
+            chainId: activeLiveChain.hexChainId,
+          }),
+        ),
+    );
+    await expect(
+      new JsonRpcChainReader().getTransactionActor(chainId, transactionHash),
+    ).resolves.toBe(actor);
+  });
+
   it("verifies a canonical, fresh postcondition only after finality", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(response("0x14a34"))
+      .mockResolvedValueOnce(response("0xaa36a7"))
       .mockResolvedValueOnce(
         response({
           transactionHash,
@@ -153,7 +181,7 @@ describe("JsonRpcChainReader finality and reorg safety", () => {
         response({ hash: receiptBlockHash, number: "0x64" }),
       )
       .mockResolvedValueOnce(response("0x6f"))
-      .mockResolvedValueOnce(response("0x14a34"))
+      .mockResolvedValueOnce(response("0xaa36a7"))
       .mockResolvedValueOnce(response({ hash: headBlockHash, number: "0x6f" }))
       .mockResolvedValueOnce(
         response(oracleStatusResult(approvedOracle, 1_800_000_000, true)),

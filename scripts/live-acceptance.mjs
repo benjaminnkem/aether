@@ -3,14 +3,14 @@ import { spawnSync } from "node:child_process";
 
 loadEnv();
 
-const deploymentPath = "packages/contracts/deployments/84532.json";
+const deploymentPath = "packages/contracts/deployments/11155111.json";
 if (!existsSync(deploymentPath)) {
-  throw new Error("Base Sepolia deployment registry is missing.");
+  throw new Error("Ethereum Sepolia deployment registry is missing.");
 }
 const deployment = JSON.parse(readFileSync(deploymentPath, "utf8"));
 if (deployment.deployed !== true) {
   throw new Error(
-    "Base Sepolia fixture is not deployed. Live acceptance will not manufacture evidence.",
+    "Ethereum Sepolia fixture is not deployed. Live acceptance will not manufacture evidence.",
   );
 }
 for (const name of [

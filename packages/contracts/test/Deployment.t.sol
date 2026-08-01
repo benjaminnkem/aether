@@ -16,6 +16,8 @@ contract DeploymentTest is ArcadiaTestBase {
         assertGt(observedImplementation.code.length, 0);
         assertTrue(market.hasRole(market.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(market.hasRole(market.ORACLE_ADMIN_ROLE(), executor));
+        assertFalse(market.hasRole(market.ORACLE_ADMIN_ROLE(), driftActor));
+        assertTrue(market.hasRole(market.DRIFT_FIXTURE_ROLE(), driftActor));
     }
 
     function test_OnlySupportedDeploymentChains() public {

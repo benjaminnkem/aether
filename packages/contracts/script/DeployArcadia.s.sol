@@ -55,6 +55,16 @@ contract DeployArcadia is ScriptBase {
     function _writeDeployment(Deployment memory deployment) internal {
         string memory object = "deployment";
         vm.serializeUint(object, "chainId", block.chainid);
+        vm.serializeString(
+            object,
+            "network",
+            block.chainid == ETHEREUM_SEPOLIA_CHAIN_ID ? "Ethereum Sepolia" : "Anvil"
+        );
+        vm.serializeString(
+            object,
+            "explorerUrl",
+            block.chainid == ETHEREUM_SEPOLIA_CHAIN_ID ? "https://sepolia.etherscan.io" : ""
+        );
         vm.serializeAddress(object, "implementation", deployment.implementation);
         vm.serializeAddress(object, "marketProxy", deployment.marketProxy);
         vm.serializeAddress(object, "approvedOracle", deployment.approvedOracle);
@@ -66,10 +76,12 @@ contract DeployArcadia is ScriptBase {
         vm.serializeAddress(object, "fixtureAdmin", deployment.fixtureAdmin);
         vm.serializeUint(object, "maxOracleAge", deployment.maxOracleAge);
         vm.serializeUint(object, "deploymentBlock", block.number);
+        vm.serializeUint(object, "deploymentTimestamp", block.timestamp);
         vm.serializeAddress(object, "deployer", tx.origin);
         vm.serializeString(
             object, "sourceCommit", vm.envOr("AETHER_SOURCE_COMMIT", string("unrecorded"))
         );
+        vm.serializeString(object, "abiArtifactVersion", "ArcadiaMarket.sol:ArcadiaMarket@0.8.30");
         string memory json = vm.serializeBool(object, "deployed", true);
         vm.writeJson(json, _deploymentPath());
     }

@@ -2,6 +2,7 @@ import {
   durableJobSchema,
   queueNames,
   stableIdempotencyKey,
+  arcadiaTopics,
   type DurableJob,
   type QueueName,
 } from "@aether/backend";
@@ -30,6 +31,7 @@ import type {
   KeeperHubProvider,
   Simulator,
 } from "@aether/backend";
+import { activeLiveChain } from "@aether/shared";
 
 @Injectable()
 export class WorkerRuntime
@@ -129,8 +131,16 @@ export class WorkerRuntime
       protocolId: job.protocolId,
     };
     const [network, contract, desired] = await Promise.all([
-      this.connection.collection("networks").findOne(tenant),
-      this.connection.collection("contracts").findOne(tenant),
+      this.connection.collection("networks").findOne({
+        ...tenant,
+        chainId: activeLiveChain.chainId,
+        networkId: activeLiveChain.slug,
+      }),
+      this.connection.collection("contracts").findOne({
+        ...tenant,
+        chainId: activeLiveChain.chainId,
+        networkId: activeLiveChain.slug,
+      }),
       this.connection
         .collection("desired_state_versions")
         .findOne({ ...tenant, active: true }),
@@ -140,13 +150,40 @@ export class WorkerRuntime
         "A network, validated contract, and active desired state are required before scanning.",
       );
     }
-    if (Number(network.chainId) !== 84532) {
-      throw new Error("Observation is restricted to Base Sepolia chain 84532.");
+    if (Number(network.chainId) !== activeLiveChain.chainId) {
+      throw new Error(
+        `Observation is restricted to ${activeLiveChain.displayName} chain ${activeLiveChain.chainId}.`,
+      );
     }
     const observation = await this.chainReader.observeOracle(
-      84532,
+      activeLiveChain.chainId,
       String(contract.address),
     );
+    const previousObservation = await this.connection
+      .collection("observations")
+      .findOne(tenant, { sort: { blockNumber: -1 } });
+    const fromBlock = Math.max(
+      0,
+      previousObservation
+        ? Number(previousObservation.blockNumber) + 1
+        : observation.blockNumber - 5_000,
+    );
+    const logs = await this.chainReader.getLogs({
+      chainId: activeLiveChain.chainId,
+      address: String(contract.address),
+      fromBlock,
+      toBlock: observation.blockNumber,
+      topics: [arcadiaTopics.oracleConfigured],
+    });
+    const originLog = logs.at(-1);
+    const originActor = originLog
+      ? await this.chainReader.getTransactionActor(
+          activeLiveChain.chainId,
+          originLog.transactionHash,
+        )
+      : undefined;
+    const topicAddress = (topic: string | undefined) =>
+      topic ? `0x${topic.slice(-40)}` : undefined;
     const observationId = `obs_${observation.blockHash.slice(2, 18)}`;
     await this.connection.collection("observations").updateOne(
       { ...tenant, observationId },
@@ -162,6 +199,18 @@ export class WorkerRuntime
             oracleUpdatedAt: observation.oracleUpdatedAt,
             fresh: observation.fresh,
             canonical: observation.canonical,
+            origin: originLog
+              ? {
+                  transactionHash: originLog.transactionHash,
+                  blockNumber: originLog.blockNumber,
+                  actor: originActor,
+                  event: "OracleConfigured",
+                  previousOracle: topicAddress(originLog.topics[1]),
+                  newOracle: topicAddress(originLog.topics[2]),
+                  eventActor: topicAddress(originLog.topics[3]),
+                  observedAt: observation.observedAt,
+                }
+              : undefined,
           },
           providerCorrelationId: `rpc-${observation.blockHash.slice(2, 14)}`,
           createdAt: new Date(),
@@ -206,6 +255,7 @@ export class WorkerRuntime
     const desiredOracle = String(
       (desired.manifest as Record<string, unknown>).oracleAddress,
     );
+    const observationValues = observation.values as Record<string, unknown>;
     const findingKey = stableIdempotencyKey(
       job.organizationId,
       job.protocolId,
@@ -225,8 +275,11 @@ export class WorkerRuntime
           desired: desiredOracle,
           evidence: {
             observationId: job.resourceId,
+            chainId: activeLiveChain.chainId,
+            networkId: activeLiveChain.slug,
             blockNumber: observation.blockNumber,
             blockHash: observation.blockHash,
+            origin: observationValues.origin,
           },
           updatedAt: new Date(),
         },
@@ -253,7 +306,11 @@ export class WorkerRuntime
       this.connection
         .collection("desired_state_versions")
         .findOne({ ...tenant, active: true }),
-      this.connection.collection("contracts").findOne(tenant),
+      this.connection.collection("contracts").findOne({
+        ...tenant,
+        chainId: activeLiveChain.chainId,
+        networkId: activeLiveChain.slug,
+      }),
     ]);
     if (!finding || !desired || !contract) {
       throw new Error(
@@ -271,7 +328,7 @@ export class WorkerRuntime
         `Desired oracle: ${String(finding.desired)}`,
         `Desired state version: ${String(desired.versionId)}`,
       ],
-      allowedChainIds: [84532],
+      allowedChainIds: [activeLiveChain.chainId],
       allowedTargets: [String(contract.address)],
       allowedFunctions: ["setOracle(address)"],
     });

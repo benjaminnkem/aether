@@ -12,6 +12,8 @@ contract ArcadiaMarketUnitTest is ArcadiaTestBase {
         assertEq(market.maxOracleAge(), MAX_ORACLE_AGE);
         assertTrue(market.hasRole(market.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(market.hasRole(market.ORACLE_ADMIN_ROLE(), executor));
+        assertFalse(market.hasRole(market.ORACLE_ADMIN_ROLE(), driftActor));
+        assertTrue(market.hasRole(market.DRIFT_FIXTURE_ROLE(), driftActor));
 
         (address configured, uint256 updatedAt, bool fresh) = market.oracleStatus();
         assertEq(configured, address(approvedOracle));
@@ -29,6 +31,28 @@ contract ArcadiaMarketUnitTest is ArcadiaTestBase {
         );
         vm.prank(outsider);
         market.setOracle(address(unauthorizedOracle));
+    }
+
+    function test_DriftAndCorrectionAuthoritiesAreSeparated() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                driftActor,
+                market.ORACLE_ADMIN_ROLE()
+            )
+        );
+        vm.prank(driftActor);
+        market.setOracle(address(unauthorizedOracle));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                executor,
+                market.DRIFT_FIXTURE_ROLE()
+            )
+        );
+        vm.prank(executor);
+        market.createFixtureDrift(address(unauthorizedOracle));
     }
 
     function test_SetOracleRejectsEOA() public {

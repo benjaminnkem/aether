@@ -21,6 +21,7 @@ import {
   type TransactionRequest,
 } from "@aether/backend";
 import { Injectable } from "@nestjs/common";
+import { activeLiveChain } from "@aether/shared";
 import { z } from "zod";
 import { ProviderRuntime } from "./provider-runtime";
 
@@ -55,6 +56,14 @@ const rpcReceiptSchema = z.object({
   blockNumber: z.string().regex(/^0x[a-fA-F0-9]+$/),
   status: z.enum(["0x0", "0x1"]),
   logs: z.array(rpcLogSchema).optional().default([]),
+});
+const rpcTransactionSchema = z.object({
+  hash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+  from: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  chainId: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]+$/)
+    .optional(),
 });
 
 export class ReorgDetectedError extends Error {
@@ -202,6 +211,22 @@ export class JsonRpcChainReader implements ChainReader {
     );
   }
 
+  async getTransactionActor(chainId: number, transactionHash: string) {
+    await this.assertChain(chainId);
+    const transaction = rpcTransactionSchema.parse(
+      await this.rpc("eth_getTransactionByHash", [transactionHash]),
+    );
+    if (
+      transaction.chainId &&
+      Number.parseInt(transaction.chainId, 16) !== chainId
+    ) {
+      throw new Error(
+        "Transaction chain does not match the observation chain.",
+      );
+    }
+    return transaction.from;
+  }
+
   async getReceipt(
     chainId: number,
     requestedTransactionHash: string,
@@ -333,7 +358,9 @@ async function readOracleFromSecondary(
     16,
   );
   if (chainId !== expectedChainId) {
-    throw new Error("Secondary RPC chain does not match Base Sepolia.");
+    throw new Error(
+      `Secondary RPC chain does not match ${activeLiveChain.displayName}.`,
+    );
   }
   const blockTag = `0x${blockNumber.toString(16)}`;
   const encoded = z
@@ -464,9 +491,9 @@ export class HttpKeeperHubProvider implements KeeperHubProvider {
         `KeeperHub chain ${chainId} is unavailable, disabled, or not a testnet.`,
       );
     }
-    if (chainId !== 84532) {
+    if (chainId !== activeLiveChain.chainId) {
       throw new Error(
-        "Aether only permits KeeperHub execution on Base Sepolia.",
+        `Aether only permits KeeperHub execution on ${activeLiveChain.displayName}.`,
       );
     }
   }
@@ -534,7 +561,7 @@ export class HttpSimulator implements Simulator {
 @Injectable()
 export class OpenAiInvestigationAssistant implements InvestigationAssistant {
   private readonly apiKey = process.env.OPENAI_API_KEY;
-  private readonly model = process.env.OPENAI_MODEL ?? "gpt-5.6-sol";
+  private readonly model = required("OPENAI_MODEL");
   private readonly runtime = new ProviderRuntime({
     provider: "openai",
     timeoutMs: positiveIntegerEnv("OPENAI_REQUEST_TIMEOUT_MS", 20_000),

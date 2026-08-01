@@ -7,6 +7,7 @@ import {
   TickCircle,
 } from "iconsax-react";
 import { Button, Card, CodeBlock, Status } from "@aether/ui";
+import { activeLiveChain } from "@aether/shared";
 import {
   HeroBackground,
   MarketingShell,
@@ -15,7 +16,7 @@ import { ProductComposition } from "@/components/marketing/product-composition";
 import { MotionReveal, StickySequence } from "@/components/marketing/motion";
 
 const desiredYaml = `version: v2.4.1
-chainId: 84532
+chainId: ${activeLiveChain.chainId}
 resources:
   OracleAdapter:
     oracle: 0x2C8A7E78...44311

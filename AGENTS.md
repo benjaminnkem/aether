@@ -13,13 +13,15 @@ Act as a principal frontend, backend, platform, security, and Web3 engineer. Pro
 - `apps/api`: NestJS, TypeScript, MongoDB with Mongoose, Swagger UI.
 - `apps/worker`: standalone NestJS worker using Redis and BullMQ.
 - `packages/contracts`: Foundry smart contracts, tests, deployment and drift scripts.
-- Shared packages for UI, types/schemas, SDK, configuration, testing, and mock data.
+- Shared packages for UI, types/schemas, SDK, configuration, and testing.
 
 ## Required workflow
 
-1. Build the entire frontend in mock mode first.
-2. Do not remove or weaken frontend states when live APIs are added.
-3. Use adapter/provider switches for mock versus live services.
+1. Keep one runtime path: browser SDK → API → MongoDB/outbox → worker → live providers.
+2. Runtime mocks, provider switches, demo controls, seeded product state, and fake
+   evidence are prohibited; test doubles remain test-only.
+3. Ethereum Sepolia `11155111` is the only live target, Anvil `31337` is local
+   infrastructure, and mainnet `1` is prohibited.
 4. Validate all external inputs and AI outputs with Zod or equivalent runtime schemas.
 5. Never let an LLM directly authorize or sign a transaction.
 6. Enforce permissions, policies, target allowlists, function allowlists, value limits, chain restrictions, approval thresholds, and invariant checks in deterministic code.

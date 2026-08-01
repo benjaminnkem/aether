@@ -19,6 +19,7 @@ import type { Request, Response } from "express";
 import * as argon2 from "argon2";
 import nodemailer from "nodemailer";
 import { registerModels, type TenantContext } from "@aether/backend";
+import { activeLiveChain } from "@aether/shared";
 import { z } from "zod";
 
 const credentialsSchema = z.object({
@@ -304,7 +305,7 @@ export class AuthService {
       organizationId,
       protocolId,
       name: parsed.protocolName,
-      environment: "Base Sepolia",
+      environment: activeLiveChain.displayName,
       governance: parsed.governanceAuthority,
       status: "setup_required",
       health: 0,
@@ -493,9 +494,10 @@ export class AuthService {
 
   private async sendEmail(to: string, subject: string, actionUrl: string) {
     const transporter = nodemailer.createTransport({
-      host: required("SMTP_HOST"),
-      port: Number(process.env.SMTP_PORT ?? 1025),
-      secure: process.env.SMTP_SECURE === "true",
+      // host: required("SMTP_HOST"),
+      // port: Number(process.env.SMTP_PORT ?? 1025),
+      // secure: process.env.SMTP_SECURE === "true",
+      service: "gmail",
       auth: process.env.SMTP_USER
         ? {
             user: process.env.SMTP_USER,

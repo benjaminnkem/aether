@@ -13,7 +13,7 @@ contract ArcadiaLifecycleTest is ArcadiaTestBase {
         bytes32 evidenceBlockHash = blockhash(block.number - 1);
 
         vm.prank(driftActor);
-        market.setOracle(address(unauthorizedOracle));
+        market.createFixtureDrift(address(unauthorizedOracle));
         assertNotEq(market.oracle(), desiredOracle);
         assertEq(block.number, evidenceBlock);
         assertEq(blockhash(block.number - 1), evidenceBlockHash);
@@ -49,7 +49,7 @@ contract ArcadiaLifecycleTest is ArcadiaTestBase {
 
     function test_ConfirmedWriteCanRequireForwardCorrection() public {
         vm.prank(driftActor);
-        market.setOracle(address(unauthorizedOracle));
+        market.createFixtureDrift(address(unauthorizedOracle));
 
         vm.prank(admin);
         approvedOracle.setUpdatedAt(block.timestamp - MAX_ORACLE_AGE - 1);

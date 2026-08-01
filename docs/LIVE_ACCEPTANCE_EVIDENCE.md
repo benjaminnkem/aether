@@ -1,15 +1,18 @@
 # Live Acceptance Evidence
 
+Evidence date: 2026-08-01.
+
 ## Current evidence
 
-- KeeperHub authentication: passed on 2026-07-31.
-- KeeperHub `GET /api/chains`: Base Sepolia `84532` was enabled and marked testnet.
+- KeeperHub authentication, Ethereum Sepolia enabled/testnet, and organization-wallet
+  configuration passed before the doctor reached the RPC mismatch gate.
 - KeeperHub organization wallet: configured; address stored locally as the executor
   public address without being printed here.
-- Base Sepolia RPC: failed validation because the configured endpoint reported another
+- Ethereum Sepolia RPC: failed validation because the configured endpoint reported another
   chain.
-- Base Sepolia deployment: not broadcast.
-- OpenAI/GitHub live calls: not run because credentials are absent.
+- Ethereum Sepolia deployment: not broadcast.
+- GitHub App authentication/identity: passed.
+- OpenAI authentication and configured-model availability: passed.
 - KeeperHub simulation/execution: not run because no live deployment/desired state is
   available.
 - Transaction link and independent verification: none.
@@ -20,7 +23,7 @@
 
 ## Verdict
 
-`LOCAL INTEGRATION READY`
+`ETHEREUM SEPOLIA MIGRATION CODE-COMPLETE — LIVE BROADCAST BLOCKED`
 
 The evidence directory is created by the opt-in live acceptance command only after real
 provider calls. No placeholder transaction, execution, provider health, or screenshot

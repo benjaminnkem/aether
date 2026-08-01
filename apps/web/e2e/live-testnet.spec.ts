@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("live Base Sepolia acceptance", () => {
+test.describe("live Ethereum Sepolia acceptance", () => {
   test.skip(
     process.env.LIVE_TESTNET_ACCEPTANCE !== "1",
     "Protected live acceptance is opt-in.",
@@ -42,12 +42,12 @@ test.describe("live Base Sepolia acceptance", () => {
     await execute.click();
     await expect(page).toHaveURL(/\/app\/executions\/[^/]+$/);
     const transactionLink = page.locator(
-      'a[href^="https://sepolia.basescan.org/tx/"]',
+      'a[href^="https://sepolia.etherscan.io/tx/"]',
     );
     await expect(transactionLink).toBeVisible({ timeout: 8 * 60_000 });
     await expect(transactionLink).toHaveAttribute(
       "href",
-      /^https:\/\/sepolia\.basescan\.org\/tx\/0x[a-fA-F0-9]{64}$/,
+      /^https:\/\/sepolia\.etherscan\.io\/tx\/0x[a-fA-F0-9]{64}$/,
     );
     await page.getByRole("link", { name: "Review audit evidence" }).click();
     await expect(page).toHaveURL(/\/app\/audit-log$/);

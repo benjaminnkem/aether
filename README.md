@@ -1,6 +1,6 @@
 # Aether
 
-Aether is a Base Sepolia control plane for versioned protocol intent, live RPC
+Aether is an Ethereum Sepolia control plane for versioned protocol intent, live RPC
 observation, advisory AI investigation, deterministic correction planning, contextual
 approval, KeeperHub Direct Execution, independent verification, and immutable audit.
 
@@ -46,4 +46,11 @@ pnpm openai:doctor
 
 The current release verdict and evidence are recorded in
 [live acceptance evidence](docs/LIVE_ACCEPTANCE_EVIDENCE.md). Never interpret a local
-build or a provider doctor as proof of a Base Sepolia transaction.
+build or a provider doctor as proof of an Ethereum Sepolia transaction.
+
+The canonical live chain is Ethereum Sepolia `11155111`; Anvil `31337` is local
+integration infrastructure and mainnet `1` is prohibited. The current migration is
+code-complete but live broadcast is blocked by the configured non-Sepolia RPC and the
+absence of an authorized funded deployer. See the
+[migration plan](docs/ETHEREUM_SEPOLIA_MIGRATION_PLAN.md) and exact continuation steps
+in [manual external actions](docs/MANUAL_EXTERNAL_ACTIONS.md).

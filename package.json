@@ -18,10 +18,11 @@
     "github:doctor": "node scripts/provider-doctor.mjs github",
     "openai:doctor": "node scripts/provider-doctor.mjs openai",
     "chain:doctor": "node scripts/provider-doctor.mjs chain",
-    "chain:deploy:dry": "node scripts/deploy-base-sepolia.mjs",
-    "chain:deploy": "node scripts/deploy-base-sepolia.mjs --broadcast",
+    "chain:deploy:dry": "node scripts/deploy-ethereum-sepolia.mjs",
+    "chain:deploy": "node scripts/deploy-ethereum-sepolia.mjs --broadcast",
     "check:runtime-imports": "node scripts/check-runtime-imports.mjs",
-    "migrate:legacy": "node scripts/migrate-legacy-state.mjs"
+    "migrate:legacy": "node scripts/migrate-legacy-state.mjs",
+    "migrate:ethereum-sepolia": "node scripts/migrate-ethereum-sepolia.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4",

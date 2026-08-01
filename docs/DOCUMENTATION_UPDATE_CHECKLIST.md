@@ -74,7 +74,7 @@ The README must state:
 - external accounts required;
 - setup commands;
 - environment doctor;
-- Base Sepolia deployment;
+- Ethereum Sepolia deployment;
 - how to run the full UI flow;
 - real KeeperHub proof;
 - test commands;

@@ -2,7 +2,9 @@
 
 ## Current verdict
 
-Aether is `LOCAL INTEGRATION READY`, but it is not yet proven as a live testnet product.
+Aether is
+`ETHEREUM SEPOLIA MIGRATION CODE-COMPLETE — LIVE BROADCAST BLOCKED`, but it is not yet
+proven as a live testnet product.
 
 The current documents describe:
 
@@ -14,8 +16,11 @@ The current documents describe:
 The runtime mock modes, deterministic product scenarios, seeded identities, and demo
 controls have been removed. Remaining blockers are:
 
-- Base Sepolia was not broadcast;
-- real KeeperHub execution, GitHub App installation, correct RPC, and OpenAI acceptance were not completed;
+- Ethereum Sepolia was not broadcast;
+- the RPC is not Ethereum Sepolia, so deployment and KeeperHub balance/role/simulation
+  checks cannot complete;
+- GitHub App authentication and OpenAI model availability passed, while repository
+  installation/provenance remains part of the protected live flow;
 - protected live Playwright acceptance did not run; local desktop/mobile smoke passed;
 - the contracts are unaudited fixtures and are not suitable for mainnet.
 
@@ -35,7 +40,7 @@ Real frontend, API, worker, MongoDB replica set, Redis, BullMQ, native authentic
 
 All Tier 1 requirements plus:
 
-- Base Sepolia fixture contracts deployed;
+- Ethereum Sepolia fixture contracts deployed;
 - real RPC reads;
 - real GitHub provenance;
 - real OpenAI structured advisory output;
@@ -97,8 +102,8 @@ Aether may be called “live testnet ready” only if every gate passes.
 ### Integration gate
 
 - KeeperHub organization key is real and begins with `kh_`.
-- KeeperHub wallet is configured and funded with Base Sepolia ETH.
-- `GET /api/chains` confirms Base Sepolia is enabled and testnet.
+- KeeperHub wallet is configured and funded with Ethereum Sepolia ETH.
+- `GET /api/chains` confirms Ethereum Sepolia is enabled and testnet.
 - Exact `setOracle(address)` request is simulated with `simulate: true`.
 - The exact same body is submitted once with `Idempotency-Key`.
 - The returned execution ID is persisted before further processing.
@@ -111,7 +116,7 @@ Aether may be called “live testnet ready” only if every gate passes.
 
 ### Chain gate
 
-- Contracts are deployed to Base Sepolia chain ID `84532`.
+- Contracts are deployed to Ethereum Sepolia chain ID `11155111`.
 - Deployment artifact records the real chain, block, transaction hashes, deployer, contract addresses, and commit.
 - Mainnet chain ID `1` is rejected.
 - The KeeperHub executor address has only the minimum required role.
@@ -132,6 +137,6 @@ Aether may be called “live testnet ready” only if every gate passes.
 - Formatting, lint, strict type checks, unit, integration, contract, security, and production builds pass.
 - Playwright browser binaries are installed.
 - All Playwright tests pass.
-- A live-provider acceptance suite passes against Base Sepolia.
+- A live-provider acceptance suite passes against Ethereum Sepolia.
 - A transaction link is captured as release evidence.
 - No known production dependency vulnerability remains.

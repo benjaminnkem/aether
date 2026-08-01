@@ -10,11 +10,15 @@ import { IArcadiaOracle } from "./interfaces/IArcadiaOracle.sol";
 /// @dev This contract is unaudited and must never custody real assets.
 contract ArcadiaMarket is AccessControl {
     bytes32 public constant ORACLE_ADMIN_ROLE = keccak256("ORACLE_ADMIN_ROLE");
+    bytes32 public constant DRIFT_FIXTURE_ROLE = keccak256("DRIFT_FIXTURE_ROLE");
+    uint256 private constant ANVIL_CHAIN_ID = 31_337;
+    uint256 private constant ETHEREUM_SEPOLIA_CHAIN_ID = 11_155_111;
 
     error InvalidAddress();
     error AlreadyInitialized();
     error InvalidMaxOracleAge();
     error OracleHasNoCode(address oracle);
+    error FixtureChainOnly(uint256 chainId);
 
     event OracleConfigured(
         address indexed previousOracle, address indexed newOracle, address indexed actor
@@ -49,7 +53,7 @@ contract ArcadiaMarket is AccessControl {
         _initialized = true;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ORACLE_ADMIN_ROLE, oracleAdmin);
-        _grantRole(ORACLE_ADMIN_ROLE, driftOracleAdmin);
+        _grantRole(DRIFT_FIXTURE_ROLE, driftOracleAdmin);
         oracle = approvedOracle;
         maxOracleAge = maximumOracleAge;
 
@@ -57,6 +61,18 @@ contract ArcadiaMarket is AccessControl {
     }
 
     function setOracle(address newOracle) external onlyRole(ORACLE_ADMIN_ROLE) {
+        _setOracle(newOracle);
+    }
+
+    /// @notice Testnet-only drift path kept separate from the correction authority.
+    function createFixtureDrift(address newOracle) external onlyRole(DRIFT_FIXTURE_ROLE) {
+        if (block.chainid != ANVIL_CHAIN_ID && block.chainid != ETHEREUM_SEPOLIA_CHAIN_ID) {
+            revert FixtureChainOnly(block.chainid);
+        }
+        _setOracle(newOracle);
+    }
+
+    function _setOracle(address newOracle) internal {
         if (newOracle == address(0)) revert InvalidAddress();
         if (newOracle.code.length == 0) revert OracleHasNoCode(newOracle);
         address previousOracle = oracle;

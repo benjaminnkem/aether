@@ -32,34 +32,36 @@ Use suitable lengths and encodings. Never print generated values in the final re
 
 ## Browser-safe variables
 
-| Variable                                | Purpose                    |
-| --------------------------------------- | -------------------------- |
-| `NEXT_PUBLIC_AETHER_API_URL`            | NestJS API URL.            |
-| `NEXT_PUBLIC_AETHER_APP_URL`            | Canonical web URL.         |
-| `NEXT_PUBLIC_BASE_SEPOLIA_EXPLORER_URL` | Transaction/address links. |
+| Variable                          | Purpose                    |
+| --------------------------------- | -------------------------- |
+| `NEXT_PUBLIC_AETHER_API_URL`      | NestJS API URL.            |
+| `NEXT_PUBLIC_AETHER_APP_URL`      | Canonical web URL.         |
+| `NEXT_PUBLIC_AETHER_EXPLORER_URL` | Transaction/address links. |
 
 There is no browser mock-mode variable.
+`NEXT_PUBLIC_BASE_SEPOLIA_EXPLORER_URL` is obsolete and is removed by `env:doctor`
+after writing a timestamped local backup.
 
 ## Core server variables
 
-| Variable                           | Purpose                                             |
-| ---------------------------------- | --------------------------------------------------- |
-| `NODE_ENV`                         | `development`, `test`, or `production`.             |
-| `PORT`                             | API port.                                           |
-| `AETHER_WEB_ORIGINS`               | Exact comma-separated CORS origins.                 |
-| `MONGODB_URI`                      | MongoDB replica-set URI.                            |
-| `REDIS_URL`                        | BullMQ Redis URI.                                   |
-| `AETHER_ACCESS_TOKEN_SECRET`       | Access JWT signing secret.                          |
-| `AETHER_REFRESH_TOKEN_SECRET`      | Refresh JWT signing secret.                         |
-| `AETHER_COOKIE_SECRET`             | Cookie signing/encryption secret.                   |
-| `AETHER_CSRF_SECRET`               | CSRF token secret.                                  |
-| `AETHER_CREDENTIAL_ENCRYPTION_KEY` | Base64 32-byte AES-256-GCM key.                     |
-| `AETHER_ACCESS_TOKEN_TTL_SECONDS`  | Short access-token lifetime.                        |
-| `AETHER_REFRESH_TOKEN_TTL_SECONDS` | Refresh-session lifetime.                           |
-| `AETHER_FINALITY_CONFIRMATIONS`    | Base Sepolia confirmation threshold.                |
-| `AETHER_MAX_ORACLE_AGE`            | Oracle freshness invariant and deployment fixture.  |
-| `AETHER_MAINNET_DISABLED`          | Must be `true` for this release.                    |
-| `AETHER_SECONDARY_RPC_URL`         | Optional independent Base Sepolia verification RPC. |
+| Variable                           | Purpose                                                 |
+| ---------------------------------- | ------------------------------------------------------- |
+| `NODE_ENV`                         | `development`, `test`, or `production`.                 |
+| `PORT`                             | API port.                                               |
+| `AETHER_WEB_ORIGINS`               | Exact comma-separated CORS origins.                     |
+| `MONGODB_URI`                      | MongoDB replica-set URI.                                |
+| `REDIS_URL`                        | BullMQ Redis URI.                                       |
+| `AETHER_ACCESS_TOKEN_SECRET`       | Access JWT signing secret.                              |
+| `AETHER_REFRESH_TOKEN_SECRET`      | Refresh JWT signing secret.                             |
+| `AETHER_COOKIE_SECRET`             | Cookie signing/encryption secret.                       |
+| `AETHER_CSRF_SECRET`               | CSRF token secret.                                      |
+| `AETHER_CREDENTIAL_ENCRYPTION_KEY` | Base64 32-byte AES-256-GCM key.                         |
+| `AETHER_ACCESS_TOKEN_TTL_SECONDS`  | Short access-token lifetime.                            |
+| `AETHER_REFRESH_TOKEN_TTL_SECONDS` | Refresh-session lifetime.                               |
+| `AETHER_FINALITY_CONFIRMATIONS`    | Ethereum Sepolia confirmation threshold.                |
+| `AETHER_MAX_ORACLE_AGE`            | Oracle freshness invariant and deployment fixture.      |
+| `AETHER_MAINNET_DISABLED`          | Must be `true` for this release.                        |
+| `AETHER_SECONDARY_RPC_URL`         | Optional independent Ethereum Sepolia verification RPC. |
 
 Remove fixed organization and protocol IDs from runtime configuration. IDs are created in MongoDB through onboarding.
 
@@ -79,8 +81,8 @@ Codex must validate the key with real KeeperHub calls and derive/store the Keepe
 
 | Variable                          | Purpose                                                              |
 | --------------------------------- | -------------------------------------------------------------------- |
-| `AETHER_CHAIN_ID`                 | Must be `84532`.                                                     |
-| `AETHER_RPC_URL`                  | Reliable Base Sepolia RPC.                                           |
+| `AETHER_CHAIN_ID`                 | Must be `11155111`.                                                  |
+| `AETHER_RPC_URL`                  | Reliable Ethereum Sepolia RPC.                                       |
 | `AETHER_DEPLOYMENT_REGISTRY_PATH` | Generated live deployment artifact.                                  |
 | `AETHER_CONTRACT_ADMIN_ADDRESS`   | Address receiving admin authority.                                   |
 | `AETHER_EXECUTOR_ADDRESS`         | KeeperHub organization wallet receiving the narrow correction role.  |
@@ -128,8 +130,8 @@ AI remains advisory-only. Deterministic code builds calldata and controls author
 Codex cannot fabricate these:
 
 1. KeeperHub account, organization API key, configured organization wallet, and testnet wallet funds.
-2. Reliable Base Sepolia RPC URL.
-3. Foundry deployer keystore or hardware-wallet access and Base Sepolia funds.
+2. Reliable Ethereum Sepolia RPC URL.
+3. Foundry deployer keystore or hardware-wallet access and Ethereum Sepolia funds.
 4. GitHub App credentials, or an explicitly approved temporary fine-grained read token.
 5. OpenAI API key.
 6. SMTP provider credentials and verified sender for hosted email.

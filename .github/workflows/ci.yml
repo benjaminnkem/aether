@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       live_testnet:
-        description: Run protected Base Sepolia acceptance
+        description: Run protected Ethereum Sepolia acceptance
         required: false
         type: boolean
         default: false
@@ -101,14 +101,20 @@ jobs:
       github.event_name == 'workflow_dispatch' &&
       inputs.live_testnet == true &&
       github.ref == 'refs/heads/main'
-    environment: live-base-sepolia
+    environment: live-ethereum-sepolia
     runs-on: ubuntu-latest
     env:
+      AETHER_CHAIN_ID: "11155111"
+      AETHER_MAINNET_DISABLED: "true"
+      NEXT_PUBLIC_AETHER_EXPLORER_URL: https://sepolia.etherscan.io
+      AETHER_DEPLOYMENT_REGISTRY_PATH: packages/contracts/deployments/11155111.json
       AETHER_RPC_URL: ${{ secrets.AETHER_RPC_URL }}
       KEEPERHUB_API_KEY: ${{ secrets.KEEPERHUB_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
       GITHUB_PRIVATE_KEY_BASE64: ${{ secrets.GITHUB_PRIVATE_KEY_BASE64 }}
+      LIVE_TEST_EMAIL: ${{ secrets.LIVE_TEST_EMAIL }}
+      LIVE_TEST_PASSWORD: ${{ secrets.LIVE_TEST_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

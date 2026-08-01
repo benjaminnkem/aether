@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { aetherClient } from "@aether/sdk";
+import { activeLiveChain } from "@aether/shared";
 import { Button, Field, Input } from "@aether/ui";
 
 const copy = {
@@ -38,7 +39,9 @@ export function AuthPage({ kind }: { kind: keyof typeof copy }) {
           AI investigates and proposes. Deterministic policy authorizes. Humans
           approve. KeeperHub executes. Aether verifies.
         </blockquote>
-        <span className="a-status">Live API · Base Sepolia only</span>
+        <span className="a-status">
+          Live API · {activeLiveChain.displayName} only
+        </span>
       </section>
       <section className="auth-panel">
         <form

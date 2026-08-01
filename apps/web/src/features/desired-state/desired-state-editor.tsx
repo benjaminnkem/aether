@@ -4,7 +4,11 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { parse, stringify } from "yaml";
-import { desiredStateSchema, type DesiredState } from "@aether/shared";
+import {
+  activeLiveChain,
+  desiredStateSchema,
+  type DesiredState,
+} from "@aether/shared";
 import {
   Button,
   DiffBlock,
@@ -20,8 +24,8 @@ import { aetherClient } from "@aether/sdk";
 
 const defaults: DesiredState = {
   version: "v1.0.0",
-  networkId: "base-sepolia",
-  chainId: 84532,
+  networkId: activeLiveChain.slug,
+  chainId: activeLiveChain.chainId,
   contractId: "",
   contractVersion: "",
   implementationAddress: "",
@@ -137,7 +141,9 @@ export default function DesiredStateEditor() {
             <div className="form-row">
               <Field label="Network">
                 <Select {...register("networkId")}>
-                  <option value="base-sepolia">Base Sepolia</option>
+                  <option value={activeLiveChain.slug}>
+                    {activeLiveChain.displayName}
+                  </option>
                 </Select>
               </Field>
               <Field label="Chain ID">

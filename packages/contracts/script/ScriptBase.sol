@@ -5,7 +5,7 @@ import { Script } from "forge-std/Script.sol";
 
 abstract contract ScriptBase is Script {
     uint256 internal constant LOCAL_ANVIL_CHAIN_ID = 31_337;
-    uint256 internal constant BASE_SEPOLIA_CHAIN_ID = 84_532;
+    uint256 internal constant ETHEREUM_SEPOLIA_CHAIN_ID = 11_155_111;
 
     error UnsupportedChain(uint256 chainId);
     error DeploymentChainMismatch(uint256 expected, uint256 actual);
@@ -23,7 +23,7 @@ abstract contract ScriptBase is Script {
     }
 
     function _requireSupportedChain() internal view {
-        if (block.chainid != LOCAL_ANVIL_CHAIN_ID && block.chainid != BASE_SEPOLIA_CHAIN_ID) {
+        if (block.chainid != LOCAL_ANVIL_CHAIN_ID && block.chainid != ETHEREUM_SEPOLIA_CHAIN_ID) {
             revert UnsupportedChain(block.chainid);
         }
     }

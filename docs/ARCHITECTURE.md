@@ -34,6 +34,12 @@ read/idempotent calls, `Retry-After`, redacted telemetry, and health state.
 execution policy, canonical hashing, redaction, and Mongoose model definitions. The
 browser-safe payload source of truth remains `packages/shared`.
 
+`packages/shared/src/chains.ts` is the single TypeScript registry for Anvil `31337`
+and Ethereum Sepolia `11155111`. It exposes browser-safe labels/explorer metadata;
+backend startup and execution policy remain authoritative. Ethereum mainnet `1` and
+the historical Base Sepolia target are rejected. Solidity deployment scripts mirror
+the supported IDs because Solidity cannot import the TypeScript registry.
+
 MongoDB collections implement the architecture inventory and carry compound tenant
 indexes. Execution intent, provider correlation, state transitions, audit evidence,
 and outbox events are durable. MongoDB transactions require a replica set. Redis is
@@ -45,7 +51,8 @@ revalidates persisted membership and every scoped record/job carries both identi
 `packages/contracts` contains only the chain fixture needed to prove this lifecycle.
 `ArcadiaMarket` holds an oracle pointer behind an ERC-1967 proxy, requires
 `ORACLE_ADMIN_ROLE` for `setOracle(address)`, rejects non-contract oracle addresses,
-and exposes `oracleStatus()` with the source timestamp and freshness result.
+exposes a separate testnet-only `DRIFT_FIXTURE_ROLE` path, and exposes
+`oracleStatus()` with the source timestamp and freshness result.
 `MockOracle` is timestamp-only and has no price, custody, governance, or token logic.
 
 Foundry generates the ABI, selectors, and deployment registry into

@@ -258,6 +258,10 @@ export interface ChainReader extends HealthCheckedProvider {
     toBlock: number;
     topics?: string[];
   }): Promise<z.input<typeof chainLogSchema>[]>;
+  getTransactionActor(
+    chainId: number,
+    transactionHash: string,
+  ): Promise<string>;
   getReceipt(
     chainId: number,
     transactionHash: string,

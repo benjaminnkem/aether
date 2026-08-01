@@ -11,7 +11,7 @@ flowchart LR
   M --> O[Transactional outbox]
   O --> Q[(Redis / BullMQ)]
   Q --> W[NestJS worker]
-  W --> R[Base Sepolia RPC]
+  W --> R[Ethereum Sepolia RPC]
   W --> K[KeeperHub Direct Execution]
   W --> AI[OpenAI Responses API]
   A --> G[GitHub App API]

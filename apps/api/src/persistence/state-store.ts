@@ -4,7 +4,11 @@ import {
   type RealtimeEnvelope,
   type TenantContext,
 } from "@aether/backend";
-import { dashboardSchema, type Dashboard } from "@aether/shared";
+import {
+  activeLiveChain,
+  dashboardSchema,
+  type Dashboard,
+} from "@aether/shared";
 import {
   DynamicModule,
   Injectable,
@@ -225,7 +229,7 @@ export class MongoStateStore implements StateStore, OnModuleInit {
           id: String(pro.protocolId),
           organizationId: String(pro.organizationId),
           name: String(pro.name),
-          environment: String(pro.environment ?? "Base Sepolia"),
+          environment: String(pro.environment ?? activeLiveChain.displayName),
           health: Number(pro.health ?? 0),
           status:
             openDrift.length > 0
@@ -269,13 +273,20 @@ export class MongoStateStore implements StateStore, OnModuleInit {
         }),
         connections: connections.map((item) => {
           const raw = item as Record<string, unknown>;
-          return makeRecord(
-            raw,
-            String(raw.provider),
-            String(raw.provider),
-            String(raw.status ?? "not configured"),
-            raw.status === "healthy" ? "healthy" : "warning",
-          );
+          const metadata = raw.metadata as Record<string, unknown> | undefined;
+          return {
+            ...makeRecord(
+              raw,
+              String(raw.provider),
+              String(raw.provider),
+              String(raw.status ?? "not configured"),
+              raw.status === "healthy" ? "healthy" : "warning",
+            ),
+            meta:
+              raw.provider === "keeperhub" && metadata?.simulationReady
+                ? "Ethereum Sepolia · wallet funded · correction role verified · simulation ready"
+                : undefined,
+          };
         }),
         "desired-state": desiredVersions.map((item) => {
           const raw = item as Record<string, unknown>;
@@ -298,7 +309,7 @@ export class MongoStateStore implements StateStore, OnModuleInit {
               raw,
               String(raw.findingId),
               String(raw.title ?? "Desired state drift"),
-              String(raw.networkId ?? "Base Sepolia"),
+              String(raw.networkId ?? activeLiveChain.displayName),
               String(raw.status ?? "open"),
             ),
             severity: raw.severity ?? "critical",
@@ -464,7 +475,7 @@ export class MongoStateStore implements StateStore, OnModuleInit {
                     latestExecution.status === "intent_persisted"
                   ? "queued"
                   : String(latestExecution.status ?? "queued"),
-            network: "Base Sepolia",
+            network: activeLiveChain.displayName,
             currentStep:
               latestExecution.status === "verified"
                 ? "Independent verification complete"

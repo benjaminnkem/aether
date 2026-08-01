@@ -18,10 +18,11 @@ Unknown outcomes take a retry lock and can only advance through reconciliation.
 
 The backend obtains `setOracle(address)` and `oracleStatus()` selectors from generated
 Foundry artifacts and independently re-encodes the desired oracle before authorization.
-The fixture supports only chain IDs `31337` and `84532`. The proxy implementation is
-initializer-locked, initialization grants explicit admin/executor/drift-fixture roles,
-and oracle targets must have deployed code. The role-enabled drift actor exists only
-to produce an out-of-policy fixture state.
+The fixture supports only chain IDs `31337` and `11155111`. The proxy implementation is
+initializer-locked, initialization grants `DEFAULT_ADMIN_ROLE` to the administrator,
+`ORACLE_ADMIN_ROLE` only to the KeeperHub correction wallet, and the separate
+`DRIFT_FIXTURE_ROLE` to the drift actor. Oracle targets must have deployed code. The
+drift method rejects every chain except Anvil and Ethereum Sepolia.
 
 Every provider response is parsed with Zod before use. An LLM has no authority or
 signing boundary in this phase. No private key is accepted or stored. Protocol setup

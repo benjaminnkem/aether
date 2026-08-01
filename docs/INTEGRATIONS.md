@@ -21,7 +21,7 @@ KeeperHub is the execution transport, not Aether’s authority boundary.
 ### Canonical correction path
 
 1. Call `GET /api/chains`.
-2. Confirm chain ID `84532` is enabled and marked testnet.
+2. Confirm chain ID `11155111` is enabled and marked testnet.
 3. Build the exact transaction request deterministically from generated ABI artifacts.
 4. Persist plan hash, request hash, chain, target, function, arguments, value, approval binding, and idempotency key.
 5. Call `POST /api/execute/contract-call` with the exact request plus `simulate: true`.

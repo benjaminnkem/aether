@@ -130,6 +130,7 @@ export const modelDefinitions = [
     schema: tenantSchema(
       {
         name: String,
+        sourceProtocolId: String,
         environment: String,
         governance: String,
         status: String,
@@ -156,6 +157,8 @@ export const modelDefinitions = [
     collection: "contracts",
     schema: tenantSchema({
       contractId: { type: String, required: true },
+      networkId: { type: String, required: true },
+      chainId: { type: Number, required: true },
       name: String,
       address: String,
       proxyType: String,

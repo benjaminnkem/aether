@@ -1,5 +1,6 @@
 import { ShieldTick, Warning2 } from "iconsax-react";
 import { Badge, Status } from "@aether/ui";
+import { activeLiveChain } from "@aether/shared";
 
 export function ProductComposition() {
   return (
@@ -8,7 +9,7 @@ export function ProductComposition() {
         <i />
         <i />
         <i />
-        <span>Aether control plane · Base Sepolia</span>
+        <span>Aether control plane · {activeLiveChain.displayName}</span>
       </div>
       <div className="hero-product">
         <aside className="hero-product__side">
