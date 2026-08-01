@@ -112,7 +112,7 @@ Authentication is a first-party NestJS capability for this release:
 - hashed refresh sessions;
 - HttpOnly/Secure/SameSite cookies;
 - CSRF protection;
-- email verification;
+- immediate authenticated signup;
 - password reset;
 - session revocation;
 - brute-force rate limiting;

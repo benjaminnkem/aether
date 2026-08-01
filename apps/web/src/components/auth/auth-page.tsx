@@ -55,10 +55,8 @@ export function AuthPage({ kind }: { kind: keyof typeof copy }) {
               const password = String(form.get("password") ?? "");
               if (kind === "signup") {
                 await aetherClient.signup(email, password);
-                toast.success(
-                  "Account created. Check your email to verify it.",
-                );
-                window.location.href = "/login";
+                toast.success("Account created. Set up your organization.");
+                window.location.href = "/onboarding";
               } else {
                 await aetherClient.login(email, password);
                 window.location.href = "/app/overview";
@@ -67,7 +65,7 @@ export function AuthPage({ kind }: { kind: keyof typeof copy }) {
               toast.error(
                 kind === "signup"
                   ? "Account creation failed. Check the form and email service."
-                  : "Sign in failed. Check your credentials and verification status.",
+                  : "Sign in failed. Check your credentials.",
               );
             } finally {
               setPending(false);

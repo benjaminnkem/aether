@@ -153,6 +153,9 @@ importers:
       clsx:
         specifier: 2.1.1
         version: 2.1.1
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.4.2
       gsap:
         specifier: 3.15.0
         version: 3.15.0
@@ -308,6 +311,9 @@ importers:
       "@aether/shared":
         specifier: workspace:*
         version: link:../shared
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.4.2
       mongoose:
         specifier: 8.24.2
         version: 8.24.2
@@ -339,6 +345,10 @@ importers:
       "@openzeppelin/contracts":
         specifier: 5.6.1
         version: 5.6.1
+    devDependencies:
+      prettier:
+        specifier: ^3.7.4
+        version: 3.7.4
 
   packages/eslint-config:
     devDependencies:
@@ -4210,6 +4220,13 @@ packages:
     resolution:
       {
         integrity: sha512-7GO6HghkA5fYG9TYnNxi14/7K9f5occMlp3zXAuSxn7CKCxt9xbNWG7yF8hTCSUchlfWSe3uLmlPfigevRItzQ==,
+      }
+    engines: { node: ">=12" }
+
+  dotenv@17.4.2:
+    resolution:
+      {
+        integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==,
       }
     engines: { node: ">=12" }
 
@@ -10406,6 +10423,8 @@ snapshots:
   dom-accessibility-api@0.6.3: {}
 
   dotenv@16.0.3: {}
+
+  dotenv@17.4.2: {}
 
   dunder-proto@1.0.1:
     dependencies:

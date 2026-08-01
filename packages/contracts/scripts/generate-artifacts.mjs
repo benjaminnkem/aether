@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { format } from "prettier";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const output = path.join(root, "artifacts", "server");
@@ -38,7 +39,7 @@ for (const contractName of contractNames) {
   };
   fs.writeFileSync(
     path.join(output, `${contractName}.json`),
-    `${JSON.stringify(generated[contractName], null, 2)}\n`,
+    await format(JSON.stringify(generated[contractName]), { parser: "json" }),
   );
 }
 

@@ -31,18 +31,18 @@ copyFileSync(envPath, join(backupDirectory, `.env.${stamp}.bak`));
 
 const generated = new Set();
 const derived = new Set();
-const migrated = new Set();
+const migrated = new Map();
 
 if (
   !values.get("NEXT_PUBLIC_AETHER_EXPLORER_URL") &&
   values.has("NEXT_PUBLIC_BASE_SEPOLIA_EXPLORER_URL")
 ) {
   values.set("NEXT_PUBLIC_AETHER_EXPLORER_URL", "https://sepolia.etherscan.io");
-  migrated.add("NEXT_PUBLIC_AETHER_EXPLORER_URL");
+  migrated.set("NEXT_PUBLIC_AETHER_EXPLORER_URL", "migrated_from_base_sepolia");
 }
 if (values.get("AETHER_CHAIN_ID") === "84532") {
   values.set("AETHER_CHAIN_ID", "11155111");
-  migrated.add("AETHER_CHAIN_ID");
+  migrated.set("AETHER_CHAIN_ID", "migrated_from_base_sepolia");
 }
 if (
   values.get("AETHER_DEPLOYMENT_REGISTRY_PATH") ===
@@ -52,7 +52,17 @@ if (
     "AETHER_DEPLOYMENT_REGISTRY_PATH",
     "packages/contracts/deployments/11155111.json",
   );
-  migrated.add("AETHER_DEPLOYMENT_REGISTRY_PATH");
+  migrated.set("AETHER_DEPLOYMENT_REGISTRY_PATH", "migrated_from_base_sepolia");
+}
+if (
+  [
+    "mongodb://127.0.0.1:27017/aether?replicaSet=rs0",
+    "mongodb://localhost:27017/aether?replicaSet=rs0",
+    "mongodb://127.0.0.1:27018/aether?replicaSet=rs0&directConnection=true",
+  ].includes(values.get("MONGODB_URI"))
+) {
+  values.set("MONGODB_URI", "mongodb://127.0.0.1:27018/aether?replicaSet=rs0");
+  migrated.set("MONGODB_URI", "migrated_local_compose_port");
 }
 const localDefaults = {
   NEXT_PUBLIC_AETHER_API_URL: "http://localhost:4000/v1",
@@ -60,12 +70,11 @@ const localDefaults = {
   NEXT_PUBLIC_AETHER_EXPLORER_URL: "https://sepolia.etherscan.io",
   GITHUB_CALLBACK_URL: "http://localhost:4000/v1/github/callback",
   AETHER_WEB_ORIGINS: "http://localhost:3000",
-  MONGODB_URI: "mongodb://127.0.0.1:27017/aether?replicaSet=rs0",
+  MONGODB_URI: "mongodb://127.0.0.1:27018/aether?replicaSet=rs0",
   REDIS_URL: "redis://127.0.0.1:6379",
   SMTP_HOST: "127.0.0.1",
   SMTP_PORT: "1025",
   SMTP_FROM: "Aether Local <aether@localhost>",
-  AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
   AETHER_ACCESS_TOKEN_TTL_SECONDS: "900",
   AETHER_REFRESH_TOKEN_TTL_SECONDS: "2592000",
   AETHER_CHAIN_ID: "11155111",
@@ -120,6 +129,7 @@ const remove = new Set([
   "AETHER_PROVIDER_MODE",
   "AETHER_PERSISTENCE_MODE",
   "AETHER_AUTH_MODE",
+  "AUTH_EMAIL_VERIFICATION_REQUIRED",
   "AETHER_AI_ENABLED",
   "AETHER_OPENAI_ENABLED",
   "AETHER_JWT_SECRET",
@@ -175,7 +185,7 @@ for (const name of [...new Set([...values.keys(), ...external])].sort()) {
   const status = generated.has(name)
     ? "generated"
     : migrated.has(name)
-      ? "migrated_from_base_sepolia"
+      ? migrated.get(name)
       : derived.has(name)
         ? "derived"
         : values.get(name)

@@ -18,8 +18,12 @@ export class AuthController {
 
   @Public()
   @Post("signup")
-  signup(@Body() body: unknown, @Req() request: Request) {
-    return this.auth.signup(body, request);
+  signup(
+    @Body() body: unknown,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.auth.signup(body, request, response);
   }
 
   @Public()
@@ -48,12 +52,6 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     return this.auth.logout(request, response);
-  }
-
-  @Public()
-  @Post("verify-email")
-  verifyEmail(@Body() body: unknown) {
-    return this.auth.verifyEmail(body);
   }
 
   @Public()

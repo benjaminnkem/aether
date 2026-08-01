@@ -2,37 +2,16 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { aetherClient } from "@aether/sdk";
 import { Button, Field, Input } from "@aether/ui";
 
-export function AuthActionPage({
-  action,
-}: {
-  action: "verify" | "forgot" | "reset";
-}) {
+export function AuthActionPage({ action }: { action: "forgot" | "reset" }) {
   const search = useSearchParams();
   const token = search.get("token") ?? "";
   const [complete, setComplete] = useState(false);
-  const [pending, setPending] = useState(action === "verify");
-
-  useEffect(() => {
-    if (action !== "verify") return;
-    if (!token) {
-      setPending(false);
-      toast.error("The verification link is missing its token.");
-      return;
-    }
-    void aetherClient
-      .verifyEmail(token)
-      .then(() => {
-        setComplete(true);
-        toast.success("Email verified. You can sign in.");
-      })
-      .catch(() => toast.error("This verification link is invalid or expired."))
-      .finally(() => setPending(false));
-  }, [action, token]);
+  const [pending, setPending] = useState(false);
 
   return (
     <main id="main-content" className="auth-shell">
@@ -67,15 +46,10 @@ export function AuthActionPage({
           }}
         >
           <h1>
-            {action === "verify"
-              ? "Verify email"
-              : action === "forgot"
-                ? "Reset your password"
-                : "Choose a new password"}
+            {action === "forgot"
+              ? "Reset your password"
+              : "Choose a new password"}
           </h1>
-          {action === "verify" ? (
-            <p>{pending ? "Verifying your one-time link…" : ""}</p>
-          ) : null}
           {action === "forgot" && !complete ? (
             <Field label="Work email">
               <Input name="email" type="email" autoComplete="email" required />
@@ -92,7 +66,7 @@ export function AuthActionPage({
               />
             </Field>
           ) : null}
-          {action !== "verify" && !complete ? (
+          {!complete ? (
             <Button type="submit" variant="primary" disabled={pending}>
               Continue
             </Button>

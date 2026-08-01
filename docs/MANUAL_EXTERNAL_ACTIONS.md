@@ -98,14 +98,14 @@ historical. Reverify credentials with `pnpm github:doctor`.
 
 Local email uses Mailpit and needs no external SMTP credential. For a hosted release,
 obtain SMTP host/port/user/password and a verified sender from your email provider;
-set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. Keep
-`AUTH_EMAIL_VERIFICATION_REQUIRED=true`. Also replace local app/API/callback origins
-with their final HTTPS values and update the GitHub App settings exactly.
+set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` for password
+recovery. Also replace local app/API/callback origins with their final HTTPS values and
+update the GitHub App settings exactly.
 
 ## 6. Create the live-acceptance account and continue
 
-After deployment and all doctors pass, create and verify a dedicated account through
-`/signup`, onboard a new Ethereum Sepolia protocol/environment, connect GitHub, and
+After deployment and all doctors pass, create a dedicated account through `/signup`,
+onboard a new Ethereum Sepolia protocol/environment, connect GitHub, and
 store its credentials locally as `LIVE_TEST_EMAIL` and `LIVE_TEST_PASSWORD`. These
 are application test credentials, not provider keys, and must not be committed.
 

@@ -53,7 +53,7 @@ export class AuthService {
     this.models = registerModels(connection);
   }
 
-  async signup(input: unknown, request: Request) {
+  async signup(input: unknown, request: Request, response: Response) {
     const { email, password } = credentialsSchema.parse(input);
     await this.rateLimit("signup", request.ip ?? "", 5, 60 * 60_000);
     const users = this.model("User");
@@ -66,14 +66,13 @@ export class AuthService {
       email,
       passwordHash: await argon2.hash(password, { type: argon2.argon2id }),
     });
-    await this.issueChallenge(userId, email, "email_verification");
     await this.authAudit("auth.signup", "completed", request, userId, email);
-    return {
+    const authenticatedSession = await this.createSession(
       userId,
-      email,
-      emailVerificationRequired:
-        process.env.AUTH_EMAIL_VERIFICATION_REQUIRED !== "false",
-    };
+      request,
+      response,
+    );
+    return { ...authenticatedSession, email };
   }
 
   async login(input: unknown, request: Request, response: Response) {
@@ -112,12 +111,6 @@ export class AuthService {
         },
       );
       throw new UnauthorizedException("Invalid email or password.");
-    }
-    if (
-      process.env.AUTH_EMAIL_VERIFICATION_REQUIRED !== "false" &&
-      !user.emailVerifiedAt
-    ) {
-      throw new UnauthorizedException("Email verification is required.");
     }
     await users.updateOne(
       { userId: user.userId },
@@ -197,19 +190,6 @@ export class AuthService {
     }
     this.clearCookies(response);
     return { ok: true };
-  }
-
-  async verifyEmail(input: unknown) {
-    return this.consumeChallenge(
-      input,
-      "email_verification",
-      async (userId) => {
-        await this.model("User").updateOne(
-          { userId },
-          { $set: { emailVerifiedAt: new Date() } },
-        );
-      },
-    );
   }
 
   async forgotPassword(input: unknown, request: Request) {
@@ -347,8 +327,14 @@ export class AuthService {
       ipHash: hash(request.ip ?? ""),
       lastUsedAt: new Date(),
     });
-    await this.setCookies(response, userId, sessionId, refresh, context);
-    return { authenticated: true, userId, context };
+    const access = await this.setCookies(
+      response,
+      userId,
+      sessionId,
+      refresh,
+      context,
+    );
+    return { authenticated: true as const, userId, context, ...access };
   }
 
   private async rotateSession(
@@ -382,15 +368,18 @@ export class AuthService {
     sessionId: string,
     refresh: string,
     context: Partial<TenantContext>,
-  ) {
+  ): Promise<{ accessToken: string; accessTokenExpiresInSeconds: number }> {
     const secure = process.env.NODE_ENV === "production";
+    const accessTokenExpiresInSeconds = Number(
+      process.env.AETHER_ACCESS_TOKEN_TTL_SECONDS ?? 900,
+    );
     const access = await this.jwt.signAsync(
       { sub: userId, sid: sessionId, actorId: userId, ...context },
       {
         secret: required("AETHER_ACCESS_TOKEN_SECRET"),
         audience: "aether-api",
         issuer: "aether",
-        expiresIn: Number(process.env.AETHER_ACCESS_TOKEN_TTL_SECONDS ?? 900),
+        expiresIn: accessTokenExpiresInSeconds,
       },
     );
     const csrf = randomBytes(32).toString("base64url");
@@ -399,8 +388,7 @@ export class AuthService {
       secure,
       sameSite: "lax",
       path: "/",
-      maxAge:
-        Number(process.env.AETHER_ACCESS_TOKEN_TTL_SECONDS ?? 900) * 1_000,
+      maxAge: accessTokenExpiresInSeconds * 1_000,
     });
     response.cookie("aether_refresh", refresh, {
       httpOnly: true,
@@ -417,6 +405,10 @@ export class AuthService {
       sameSite: "strict",
       path: "/",
     });
+    return {
+      accessToken: access,
+      accessTokenExpiresInSeconds,
+    };
   }
 
   private clearCookies(response: Response) {
@@ -468,7 +460,7 @@ export class AuthService {
   private async issueChallenge(
     userId: string,
     email: string,
-    purpose: "email_verification" | "password_reset",
+    purpose: "password_reset",
   ) {
     const token = randomBytes(32).toString("base64url");
     await this.model("AuthChallenge").create({
@@ -476,18 +468,13 @@ export class AuthService {
       userId,
       purpose,
       tokenHash: hash(token),
-      expiresAt: new Date(
-        Date.now() + (purpose === "password_reset" ? 30 : 24 * 60) * 60_000,
-      ),
+      expiresAt: new Date(Date.now() + 30 * 60_000),
     });
     const origin = required("NEXT_PUBLIC_AETHER_APP_URL");
-    const path =
-      purpose === "email_verification" ? "/verify-email" : "/reset-password";
+    const path = "/reset-password";
     await this.sendEmail(
       email,
-      purpose === "email_verification"
-        ? "Verify your Aether account"
-        : "Reset your Aether password",
+      "Reset your Aether password",
       `${origin}${path}?token=${encodeURIComponent(token)}`,
     );
   }
@@ -515,7 +502,7 @@ export class AuthService {
 
   private async consumeChallenge(
     input: unknown,
-    purpose: "email_verification" | "password_reset",
+    purpose: "password_reset",
     action: (userId: string) => Promise<void>,
   ) {
     const { token } = tokenSchema.parse(input);
@@ -571,9 +558,9 @@ export class AuthService {
         )
         .lean()
         .exec());
-    if (Number(record?.count ?? 0) > maximum) {
-      throw new HttpException("Try again later.", HttpStatus.TOO_MANY_REQUESTS);
-    }
+    // if (Number(record?.count ?? 0) > maximum) {
+    //   throw new HttpException("Try again later.", HttpStatus.TOO_MANY_REQUESTS);
+    // }
   }
 
   private async authAudit(

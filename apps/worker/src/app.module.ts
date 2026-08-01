@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
+import { loadRootEnvironment } from "@aether/backend";
 import { MongoWorkerStore } from "./persistence/mongo-worker-store";
 import {
   CHAIN_READER,
@@ -12,6 +13,8 @@ import {
   SIMULATOR,
 } from "./providers/providers";
 import { WorkerRuntime } from "./worker-runtime";
+
+loadRootEnvironment();
 
 @Module({
   imports: [

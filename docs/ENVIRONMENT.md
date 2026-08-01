@@ -42,6 +42,11 @@ There is no browser mock-mode variable.
 `NEXT_PUBLIC_BASE_SEPOLIA_EXPLORER_URL` is obsolete and is removed by `env:doctor`
 after writing a timestamped local backup.
 
+Next.js runs from `apps/web`, so its configuration explicitly loads the repository-root
+`.env` before compilation and validates all three browser-safe URLs. These values are
+embedded into the browser bundle at build time; restart `pnpm dev` after changing one.
+An injected shell or CI value takes precedence over the file.
+
 ## Core server variables
 
 | Variable                           | Purpose                                                 |
@@ -62,6 +67,12 @@ after writing a timestamped local backup.
 | `AETHER_MAX_ORACLE_AGE`            | Oracle freshness invariant and deployment fixture.      |
 | `AETHER_MAINNET_DISABLED`          | Must be `true` for this release.                        |
 | `AETHER_SECONDARY_RPC_URL`         | Optional independent Ethereum Sepolia verification RPC. |
+
+For local Compose, use `mongodb://127.0.0.1:27018/aether?replicaSet=rs0`. The MongoDB
+container and its published host port both use `27018`, so the replica-set member is
+reachable during transactions without colliding with a separate local Mongo install.
+API and worker startup locate the repository-root `.env` even though Turbo runs them
+from their package directories. Existing process variables override file values.
 
 Remove fixed organization and protocol IDs from runtime configuration. IDs are created in MongoDB through onboarding.
 
@@ -116,14 +127,17 @@ AI remains advisory-only. Deterministic code builds calldata and controls author
 
 ## Email variables
 
-| Variable                           | Purpose                          |
-| ---------------------------------- | -------------------------------- |
-| `SMTP_HOST`                        | SMTP provider or local Mailpit.  |
-| `SMTP_PORT`                        | SMTP port.                       |
-| `SMTP_USER`                        | Provider username when required. |
-| `SMTP_PASSWORD`                    | Provider password when required. |
-| `SMTP_FROM`                        | Verified sender.                 |
-| `AUTH_EMAIL_VERIFICATION_REQUIRED` | `true` in hosted environments.   |
+| Variable        | Purpose                          |
+| --------------- | -------------------------------- |
+| `SMTP_HOST`     | SMTP provider or local Mailpit.  |
+| `SMTP_PORT`     | SMTP port.                       |
+| `SMTP_USER`     | Provider username when required. |
+| `SMTP_PASSWORD` | Provider password when required. |
+| `SMTP_FROM`     | Verified sender.                 |
+
+Signup creates an authenticated cookie session immediately and returns the short-lived
+access token in the response. Email delivery is retained only for password recovery;
+the browser does not persist tokens in local storage.
 
 ## External values the user must obtain
 

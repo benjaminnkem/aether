@@ -58,7 +58,7 @@ after they are moved out of runtime imports.
   webhook verification/idempotency, and persisted connection state are missing.
 - OpenAI: a Responses API structured-output adapter exists, but its schema is too
   narrow and live credentials are absent.
-- SMTP/auth: first-party issuance, refresh sessions, email verification, reset, and
+- SMTP/auth: first-party issuance, immediate signup sessions, refresh sessions, reset, and
   revocation are missing.
 
 ## Unsafe assumptions

@@ -44,20 +44,18 @@ export class AetherClient {
   async signup(email: string, password: string) {
     const response = await this.http.post("/auth/signup", { email, password });
     return response.data as {
+      authenticated: true;
       userId: string;
       email: string;
-      emailVerificationRequired: boolean;
+      accessToken: string;
+      accessTokenExpiresInSeconds: number;
+      context: Record<string, unknown>;
     };
   }
 
   async login(email: string, password: string) {
     const response = await this.http.post("/auth/login", { email, password });
     return response.data as { authenticated: true; userId: string };
-  }
-
-  async verifyEmail(token: string) {
-    const response = await this.http.post("/auth/verify-email", { token });
-    return response.data as { ok: true };
   }
 
   async forgotPassword(email: string) {

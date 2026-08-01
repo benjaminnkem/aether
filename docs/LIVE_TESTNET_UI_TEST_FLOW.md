@@ -33,7 +33,8 @@ Expected:
 - API creates the user in MongoDB.
 - Password is never returned.
 - Verification email is sent through the configured SMTP provider/Mailpit.
-- UI asks for email verification.
+- Signup returns an authenticated cookie session and opens organization onboarding
+  immediately; there is no email-verification gate.
 - Audit contains `auth.user_registered`.
 - Reloading does not lose the user.
 

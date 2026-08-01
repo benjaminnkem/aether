@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
+import { loadRootEnvironment } from "@aether/backend";
 import { AuthGuard } from "./auth/auth";
 import { AuthController } from "./auth/auth-controller";
 import { AuthService } from "./auth/auth-service";
@@ -19,6 +20,8 @@ import {
 } from "./http/controllers";
 import { StructuredLogger } from "./observability/logger";
 import { PersistenceModule } from "./persistence/state-store";
+
+loadRootEnvironment();
 
 const jwtSecret = process.env.AETHER_ACCESS_TOKEN_SECRET;
 if (!jwtSecret || jwtSecret.length < 32) {

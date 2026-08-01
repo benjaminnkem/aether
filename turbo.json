@@ -24,7 +24,6 @@
     "AETHER_RECORD_DEPLOYMENT",
     "AETHER_UNPRIVILEGED_ADDRESS",
     "AETHER_WEB_ORIGINS",
-    "AUTH_EMAIL_VERIFICATION_REQUIRED",
     "GITHUB_APP_ID",
     "GITHUB_APP_SLUG",
     "GITHUB_CLIENT_ID",
@@ -77,6 +76,7 @@
       "dependsOn": ["build", "^build"]
     },
     "dev": {
+      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
     }

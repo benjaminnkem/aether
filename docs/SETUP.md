@@ -9,8 +9,10 @@ test -f .env || cp .env.example .env
 docker compose up -d
 ```
 
-Compose starts the Mongo replica set, Redis, and Mailpit. `pnpm env:doctor` generates
-safe local values and never creates product records.
+Compose starts the Mongo replica set on host port `27018`, Redis, and Mailpit. Port
+`27018` avoids collisions with a separately installed local MongoDB. `pnpm env:doctor`
+generates safe local values, migrates the former Aether Compose URI when present, and
+never creates product records.
 
 ## 2. Fill the environment
 
@@ -51,6 +53,14 @@ pnpm migrate:ethereum-sepolia -- --apply --source-protocol-id=<PERSISTED_PROTOCO
 ```bash
 pnpm dev
 ```
+
+Turbo launches API and worker commands from their package directories. Both services
+explicitly discover and load the repository-root `.env` before validating module-level
+configuration; variables already supplied by the shell or hosting platform take
+precedence. Next.js also loads the root file at configuration time so its browser-safe
+API, app, and explorer URLs are compiled correctly. Restart the dev process after
+changing a `NEXT_PUBLIC_*` value. Workspace runtime dependencies are built before the
+watchers start.
 
 Expected services:
 

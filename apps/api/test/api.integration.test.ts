@@ -14,7 +14,6 @@ process.env.NEXT_PUBLIC_AETHER_APP_URL = "http://localhost:3000";
 process.env.SMTP_HOST = "127.0.0.1";
 process.env.SMTP_PORT = "1025";
 process.env.SMTP_FROM = "aether-integration@example.invalid";
-process.env.AUTH_EMAIL_VERIFICATION_REQUIRED = "false";
 process.env.AETHER_CHAIN_ID = "11155111";
 process.env.AETHER_MAINNET_DISABLED = "true";
 process.env.AETHER_RPC_URL = "http://127.0.0.1:8545";
@@ -35,17 +34,15 @@ describe.runIf(enabled)("Aether API integration", () => {
     await app?.close();
   });
 
-  it("persists signup, login, onboarding, refresh, and tenant dashboard", async () => {
-    await agent
+  it("signs in immediately, persists onboarding, refreshes, and loads the tenant dashboard", async () => {
+    const signup = await agent
       .post("/v1/auth/signup")
       .send({ email, password: "correct-horse-battery-staple" })
       .expect(201);
-    const login = await agent
-      .post("/v1/auth/login")
-      .send({ email, password: "correct-horse-battery-staple" })
-      .expect(201);
-    expect(login.body.authenticated).toBe(true);
-    const setCookies = login.headers["set-cookie"];
+    expect(signup.body.authenticated).toBe(true);
+    expect(signup.body.accessToken).toEqual(expect.any(String));
+    expect(signup.body.accessTokenExpiresInSeconds).toBe(900);
+    const setCookies = signup.headers["set-cookie"];
     const cookieValues = Array.isArray(setCookies)
       ? setCookies
       : setCookies

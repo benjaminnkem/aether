@@ -1,7 +1,7 @@
 # Frontend Routes
 
 - `/` — product narrative.
-- `/signup`, `/login`, `/verify-email`, `/forgot-password`, `/reset-password`.
+- `/signup`, `/login`, `/forgot-password`, `/reset-password`.
 - `/onboarding` — persist organization and protocol.
 - `/app/overview`.
 - `/app/protocol-setup`.
