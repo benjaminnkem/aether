@@ -1,348 +1,191 @@
-# Aether Live Testnet UI Test Flow
+# Live Testnet UI Test Journal
 
-This guide validates the complete product using real API, database, queues, providers, and Ethereum Sepolia transactions.
+Evidence date: 2026-08-03
 
-## Preconditions
+This file is the chronological record of the current UI-driven acceptance run. It
+contains no passwords, provider secrets, cookies, private keys, or unredacted tokens.
+The runtime path under test is browser → typed SDK → API → MongoDB/outbox → worker →
+live providers.
 
-Before opening the UI:
+## Safety boundaries
 
-- all services are healthy;
-- no runtime mock flag exists;
-- MongoDB and Redis are running;
-- Ethereum Sepolia fixture contracts are deployed;
-- KeeperHub organization key is valid;
-- KeeperHub organization wallet is funded;
-- GitHub is connected;
-- OpenAI is enabled;
-- the user can sign in;
-- `pnpm env:doctor` passes;
-- `pnpm keeperhub:doctor` passes.
+- Ethereum Sepolia `11155111` only; Ethereum mainnet remains prohibited.
+- Aether performs GitHub reads only. The live GitHub App is currently over-privileged
+  with `contents: write` and must be reduced to read-only by its owner.
+- OpenAI output remains advisory and cannot authorize execution.
+- A blockchain submission is not successful until independently verified.
+- Unknown outcomes lock resubmission; confirmed writes use forward correction, never
+  fictional rollback.
 
-Record the starting time and current Git commit.
+## Chronological run
 
----
+### Step 1 — Reset the acceptance journal
 
-## Stage 1 — Create a real account
+Status: **passed**
 
-1. Open `/signup`.
-2. Enter a real test email and strong password.
-3. Submit.
+The historical checklist was replaced by this live journal before beginning browser
+testing, as requested. Credentials supplied for the run are used only in the browser
+and are not persisted in this document or repository.
 
-Expected:
+### Step 2 — Establish the local runtime
 
-- API creates the user in MongoDB.
-- Password is never returned.
-- Verification email is sent through the configured SMTP provider/Mailpit.
-- Signup returns an authenticated cookie session and opens organization onboarding
-  immediately; there is no email-verification gate.
-- Audit contains `auth.user_registered`.
-- Reloading does not lose the user.
+Status: **passed**
 
-4. Verify the email.
-5. Sign in.
+MongoDB replica set, Redis, and Mailpit report healthy. The Next.js web application,
+NestJS API, and standalone NestJS worker are running. `GET /v1/health` returned the
+API health payload without exposing configuration.
 
-Expected:
+### Step 3 — Verify anonymous landing and authenticate through the UI
 
-- Secure authentication cookies are set.
-- `/app/overview` is protected.
-- Refreshing the page keeps the session.
-- Signing out revokes the refresh session.
+Status: **passed after repair**
 
----
+The anonymous landing exposed only Sign in/Create account actions and no demo/testnet
+control. UI login succeeded with the supplied Aether account. The session endpoint
+returned the persisted owner membership and dashboard destination without returning a
+token.
 
-## Stage 2 — Onboard an organization and protocol
+Initial Overview loading failed because dashboard hooks trusted stale persisted Zustand
+tenant IDs instead of the authenticated session. The hooks were repaired to use the
+session-bound organization/protocol and to defer dashboard requests until that context
+exists. The focused frontend test and TypeScript check passed. After reload, the UI
+showed `my org / my protocol`, owner role, connected realtime state, live resource
+counts, 100% desired alignment, and healthy GitHub/KeeperHub connections.
 
-1. Create an organization.
-2. Create the protocol.
-3. Choose Ethereum Sepolia.
-4. Enter the live deployed proxy/market address.
-5. Allow the server to load the generated ABI or verified ABI.
-6. Complete onboarding.
+### Step 4 — Verify Protocol Setup and connected GitHub provenance
 
-Expected:
+Status: **passed after repair**
 
-- Organization, membership, protocol, network, and contract records exist in MongoDB.
-- IDs are generated records, not `org-arcadia`/`arcadia` constants.
-- Wrong chain or invalid address is rejected.
-- Contract bytecode is checked.
-- Overview is empty/healthy based on real observation, not seeded cards.
+All five setup steps were opened in the browser. General retained the protocol,
+environment, and governance values. Networks retained Ethereum Sepolia `11155111`.
+Contracts retained the validated proxy resource. GitHub retained installation
+`150938893`, repository `daniel-oluwadunsin/aether-demo-protocol`, branch `main`, and
+path `aether/desired-state.yaml`. Aether used only read endpoints, but the final provider
+doctor proved the GitHub App itself currently grants `contents: write`; that external
+least-privilege correction is recorded in Step 11. KeeperHub reported a
+funded wallet, correction role, Sepolia support, and simulation readiness; the live
+validation action completed.
 
----
+The Network and Contract tables had empty evidence columns. They now expose RPC
+verification freshness and scannable proxy, implementation, ABI, and owner evidence.
 
-## Stage 3 — Connect GitHub
+### Step 5 — Verify GitHub-backed Desired State
 
-1. Open Protocol Setup → GitHub.
-2. Select **Connect GitHub**.
-3. Complete the GitHub App installation/authorization.
-4. Select the repository and desired-state path.
-5. Synchronize.
+Status: **passed after implementation**
 
-Expected:
+The product previously persisted only repository metadata and did not load desired
+state content from GitHub. A tenant-bound API/SDK/UI flow now mints a short-lived
+installation token, resolves `main` to exact commit
+`f3c7955181aaad913e3cf6bdf6b875d311fe53a7`, fetches and validates the YAML, maps the
+repository resource `arcadia-market` to the tenant contract, and compares its
+canonical manifest hash with the active version.
 
-- Connection status comes from GitHub.
-- Repository, default branch, installation ID, and exact commit SHA are persisted.
-- Desired-state provenance links to a real commit.
-- No token is displayed in the browser.
-- Webhook signature validation succeeds.
-- Replaying the same webhook delivery does not duplicate audit events.
+The UI showed the pinned repository/branch/path/commit and mapping. The repository
+version already matched the active approved version, so the action was correctly
+disabled rather than creating a duplicate version.
 
----
+### Step 6 — Run a real Sepolia observation scan
 
-## Stage 4 — Connect KeeperHub
+Status: **passed after repair**
 
-1. Open Protocol Setup → KeeperHub.
-2. Click **Test connection**.
+The first UI scan exposed a permanent idempotency-key bug: every deliberate scan used
+the same BullMQ job ID, so later scans were acknowledged but never rerun. Scan actions
+now use a fresh operation key while HTTP retries preserve the same key.
 
-Expected:
+The next scan exposed the RPC provider's free-tier ten-block `eth_getLogs` limit. Log
+reads are now provider-safe and configurable. A fresh scan then pinned Sepolia block
+`11410671` and persisted a critical oracle drift finding. The drawer showed both the
+observed and GitHub-approved oracle addresses plus the pinned block.
 
-- API calls real KeeperHub.
-- UI shows the real organization/wallet status.
-- Ethereum Sepolia is reported as supported.
-- Wallet balance is shown or summarized without exposing credentials.
-- Missing wallet or low balance produces an actionable error.
-- No transaction is sent by the health check.
+### Step 7 — Run advisory investigation
 
----
-
-## Stage 5 — Define desired state
-
-1. Open Desired State.
-2. Select the market contract.
-3. Set the approved oracle address.
-4. Set the expected version/implementation.
-5. Set paused state to false.
-6. Configure the freshness invariant.
-7. Save.
-
-Expected:
-
-- Validation uses the real chain and generated ABI.
-- A versioned desired-state record is stored.
-- The active version references the user and GitHub commit when available.
-- Audit contains `desired_state.created` or `desired_state.updated`.
-- Reloading shows the saved version.
-
----
-
-## Stage 6 — Run a healthy scan
-
-1. Open Overview or Protocol Setup.
-2. Click **Run scan**.
-
-Expected:
-
-- API creates a scan job.
-- Worker reads Ethereum Sepolia at a pinned block.
-- SSE shows progress.
-- Observed oracle matches desired oracle.
-- No critical drift exists.
-- Audit contains scan start/completion.
-- Reloading keeps the scan and result.
-
----
-
-## Stage 7 — Create real testnet drift
-
-Use the repository’s approved Ethereum Sepolia fixture tool. This may be:
-
-- a protected Testnet Lab UI action signed by a connected test wallet; or
-- the exact Foundry script shown by the UI.
-
-Do not use a mock scenario selector.
-
-Create a real change from the approved oracle to the designated stale/out-of-policy oracle.
-
-Expected:
-
-- A real Ethereum Sepolia transaction is produced.
-- The explorer shows the changed state.
-- The transaction is not the correction transaction.
-- The application does not update until it observes the chain.
-
----
-
-## Stage 8 — Detect the drift
-
-1. Click **Run scan**, or wait for the configured scheduled/event scan.
-2. Open Drift.
-
-Expected:
-
-- A critical oracle drift appears.
-- Desired and observed addresses are real.
-- Evidence includes chain ID, block, transaction hash, actor, and timestamp.
-- The stale freshness invariant fails.
-- The health score changes based on persisted findings.
-- No field comes from a demo scenario.
-
----
-
-## Stage 9 — Investigate with AI
-
-1. Open the drift drawer.
-2. Click **Investigate**.
-
-Expected:
-
-- Backend sends bounded redacted evidence to OpenAI.
-- UI distinguishes facts, inferences, confidence, and recommendation.
-- AI output is persisted as advisory.
-- AI cannot approve or execute.
-- Invalid AI output produces a real error, not a canned answer.
-- Audit contains the provider/model/request correlation without exposing prompts containing secrets.
-
----
-
-## Stage 10 — Generate the correction operation
-
-1. Click **Generate correction plan**.
-2. Open Operation Detail.
-
-Expected:
-
-- Deterministic code produces only `setOracle(approvedAddress)`.
-- Target, chain, function, args, value, calldata hash, and plan hash are visible.
-- Preconditions and postconditions are explicit.
-- Safety checks validate allowlisted chain/contract/function and zero value.
-- AI prose is not used as calldata.
-- Operation is immutable after approval begins.
-
----
-
-## Stage 11 — Simulate with KeeperHub
-
-1. Click **Simulate exact request**.
-
-Expected:
-
-- Real `POST /api/execute/contract-call` is sent with `simulate: true`.
-- The request uses chain ID `11155111`, exact contract, exact ABI/function/args, and zero value.
-- Response shows real sender, gas estimate, and `wouldRevert`.
-- Simulation evidence is bound to the operation.
-- A failed/reverting simulation blocks execution.
-- No transaction hash exists yet.
-
----
-
-## Stage 12 — Approve
-
-1. After the immutable simulation is healthy, click **Approve exact plan** as an
-   authorized reviewer.
-
-Expected:
-
-- Server checks role, threshold, distinct identity, expiry, plan hash, and simulation binding.
-- Approval is persisted and auditable.
-- A viewer cannot approve.
-- Editing desired state or plan invalidates prior approval.
-- CSRF and authentication checks are enforced.
-
----
-
-## Stage 13 — Execute with KeeperHub
-
-1. Review the final confirmation.
-2. Click **Execute with KeeperHub** once.
-
-Expected:
-
-- The exact simulated request is submitted without `simulate`.
-- A unique idempotency key is used.
-- The intent is already durable before the network call.
-- A real KeeperHub direct execution ID is shown.
-- Double-click/reload does not create a second transaction.
-- UI transitions from submitted to confirming based on real status.
-- A real Ethereum Sepolia transaction hash and explorer link appear.
-
-Record:
-
-- operation ID;
-- KeeperHub execution ID;
-- transaction hash;
-- transaction URL.
-
----
-
-## Stage 14 — Independent verification
-
-Wait for the configured finality threshold.
-
-Expected:
-
-- Aether verifies receipt status.
-- It verifies canonical block hash.
-- It reads `oracleStatus()` at a pinned post-finality block.
-- Approved oracle and freshness both pass.
-- Operation becomes `verified`.
-- Drift becomes `resolved`.
-- Health returns to healthy.
-- Transaction confirmation alone is not sufficient without postcondition verification.
-
----
-
-## Stage 15 — Audit
-
-Open Audit Log.
-
-Expected chronological events:
-
-1. user/organization/protocol created;
-2. GitHub connected/synchronized;
-3. desired state saved;
-4. healthy scan;
-5. drift observed;
-6. investigation requested/completed;
-7. plan generated;
-8. safety checks completed;
-9. KeeperHub simulation completed;
-10. approval granted;
-11. execution intent persisted;
-12. KeeperHub execution submitted;
-13. transaction observed/confirmed;
-14. independent verification passed;
-15. drift resolved.
-
-Every event must reference real database records. Related IDs must correlate across drift, operation, execution, provider, transaction, and verification.
-
----
-
-## Stage 16 — Recovery tests
-
-### Browser refresh
-
-Refresh during execution.
-
-Expected: state resumes from API/SSE; no duplicated write.
-
-### Worker restart
-
-Restart worker after submission.
-
-Expected: durable intent and outbox recover; no duplicated write.
-
-### Provider timeout
-
-Inject a timeout after submit in the controlled acceptance environment.
-
-Expected: status becomes `unknown/reconciling`; automatic submit retry stays locked.
-
-### Verification failure
-
-Make the approved oracle stale after the pointer write.
-
-Expected: execution becomes partial; Aether creates a forward-correction operation and never claims rollback.
-
----
-
-## Pass criteria
-
-The flow passes only when:
-
-- every stage uses real runtime services;
-- no demo controls or scenario IDs are involved;
-- at least one correction transaction was executed through KeeperHub on Ethereum Sepolia;
-- the transaction is independently verified;
-- audit correlation is complete;
-- refresh/restart does not duplicate the transaction;
-- Playwright reproduces the critical path;
-- the evidence bundle contains no secrets.
+Status: **blocked externally, failure handling passed after repair**
+
+The OpenAI request exhausted the configured provider quota with HTTP `429`. This is an
+external account/quota blocker, not authorization to synthesize an answer. The run
+also exposed that provider-job failures were invisible and could not be deliberately
+retried. Worker jobs now persist sanitized running/completed/failed state, and the
+Drift drawer visibly reports `Advisory investigation failed` while preserving the
+fact-versus-analysis boundary.
+
+### Step 8 — Generate, simulate, and approve the correction
+
+Status: **passed after repair**
+
+The UI generated immutable operation
+`op_6588ec40-bd52-49d5-b79f-85ab1540836e` from persisted evidence. KeeperHub exact
+request simulation succeeded with simulation ID `keeperhub-sim-c3cb34c99a6a`, plan
+hash `0xc3cb34c99a6ae652a3aeba13af20025b624080688d96591a803eb17550853609`,
+and gas estimate `39115`. The owner approval bound that exact plan/simulation pair.
+
+Persisting the new execution exposed raw internal status `new` at the UI schema
+boundary. Execution states are now normalized before dashboard parsing, preventing a
+successful mutation from invalidating every product route.
+
+### Step 9 — Execute, reconcile an unknown outcome, and verify independently
+
+Status: **passed safety behavior; final postcondition is partial**
+
+The initial worker attempt stopped before broadcast because a valid successful
+simulation had persisted `errorCode: null`; the schema now normalizes provider nulls
+and has regression coverage. A safe retry then reached KeeperHub, but the provider
+response outcome was unknown. Aether locked resubmission and entered reconciliation.
+
+Independent RPC evidence proved that the approved correction landed:
+
+- transaction: `0x6faa2bded91ead5b71f34771ad0f14466f8f23be8127274e8f112840f513b421`;
+- Sepolia block: `11410736`;
+- emitted oracle: the exact GitHub-approved address;
+- emitted actor: the configured KeeperHub executor;
+- canonical receipt observed with 58 confirmations.
+
+Reconciliation now recovers unknown submissions only from the exact contract event,
+desired value, configured executor, bounded provider-safe log history, and canonical
+receipt. Worker restart recovery promotes retry-locked reconciliation jobs without
+resubmitting the write.
+
+Independent verification found the approved oracle address but `fresh: false`.
+Aether correctly persisted `partial`, kept retry locked, and displayed Forward
+correction required instead of claiming convergence or rollback.
+
+### Step 10 — Verify drift, dashboard, and audit after the partial outcome
+
+Status: **passed; protocol-specific forward correction remains required**
+
+A final scan pinned block `11410822`. The observed and desired oracle addresses match,
+but oracle freshness remains false, so the critical finding is retained as `Oracle
+freshness violation` instead of being incorrectly resolved.
+
+The desktop Overview reports 35% protocol health, zero of one resources aligned, one
+critical open finding, the active operation as `correction required`, and the recovered
+execution as `partial`. Its execution link retains the transaction hash and forward-
+correction state. The Audit Log exposes the correlated operation, execution, actor,
+resource, and transaction evidence in its inspection drawer.
+
+The authenticated landing now uses `Go to dashboard` in the header, hero, campaign
+sections, and closing call to action; no lower section sends an authenticated user to
+signup. Logout cleared the session, a direct visit to `/app/overview` redirected to
+`/login?returnTo=%2Fapp%2Foverview`, and UI login returned to Overview. Per the current
+acceptance scope, no additional mobile-specific testing was performed.
+
+The remaining product action is a protocol-specific forward correction that refreshes
+the connected repository's approved oracle. The repository-local contract deployment
+registry targets a different fixture, so its correction script was not run against this
+contract. Aether correctly refuses to resubmit or pretend that the confirmed write can
+be rolled back.
+
+### Step 11 — Run automated quality and provider gates
+
+Status: **product gates passed; GitHub least privilege blocked externally**
+
+Formatting, lint, TypeScript, unit tests, Foundry unit/fuzz/invariant tests, the isolated
+MongoDB replica-set integration suite, worker recovery tests, security checks, runtime-
+import enforcement, desktop Chromium accessibility, nine desktop visual baselines,
+seven non-live desktop E2E checks, the production build, and the production dependency
+audit passed. The live Playwright case remained opt-in and skipped. No quality command
+broadcast a transaction.
+
+Environment, KeeperHub, chain, and OpenAI doctors passed. GitHub App authentication and
+identity passed, but `github:doctor` failed closed because GitHub reports
+`contents: write`. The owner must change Repository permissions → Contents to Read-only
+and approve the installation permission update. The doctor now reports the actual
+observed level in its error instead of an ambiguous missing-permission message.

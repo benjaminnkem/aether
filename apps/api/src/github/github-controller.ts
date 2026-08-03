@@ -1,5 +1,14 @@
-import { Body, Controller, Get, Post, Put, Query, Req } from "@nestjs/common";
-import type { Request } from "express";
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+} from "@nestjs/common";
+import type { Request, Response } from "express";
 import type { TenantContext } from "@aether/backend";
 import { Actor, Public, Roles } from "../auth/auth";
 import { GitHubService } from "./github-service";
@@ -16,8 +25,9 @@ export class GitHubController {
 
   @Public()
   @Get("callback")
-  callback(@Query() query: unknown) {
-    return this.github.callback(query);
+  async callback(@Query() query: unknown, @Res() response: Response) {
+    const result = await this.github.callback(query);
+    response.redirect(303, result.redirectUrl);
   }
 
   @Get("repositories")
@@ -29,6 +39,11 @@ export class GitHubController {
   @Roles("owner", "operator")
   repository(@Actor() tenant: TenantContext, @Body() body: unknown) {
     return this.github.selectRepository(tenant, body);
+  }
+
+  @Get("desired-state-source")
+  desiredStateSource(@Actor() tenant: TenantContext) {
+    return this.github.desiredStateSource(tenant);
   }
 
   @Public()

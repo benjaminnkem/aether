@@ -190,11 +190,9 @@ const checks = {
     for (const name of [
       "GITHUB_APP_ID",
       "GITHUB_APP_SLUG",
-      "GITHUB_CLIENT_ID",
-      "GITHUB_CLIENT_SECRET",
       "GITHUB_PRIVATE_KEY_BASE64",
       "GITHUB_WEBHOOK_SECRET",
-      "GITHUB_CALLBACK_URL",
+      "GITHUB_SETUP_URL",
     ]) {
       required(name);
     }
@@ -225,9 +223,32 @@ const checks = {
         "GitHub App identity does not match the configured values.",
       );
     }
+    const permissions = app.permissions ?? {};
+    for (const permission of ["metadata", "contents", "pull_requests"]) {
+      if (permissions[permission] !== "read") {
+        throw new Error(
+          `GitHub App permission ${permission} is ${String(permissions[permission] ?? "not granted")}; it must be configured as read-only.`,
+        );
+      }
+    }
+    const writePermission = Object.entries(permissions).find(([, level]) =>
+      ["write", "admin"].includes(String(level)),
+    );
+    if (writePermission) {
+      throw new Error(
+        `GitHub App permission ${writePermission[0]} is ${writePermission[1]}; Aether requires read-only provenance.`,
+      );
+    }
     console.log("GITHUB_APP_CREDENTIALS: authenticated");
     console.log("GITHUB_APP_IDENTITY: verified");
-    console.log("GITHUB_CALLBACK_URL: configured");
+    console.log("GITHUB_APP_PERMISSIONS: verified_read_only");
+    const setupUrl = new URL(required("GITHUB_SETUP_URL"));
+    if (!setupUrl.pathname.endsWith("/v1/github/callback")) {
+      throw new Error(
+        "GITHUB_SETUP_URL must end with /v1/github/callback for the installation flow.",
+      );
+    }
+    console.log("GITHUB_SETUP_URL: configured");
   },
   async openai() {
     const key = required("OPENAI_API_KEY");

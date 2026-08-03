@@ -177,3 +177,16 @@ hydration mismatch.
 - Critical status always includes readable text and icon.
 - Touch targets remain usable at 320px width.
 - Unknown/partial execution language is explicit and safety preserving.
+- Sonner announcements use accessible live regions and reduced motion.
+- React Flow always has a complete keyboard-readable vertical fallback.
+- Three.js failure, mobile, and reduced-motion contexts use the static state-field asset.
+- Unauthorized states explain that no action occurred and provide a clear recovery path.
+
+## 16. Unified editorial direction
+
+Marketing and the authenticated product share the updated editorial design language:
+white and soft-cloud canvases, black pill actions, flat hairline-separated surfaces,
+large campaign hierarchy, and chromatic restraint. Product screens retain semantic
+danger, warning, information, and verified-convergence colors so operational safety is
+never reduced to visual fashion. Product motion remains shorter and state-driven than
+marketing motion.

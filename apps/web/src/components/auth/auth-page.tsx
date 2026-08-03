@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { aetherClient } from "@aether/sdk";
 import { activeLiveChain } from "@aether/shared";
 import { Button, Field, Input } from "@aether/ui";
+import { useSession } from "@/features/auth/use-session";
 
 const copy = {
   login: [
@@ -23,6 +24,15 @@ const copy = {
 export function AuthPage({ kind }: { kind: keyof typeof copy }) {
   const [title, description, action] = copy[kind];
   const [pending, setPending] = useState(false);
+  const session = useSession();
+  useEffect(() => {
+    if (!session.data) return;
+    window.location.replace(
+      session.data.destination === "dashboard"
+        ? "/app/overview"
+        : "/onboarding",
+    );
+  }, [session.data]);
   return (
     <main id="main-content" className="auth-shell">
       <section className="auth-art">
@@ -59,7 +69,12 @@ export function AuthPage({ kind }: { kind: keyof typeof copy }) {
                 window.location.href = "/onboarding";
               } else {
                 await aetherClient.login(email, password);
-                window.location.href = "/app/overview";
+                const returnTo = new URLSearchParams(
+                  window.location.search,
+                ).get("returnTo");
+                window.location.href = returnTo?.startsWith("/app/")
+                  ? returnTo
+                  : "/app/overview";
               }
             } catch {
               toast.error(

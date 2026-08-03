@@ -72,7 +72,7 @@ Preferred production path: GitHub App installation.
 
 Required capabilities:
 
-- OAuth/install flow;
+- signed, one-time installation state and post-installation Setup URL flow;
 - signed webhook verification;
 - installation-token generation and rotation;
 - repository selection;
@@ -87,6 +87,13 @@ Required capabilities:
 
 An operator-managed fine-grained token mode may be added only when explicitly
 labelled; it must never be represented as a GitHub App installation.
+
+The installation webhook and browser redirect have different responsibilities.
+Webhooks authenticate provider events but do not contain Aether's tenant-bound
+`state`; only the Setup URL callback may bind an installation to an organization and
+protocol. After persistence, the API issues a `303` redirect to Protocol Setup and the
+frontend invalidates the active tenant dashboard query. Installation repository lists
+are paginated until GitHub's reported `total_count` is reached.
 
 ## OpenAI
 

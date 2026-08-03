@@ -188,6 +188,16 @@ export const modelDefinitions = [
     ),
   },
   {
+    name: "GitHubAuthorizationAttempt",
+    collection: "github_authorization_attempts",
+    schema: tenantSchema({
+      nonceHash: { type: String, required: true, unique: true },
+      actorId: { type: String, required: true },
+      expiresAt: { type: Date, required: true },
+      consumedAt: Date,
+    }).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+  },
+  {
     name: "DesiredStateVersion",
     collection: "desired_state_versions",
     schema: tenantSchema({

@@ -60,7 +60,10 @@ export const simulationResultSchema = z.object({
   gasEstimate: z.string().regex(/^\d+$/),
   postconditionMatched: z.boolean(),
   blockNumber: z.number().int().positive(),
-  errorCode: z.string().optional(),
+  errorCode: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? undefined),
 });
 
 export const keeperSubmissionSchema = z.object({

@@ -1,15 +1,15 @@
 # Implementation Status
 
-Evidence date: 2026-08-01.
+Evidence date: 2026-08-03.
 
 ## Release verdict
 
-`ETHEREUM SEPOLIA MIGRATION CODE-COMPLETE — LIVE BROADCAST BLOCKED`
+`PRODUCT OVERHAUL VERIFIED — FORWARD CORRECTION, OPENAI QUOTA, AND GITHUB PERMISSION PENDING`
 
-There is no runtime mock path. This is not yet a live-testnet release candidate:
-the configured RPC is not chain `11155111`, no usable authorized signer matching the
-configured administrator is available, the fixture is not deployed, protected live
-Playwright/provider acceptance has not run, and no transaction evidence exists.
+There is no runtime mock path. Automated product gates pass. A UI-driven Sepolia write
+was reconciled and independently verified as partial because the approved oracle is
+stale. The external GitHub App must be reduced from `contents: write` to read-only, and
+the OpenAI account needs quota before advisory investigation can complete.
 
 ## Implemented
 
@@ -20,7 +20,8 @@ Playwright/provider acceptance has not run, and no transaction evidence exists.
 - durable outbox, BullMQ jobs, cursor SSE, pinned RPC observation, drift evaluation;
 - deterministic plans, exact KeeperHub simulation/direct execution, unknown locks,
   receipt/finality/reorg handling, and independent verification;
-- GitHub App installation/repository/webhook/revocation boundary;
+- GitHub App one-time installation state, Setup URL callback/browser redirect,
+  paginated repository discovery, webhook idempotency, and revocation boundary;
 - strict advisory OpenAI Responses output;
 - testnet-only fixture scripts that require explicit live role addresses;
 - Sonner-only toasts, subtle blur/reduced motion, and no demo controls;
@@ -31,25 +32,43 @@ Playwright/provider acceptance has not run, and no transaction evidence exists.
   `ORACLE_ADMIN_ROLE`;
 - chain-bound desired state, contract resources, plans, simulations, approvals, and
   drift-origin RPC evidence.
+- active dashboard-query invalidation after every frontend mutation, with durable SSE
+  remaining the source of subsequent worker-driven updates.
+- authoritative session discovery, single-flight cookie refresh, session-aware landing
+  actions, protected-route recovery, and visible logout;
+- unified light editorial visual system across marketing, authentication, onboarding,
+  dashboard, Protocol Setup, and product overlays;
+- structured health/alignment/severity/lifecycle/provider overview aggregates and
+  visual dashboard representations;
+- stepped Protocol Setup workspace and GitHub repository/branch/path selection;
+- deterministic Playwright visual baselines and axe accessibility coverage.
 
 ## Observed verification
 
 - `pnpm check-types`, `pnpm format:check`, and `pnpm lint`: passed.
 - Foundry: 16 passed.
 - Foundry gas report and updated snapshot check: passed.
-- backend: 11 passed.
-- worker: 19 passed.
+- backend: 14 passed.
+- worker: 20 passed.
 - API contract/security: passed.
-- isolated Mongo replica-set API integration: 2 passed.
-- frontend: 9 passed.
-- Playwright: 8 desktop/mobile checks passed; 2 protected live checks skipped.
+- isolated Mongo replica-set API integration: 3 passed, including one-time GitHub
+  callback persistence, redirect, and replay rejection.
+- frontend: 13 passed, including session-aware actions and tenant-scoped active query
+  invalidation.
+- Playwright desktop Chromium: 7 non-live E2E checks, the critical-surface accessibility
+  suite, and 9 deterministic visual baselines passed; the protected live check skipped.
 - production build: passed.
 - `pnpm audit --prod`: no known vulnerabilities.
-- KeeperHub doctor: key, Ethereum Sepolia chain, and wallet validation reached the
-  fail-closed RPC mismatch; balance, role, and simulation were therefore not claimed.
-- chain doctor: failed because the supplied RPC reports another chain.
-- GitHub App doctor: authenticated and identity matched.
+- KeeperHub doctor: authenticated; Sepolia, wallet funding, role, and no-broadcast
+  simulation passed.
+- chain doctor: Sepolia chain, fixture bytecode, proxy implementation, and oracle
+  decoding passed.
+- GitHub App doctor: identity passed; fails closed because the live App reports
+  `contents: write` instead of read-only.
 - OpenAI doctor: authenticated and configured model available.
 
-No Ethereum Sepolia deployment, simulation, execution, transaction, or live independent
-verification is claimed.
+UI-driven acceptance simulated, approved, and executed an exact KeeperHub correction.
+Transaction `0x6faa2bded91ead5b71f34771ad0f14466f8f23be8127274e8f112840f513b421`
+was recovered from an unknown provider outcome without resubmission. Independent RPC
+verification confirmed the approved oracle address and a stale freshness invariant, so
+the durable result is correctly `partial` with forward correction required.

@@ -2,10 +2,15 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useMutation } from "@tanstack/react-query";
-import { aetherClient, getAetherErrorMessage } from "@aether/sdk";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  aetherClient,
+  getAetherErrorMessage,
+  isAuthenticationError,
+} from "@aether/sdk";
 import {
   Activity,
   Add,
@@ -42,6 +47,8 @@ import {
 } from "@aether/ui";
 import { AppShell } from "./app-shell";
 import { useDashboard } from "@/features/dashboard/use-dashboard";
+import { useRefreshDashboard } from "@/features/dashboard/use-refresh-dashboard";
+import { useSession } from "@/features/auth/use-session";
 
 const OperationGraph = dynamic(
   () => import("@/features/operations/operation-graph"),
@@ -101,9 +108,22 @@ function AppPage({
   resourceId?: string;
 }) {
   const dashboard = useDashboard();
+  const session = useSession();
   const title = routeTitles[route] ?? "Aether";
 
-  if (dashboard.isLoading) {
+  useEffect(() => {
+    if (session.isLoading) return;
+    if (!session.data || isAuthenticationError(dashboard.error)) {
+      const returnTo = encodeURIComponent(window.location.pathname);
+      window.location.replace(`/login?returnTo=${returnTo}`);
+      return;
+    }
+    if (session.data.destination === "onboarding") {
+      window.location.replace("/onboarding");
+    }
+  }, [dashboard.error, session.data, session.isLoading]);
+
+  if (dashboard.isLoading || session.isLoading) {
     return (
       <AppShell title={title}>
         <PageHeader
@@ -119,6 +139,18 @@ function AppPage({
             <div className="a-skeleton" style={{ height: 116 }} key={item} />
           ))}
         </div>
+      </AppShell>
+    );
+  }
+
+  if (
+    !session.data ||
+    session.data.destination === "onboarding" ||
+    isAuthenticationError(dashboard.error)
+  ) {
+    return (
+      <AppShell title={title}>
+        <div className="a-skeleton" style={{ height: 180 }} />
       </AppShell>
     );
   }
@@ -145,6 +177,7 @@ function AppPage({
       title={title}
       organization={data.organization ?? undefined}
       protocol={data.protocols[0]}
+      realtime={data.realtime}
     >
       {route === "overview" ? <Overview data={data} /> : null}
       {route === "protocol-setup" ? <ProtocolSetup data={data} /> : null}
@@ -199,6 +232,12 @@ function Overview({
   const drift = data.records.drift ?? [];
   const operations = data.records.operations ?? [];
   const executions = data.records.executions ?? [];
+  const summary = data.overviewSummary;
+  const alignment = summary.totalResources
+    ? Math.round((summary.alignedResources / summary.totalResources) * 100)
+    : 0;
+  const severityEntries = Object.entries(summary.findingsBySeverity);
+  const maxSeverity = Math.max(1, ...severityEntries.map(([, count]) => count));
   return (
     <>
       <PageHeader
@@ -222,19 +261,71 @@ function Overview({
           Observed {new Date(protocol.lastScanAt).toLocaleTimeString()}
         </span>
       </div>
-      <section className="metric-grid" aria-label="Protocol metrics">
+      <section
+        className="overview-hero-grid"
+        aria-label="Protocol health summary"
+      >
+        <Card className="overview-health-card">
+          <div
+            className="health-ring__visual"
+            style={{ "--health": summary.healthScore } as React.CSSProperties}
+            aria-label={`Protocol health ${summary.healthScore} percent`}
+          >
+            <strong>{summary.healthScore}%</strong>
+          </div>
+          <div className="overview-health-copy">
+            <span className="visual-kicker">Protocol health</span>
+            <h2>{drift.length ? "Attention required" : "State converged"}</h2>
+            <p>
+              {drift.length
+                ? `${drift.length} persisted finding${drift.length === 1 ? "" : "s"} require evidence review.`
+                : "The latest pinned observation matches approved intent."}
+            </p>
+            <Status status={protocol.status} />
+          </div>
+        </Card>
+        <Card className="alignment-card">
+          <div className="alignment-card__head">
+            <div>
+              <span className="visual-kicker">Desired alignment</span>
+              <strong>{alignment}%</strong>
+            </div>
+            <span>
+              {summary.alignedResources}/{summary.totalResources} resources
+            </span>
+          </div>
+          <div className="alignment-track" aria-hidden="true">
+            <i style={{ width: `${alignment}%` }} />
+          </div>
+          <div
+            className="severity-visual"
+            aria-label="Open findings by severity"
+          >
+            {severityEntries.map(([severity, count]) => (
+              <div
+                className={`severity-row severity-row--${severity}`}
+                key={severity}
+              >
+                <span>{severity}</span>
+                <div>
+                  <i style={{ width: `${(count / maxSeverity) * 100}%` }} />
+                </div>
+                <strong>{count}</strong>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </section>
+      <section className="metric-grid" aria-label="Protocol resources">
         {data.metrics.map((metric) => (
           <Card className="metric-card" key={metric.label}>
             <span className="metric-card__label">{metric.label}</span>
             <strong className="metric-card__value">{metric.value}</strong>
             <span className="metric-card__detail">{metric.detail}</span>
-            {metric.trend ? (
-              <span className="metric-card__trend">{metric.trend}</span>
-            ) : null}
           </Card>
         ))}
       </section>
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--overview">
         <Panel
           title={drift.length ? "Critical drift" : "Protocol aligned"}
           action={<Link href="/app/drift">Open drift</Link>}
@@ -277,12 +368,27 @@ function Overview({
             />
           </Panel>
         )}
-        <Panel title="KeeperHub execution">
+        <Panel title="Execution lifecycle">
           {data.execution ? (
             <>
               <Link href={`/app/executions/${data.execution.id}`}>
                 Open execution
               </Link>
+              <div className="lifecycle-progress">
+                <div>
+                  <span>{summary.lifecycle.current.replaceAll("_", " ")}</span>
+                  <strong>
+                    {summary.lifecycle.completed}/{summary.lifecycle.total}
+                  </strong>
+                </div>
+                <div className="alignment-track" aria-hidden="true">
+                  <i
+                    style={{
+                      width: `${summary.lifecycle.total ? (summary.lifecycle.completed / summary.lifecycle.total) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
               <RecordList records={executions} />
             </>
           ) : (
@@ -292,8 +398,23 @@ function Overview({
             />
           )}
         </Panel>
-        <Panel title="Network health">
-          <RecordList records={data.records.networks ?? []} />
+        <Panel title="Live connections">
+          <div className="connection-matrix">
+            {summary.connections.length ? (
+              summary.connections.map((connection) => (
+                <div key={connection.id}>
+                  <span className="connection-pulse" />
+                  <strong>{connection.label}</strong>
+                  <Status status={connection.status} />
+                </div>
+              ))
+            ) : (
+              <EmptyState
+                title="Connections not configured"
+                description="Complete Protocol Setup to expose live provider evidence."
+              />
+            )}
+          </div>
         </Panel>
       </div>
     </>
@@ -305,7 +426,12 @@ function ProtocolSetup({
 }: {
   data: ReturnType<typeof useDashboard>["data"] & {};
 }) {
-  const [tab, setTab] = useState("general");
+  const searchParams = useSearchParams();
+  const refreshDashboard = useRefreshDashboard();
+  const requestedTab = searchParams.get("tab");
+  const [tab, setTab] = useState(
+    requestedTab === "github" ? "github" : "general",
+  );
   const [dialog, setDialog] = useState<"network" | "contract" | null>(null);
   const [resourceValue, setResourceValue] = useState("");
   const protocol = data.protocols[0]!;
@@ -319,16 +445,61 @@ function ProtocolSetup({
       section: "general" | "networks" | "contracts";
       input: Record<string, unknown>;
     }) => aetherClient.updateProtocolSetup(section, input),
-    onSuccess: ({ section }) => toast.success(`${section} settings saved.`),
+    onSuccess: async ({ section }) => {
+      await refreshDashboard();
+      toast.success(`${section} settings saved.`);
+    },
     onError: () =>
       toast.error("The API could not persist these settings. Nothing changed."),
   });
+  useEffect(() => {
+    const githubStatus = searchParams.get("github");
+    if (!githubStatus) return;
+    if (githubStatus === "connected") {
+      void refreshDashboard();
+      toast.success("GitHub App connected.");
+    } else if (githubStatus === "requested") {
+      toast.info(
+        "GitHub installation approval was requested from the organization owner.",
+      );
+    }
+    window.history.replaceState({}, "", "/app/protocol-setup?tab=github");
+  }, [refreshDashboard, searchParams]);
   const tabs = [
-    { value: "general", label: "General" },
-    { value: "networks", label: "Networks" },
-    { value: "contracts", label: "Contracts" },
-    { value: "github", label: "GitHub" },
-    { value: "keeperhub", label: "KeeperHub" },
+    {
+      value: "general",
+      label: "General",
+      detail: "Identity & governance",
+      status: protocol.name && protocol.governance ? "healthy" : "warning",
+    },
+    {
+      value: "networks",
+      label: "Networks",
+      detail: "Sepolia observation",
+      status: (data.records.networks ?? []).length ? "healthy" : "warning",
+    },
+    {
+      value: "contracts",
+      label: "Contracts",
+      detail: "Targets & evidence",
+      status: (data.records.contracts ?? []).length ? "healthy" : "warning",
+    },
+    {
+      value: "github",
+      label: "GitHub",
+      detail: "Release provenance",
+      status:
+        (data.records.connections ?? []).find((item) => item.id === "github")
+          ?.status ?? "warning",
+    },
+    {
+      value: "keeperhub",
+      label: "KeeperHub",
+      detail: "Execution readiness",
+      status:
+        (data.records.connections ?? []).find((item) => item.id === "keeperhub")
+          ?.status ?? "warning",
+    },
   ];
   return (
     <>
@@ -336,81 +507,81 @@ function ProtocolSetup({
         title="Protocol Setup"
         description={descriptions["protocol-setup"]}
       />
-      <Tabs value={tab} onValueChange={setTab} tabs={tabs}>
-        <TabContent value="general">
-          <div className="settings-form a-card">
-            <div className="form-row">
-              <Field label="Protocol name">
+      <div className="setup-workspace">
+        <Tabs value={tab} onValueChange={setTab} tabs={tabs}>
+          <TabContent className="setup-panel" value="general">
+            <div className="settings-form a-card">
+              <div className="form-row">
+                <Field label="Protocol name">
+                  <Input
+                    value={protocolName}
+                    onChange={(event) => setProtocolName(event.target.value)}
+                  />
+                </Field>
+                <Field label="Environment">
+                  <Select defaultValue={protocol.environment}>
+                    <option>{activeLiveChain.displayName}</option>
+                  </Select>
+                </Field>
+              </div>
+              <Field label="Governance authority">
                 <Input
-                  value={protocolName}
-                  onChange={(event) => setProtocolName(event.target.value)}
+                  value={governance}
+                  onChange={(event) => setGovernance(event.target.value)}
                 />
               </Field>
-              <Field label="Environment">
-                <Select defaultValue={protocol.environment}>
-                  <option>{activeLiveChain.displayName}</option>
-                </Select>
-              </Field>
+              <Button
+                variant="primary"
+                disabled={setupMutation.isPending}
+                onClick={() =>
+                  setupMutation.mutate({
+                    section: "general",
+                    input: {
+                      name: protocolName,
+                      environment: protocol.environment,
+                      governanceAuthority: governance,
+                    },
+                  })
+                }
+              >
+                Save settings
+              </Button>
             </div>
-            <Field label="Governance authority">
-              <Input
-                value={governance}
-                onChange={(event) => setGovernance(event.target.value)}
-              />
-            </Field>
-            <Button
-              variant="primary"
-              disabled={setupMutation.isPending}
-              onClick={() =>
-                setupMutation.mutate({
-                  section: "general",
-                  input: {
-                    name: protocolName,
-                    environment: protocol.environment,
-                    governanceAuthority: governance,
-                  },
-                })
-              }
-            >
-              Save settings
-            </Button>
-          </div>
-        </TabContent>
-        <TabContent value="networks">
-          <SetupTable
-            title="Observed networks"
-            records={data.records.networks ?? []}
-            actionLabel="Add network"
-            onAction={() => setDialog("network")}
-          />
-        </TabContent>
-        <TabContent value="contracts">
-          <SetupTable
-            title="Observed contracts"
-            records={data.records.contracts ?? []}
-            actionLabel="Add contract"
-            onAction={() => setDialog("contract")}
-          />
-        </TabContent>
-        <TabContent value="github">
-          <ConnectionPanel
-            title="GitHub release provenance"
-            description="Aether reads release and pull-request metadata. It never receives repository write permission in the MVP."
-            record={(data.records.connections ?? []).find(
-              (item) => item.id === "github",
-            )}
-          />
-        </TabContent>
-        <TabContent value="keeperhub">
-          <ConnectionPanel
-            title="KeeperHub execution adapter"
-            description="KeeperHub is the configured third-party execution path. Aether independently controls policy, approvals, and post-execution verification."
-            record={(data.records.connections ?? []).find(
-              (item) => item.id === "keeperhub",
-            )}
-          />
-        </TabContent>
-      </Tabs>
+          </TabContent>
+          <TabContent className="setup-panel" value="networks">
+            <SetupTable
+              title="Observed networks"
+              records={data.records.networks ?? []}
+              actionLabel="Add network"
+              onAction={() => setDialog("network")}
+            />
+          </TabContent>
+          <TabContent className="setup-panel" value="contracts">
+            <SetupTable
+              title="Observed contracts"
+              records={data.records.contracts ?? []}
+              actionLabel="Add contract"
+              onAction={() => setDialog("contract")}
+            />
+          </TabContent>
+          <TabContent className="setup-panel" value="github">
+            <GitHubConnectionPanel
+              record={(data.records.connections ?? []).find(
+                (item) => item.id === "github",
+              )}
+            />
+          </TabContent>
+          <TabContent className="setup-panel" value="keeperhub">
+            <ConnectionPanel
+              title="KeeperHub execution adapter"
+              description=""
+              record={(data.records.connections ?? []).find(
+                (item) => item.id === "keeperhub",
+              )}
+            />
+          </TabContent>
+        </Tabs>
+      </div>
       <Dialog
         open={dialog !== null}
         onOpenChange={(open) => !open && setDialog(null)}
@@ -472,6 +643,144 @@ function ProtocolSetup({
   );
 }
 
+function GitHubConnectionPanel({ record }: { record?: AetherRecord }) {
+  const refreshDashboard = useRefreshDashboard();
+  const [repository, setRepository] = useState("");
+  const [desiredStatePath, setDesiredStatePath] = useState(
+    "aether/desired-state.yaml",
+  );
+  const repositories = useQuery({
+    queryKey: ["github", "repositories"],
+    queryFn: () => aetherClient.getGitHubRepositories(),
+    enabled: record?.status === "healthy",
+    retry: false,
+  });
+  useEffect(() => {
+    if (!repository && repositories.data?.[0]) {
+      setRepository(repositories.data[0].full_name);
+    }
+  }, [repositories.data, repository]);
+  const install = useMutation({
+    mutationFn: () => aetherClient.getGitHubInstallUrl(),
+    onSuccess: ({ url }) => window.location.assign(url),
+    onError: (error) =>
+      toast.error(
+        getAetherErrorMessage(error, "GitHub installation could not start."),
+      ),
+  });
+  const selected = repositories.data?.find(
+    (item) => item.full_name === repository,
+  );
+  const save = useMutation({
+    mutationFn: () =>
+      aetherClient.selectGitHubRepository({
+        repository,
+        defaultBranch: selected?.default_branch ?? "",
+        desiredStatePath,
+      }),
+    onSuccess: async () => {
+      await refreshDashboard();
+      toast.success("GitHub provenance source saved.");
+    },
+    onError: (error) =>
+      toast.error(
+        getAetherErrorMessage(
+          error,
+          "Repository selection could not be saved.",
+        ),
+      ),
+  });
+  return (
+    <div className="settings-form a-card connection-setup-card">
+      <div className="panel__head">
+        <div>
+          <span className="visual-kicker">Read-only provenance</span>
+          <h2>GitHub App</h2>
+          <p>
+            Release, pull-request, and desired-state evidence without repository
+            writes.
+          </p>
+        </div>
+        <Status status={record?.status ?? "warning"} />
+      </div>
+      <div className="connection-identity">
+        <div className="connection-logo">GH</div>
+        <div>
+          <strong>{record?.meta ?? "No installation connected"}</strong>
+          <span>
+            {record?.subtitle ?? "Install the Aether GitHub App to continue."}
+          </span>
+        </div>
+      </div>
+      {record?.status === "healthy" ? (
+        <>
+          <div className="form-row">
+            <Field label="Repository">
+              <Select
+                value={repository}
+                onChange={(event) => setRepository(event.target.value)}
+              >
+                {(repositories.data ?? []).map((item) => (
+                  <option key={item.full_name} value={item.full_name}>
+                    {item.full_name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Default branch">
+              <Input readOnly value={selected?.default_branch ?? "Loading…"} />
+            </Field>
+          </div>
+          <Field
+            label="Desired-state path"
+            hint="Repository-relative path read by Aether."
+          >
+            <Input
+              value={desiredStatePath}
+              onChange={(event) => setDesiredStatePath(event.target.value)}
+            />
+          </Field>
+          {repositories.isError ? (
+            <div className="a-callout a-callout--danger">
+              The installation cannot read any repositories. Review the selected
+              repository permissions in GitHub.
+            </div>
+          ) : null}
+          <Button
+            variant="primary"
+            disabled={!selected || save.isPending}
+            onClick={() => save.mutate()}
+          >
+            Save provenance source
+          </Button>
+        </>
+      ) : (
+        <Button
+          variant="primary"
+          disabled={install.isPending}
+          onClick={() => install.mutate()}
+        >
+          Install GitHub App
+        </Button>
+      )}
+      <div className="permission-grid" aria-label="GitHub permission boundary">
+        <span>
+          <ShieldTick size={16} /> Metadata read
+        </span>
+        <span>
+          <ShieldTick size={16} /> Contents read
+        </span>
+        <span>
+          <ShieldTick size={16} /> Pull requests read
+        </span>
+        <span>
+          <Warning2 size={16} /> Repository writes denied
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function SetupTable({
   title,
   records,
@@ -504,8 +813,22 @@ function SetupTable({
             </>
           ),
           Status: <Status status={item.status} />,
-          Value: item.value,
-          Details: item.meta,
+          Value: item.value ? (
+            <code className="evidence-value">{item.value}</code>
+          ) : (
+            <span className="muted">Pending</span>
+          ),
+          Details: item.meta ? (
+            <div className="evidence-cluster">
+              {item.meta.split(" · ").map((detail) => (
+                <span className="evidence-chip" key={detail}>
+                  <ShieldTick size={13} aria-hidden="true" /> {detail}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="muted">Evidence pending</span>
+          ),
         }))}
       />
       <ResponsiveCards records={records} />
@@ -522,6 +845,7 @@ function ConnectionPanel({
   description: string;
   record?: AetherRecord;
 }) {
+  const refreshDashboard = useRefreshDashboard();
   const connect = useMutation({
     mutationFn: async () => {
       if (title.toLowerCase().includes("github")) {
@@ -531,8 +855,9 @@ function ConnectionPanel({
       }
       await aetherClient.validateProvider("keeperhub");
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       if (!title.toLowerCase().includes("github")) {
+        await refreshDashboard();
         toast.success("Live connection state refreshed.");
       }
     },
@@ -579,6 +904,11 @@ function DesiredState({
 }) {
   const versions = data.records["desired-state"] ?? [];
   const active = versions.find((item) => item.value === "Active");
+  const githubSource = useQuery({
+    queryKey: ["github", "desired-state-source"],
+    queryFn: () => aetherClient.getGitHubDesiredState(),
+    retry: false,
+  });
   return (
     <>
       <PageHeader
@@ -592,7 +922,24 @@ function DesiredState({
       />
       <div className="dashboard-grid">
         <div>
-          <DesiredStateEditor />
+          {githubSource.isLoading ? (
+            <div className="a-skeleton" style={{ height: 88 }} />
+          ) : null}
+          {githubSource.isError ? (
+            <div className="a-callout" role="alert">
+              <Warning2 size={18} />
+              <div>
+                <strong>GitHub desired state is unavailable</strong>
+                <p>
+                  {getAetherErrorMessage(
+                    githubSource.error,
+                    "Check the selected repository path and validate the YAML schema.",
+                  )}
+                </p>
+              </div>
+            </div>
+          ) : null}
+          <DesiredStateEditor githubSource={githubSource.data} />
         </div>
         <div className="panel-stack">
           <Panel title="Active version">
@@ -651,25 +998,33 @@ function Drift({
 }: {
   data: ReturnType<typeof useDashboard>["data"] & {};
 }) {
+  const refreshDashboard = useRefreshDashboard();
   const [selected, setSelected] = useState<AetherRecord>();
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("all");
   const scan = useMutation({
     mutationFn: () => aetherClient.runScan(),
-    onSuccess: () => toast.success("Live observation scan queued."),
+    onSuccess: async () => {
+      await refreshDashboard();
+      toast.success("Live observation scan queued.");
+    },
     onError: () =>
       toast.error("The live observation scan could not be queued."),
   });
   const investigate = useMutation({
     mutationFn: (findingId: string) =>
       aetherClient.investigateFinding(findingId),
-    onSuccess: () => toast.success("OpenAI investigation queued."),
+    onSuccess: async () => {
+      await refreshDashboard();
+      toast.success("OpenAI investigation queued.");
+    },
     onError: () =>
       toast.error("Investigation is unavailable. Check OpenAI configuration."),
   });
   const plan = useMutation({
     mutationFn: (findingId: string) => aetherClient.generatePlan(findingId),
-    onSuccess: (operation: { id?: string }) => {
+    onSuccess: async (operation: { id?: string }) => {
+      await refreshDashboard();
       toast.success("Immutable correction plan created.");
       if (operation.id)
         window.location.assign(`/app/operations/${operation.id}`);
@@ -683,6 +1038,7 @@ function Drift({
     () =>
       (data.records.drift ?? []).filter(
         (item) =>
+          item.status !== "resolved" &&
           (severity === "all" || item.severity === severity) &&
           `${item.title} ${item.subtitle}`
             .toLowerCase()
@@ -690,6 +1046,12 @@ function Drift({
       ),
     [data.records.drift, query, severity],
   );
+  const investigationJob = selected
+    ? (data.records.jobs ?? []).find(
+        (item) =>
+          item.title === "investigation.run" && item.meta === selected.id,
+      )
+    : undefined;
   return (
     <>
       <PageHeader
@@ -776,9 +1138,13 @@ function Drift({
               {selected.value ? <ChainValue value={selected.value} /> : null}
             </Panel>
             <Panel title="Desired value">
-              <p className="record-meta">
-                {selected.meta ?? "No desired-state provenance is available."}
-              </p>
+              {selected.meta ? (
+                <ChainValue value={selected.meta} />
+              ) : (
+                <p className="record-meta">
+                  No desired-state provenance is available.
+                </p>
+              )}
             </Panel>
             <Panel title="Testnet-only drift action">
               <p className="record-subtitle">
@@ -804,6 +1170,24 @@ function Drift({
                 </p>
               </div>
             </div>
+            {investigationJob ? (
+              <div
+                className={`a-callout ${investigationJob.status === "failed" ? "a-callout--danger" : ""}`}
+                role={investigationJob.status === "failed" ? "alert" : "status"}
+              >
+                {investigationJob.status === "failed" ? (
+                  <Warning2 size={18} />
+                ) : (
+                  <ShieldTick size={18} />
+                )}
+                <div>
+                  <strong>
+                    Advisory investigation {investigationJob.status}
+                  </strong>
+                  <p>{investigationJob.subtitle}</p>
+                </div>
+              </div>
+            ) : null}
             <Button
               disabled={investigate.isPending}
               onClick={() => investigate.mutate(selected.id)}
@@ -841,18 +1225,23 @@ function OperationDetail({
   resourceId?: string;
   approve: (decision: "approve" | "reject") => void;
 }) {
+  const refreshDashboard = useRefreshDashboard();
   const [selectedStep, setSelectedStep] = useState<OperationStep>();
   const operation = data.operation;
   const simulate = useMutation({
     mutationFn: () =>
       aetherClient.simulateOperation(resourceId ?? operation?.id ?? ""),
-    onSuccess: () => toast.success("KeeperHub simulation queued."),
+    onSuccess: async () => {
+      await refreshDashboard();
+      toast.success("KeeperHub simulation queued.");
+    },
     onError: () => toast.error("KeeperHub simulation could not be queued."),
   });
   const execute = useMutation({
     mutationFn: () =>
       aetherClient.executeOperation(resourceId ?? operation?.id ?? ""),
-    onSuccess: ({ id }) => {
+    onSuccess: async ({ id }) => {
+      await refreshDashboard();
       toast.success("KeeperHub direct execution queued.");
       window.location.assign(`/app/executions/${id}`);
     },
@@ -1042,12 +1431,15 @@ function ExecutionDetail({
   return (
     <>
       <PageHeader
-        title={`KeeperHub ${execution.directExecutionId || "direct execution"}`}
+        title="KeeperHub execution"
         description={descriptions.executions}
         actions={<Status status={execution.status} />}
       />
       <div className="context-strip" aria-live="polite">
         <span>{execution.network}</span>
+        {execution.directExecutionId ? (
+          <span>{execution.directExecutionId}</span>
+        ) : null}
         <span>{execution.currentStep}</span>
         <Status status={data.realtime} label={`Realtime ${data.realtime}`} />
       </div>
@@ -1169,7 +1561,9 @@ function AuditLog({
               <div className="record-subtitle">{item.subtitle}</div>
             ),
             Status: <Status status={item.status} />,
-            Reference: item.value,
+            Reference: item.value ? (
+              <code className="evidence-value">{item.value}</code>
+            ) : null,
           }))}
           onRowClick={(index) => setSelected(records[index])}
         />

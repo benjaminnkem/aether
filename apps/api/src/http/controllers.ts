@@ -471,6 +471,7 @@ export class ObservationController {
         tenant.organizationId,
         tenant.protocolId,
         "observation.scan",
+        request.requestId,
       );
     durableJobSchema.parse({
       organizationId: tenant.organizationId,
@@ -512,6 +513,7 @@ export class ObservationController {
     @Actor() tenant: TenantContext,
     @Req() request: AuthenticatedRequest,
     @Param("findingId") findingId: string,
+    @Headers("idempotency-key") suppliedKey: string | undefined,
   ) {
     if (
       !(await this.models.DriftFinding!.exists({
@@ -521,12 +523,15 @@ export class ObservationController {
     ) {
       throw new BadRequestException("Unknown drift finding.");
     }
-    const idempotencyKey = stableIdempotencyKey(
-      tenant.organizationId,
-      tenant.protocolId,
-      findingId,
-      "investigation.run",
-    );
+    const idempotencyKey =
+      suppliedKey ??
+      stableIdempotencyKey(
+        tenant.organizationId,
+        tenant.protocolId,
+        findingId,
+        "investigation.run",
+        request.requestId,
+      );
     await this.store.append(
       tenant,
       event(

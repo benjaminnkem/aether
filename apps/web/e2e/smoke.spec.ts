@@ -61,7 +61,7 @@ test("signup creates an authenticated session and continues to onboarding", asyn
   await expect(page).toHaveURL(/\/onboarding$/);
 });
 
-test("dashboard fails closed when the API denies the session", async ({
+test("dashboard returns to sign in when the API denies the session", async ({
   page,
 }) => {
   await page.route("**/v1/dashboard**", (route) =>
@@ -72,9 +72,10 @@ test("dashboard fails closed when the API denies the session", async ({
     }),
   );
   await page.goto("/app/overview");
+  await expect(page).toHaveURL(/\/login\?returnTo=/, { timeout: 15_000 });
   await expect(
-    page.getByText(/live API did not return a valid response/i),
-  ).toBeVisible({ timeout: 15_000 });
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
   await expect(page.getByText(/Demo controls/i)).toHaveCount(0);
 });
 
@@ -89,6 +90,22 @@ test("mobile and reduced motion keep navigation usable", async ({ page }) => {
 test("removed fixed resource URLs do not fabricate records", async ({
   page,
 }) => {
+  await page.route("**/v1/auth/session", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated: true,
+        user: { id: "usr_test", email: "test@example.invalid" },
+        context: {
+          organizationId: "org_test",
+          protocolId: "pro_test",
+          role: "owner",
+        },
+        destination: "dashboard",
+      }),
+    }),
+  );
   await page.route("**/v1/dashboard**", (route) =>
     route.fulfill({
       status: 404,

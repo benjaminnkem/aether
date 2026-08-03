@@ -107,13 +107,23 @@ Signing keys must not be plain `.env` variables. Use Foundry keystore, hardware 
 | Variable                    | Purpose                                |
 | --------------------------- | -------------------------------------- |
 | `GITHUB_APP_ID`             | GitHub App numeric ID.                 |
-| `GITHUB_CLIENT_ID`          | OAuth client ID.                       |
-| `GITHUB_CLIENT_SECRET`      | OAuth client secret.                   |
 | `GITHUB_PRIVATE_KEY_BASE64` | Base64-encoded GitHub App private key. |
 | `GITHUB_WEBHOOK_SECRET`     | Webhook signature secret.              |
-| `GITHUB_CALLBACK_URL`       | OAuth callback URL.                    |
+| `GITHUB_SETUP_URL`          | Post-installation Setup URL.           |
+
+Aether does not request a GitHub user OAuth token, so a Client ID, Client Secret, and
+OAuth Callback URL are not runtime requirements. In the GitHub App registration,
+configure `GITHUB_SETUP_URL` under **Post installation → Setup URL** and enable
+**Redirect on update**. The webhook URL remains a separate endpoint.
 
 For a temporary single-user testnet deployment, Codex may support a server-only fine-grained read token only when the GitHub App cannot be configured, but the UI must state that this is an operator-managed connection and must not pretend to perform OAuth.
+
+`pnpm env:doctor` creates an ignored backup before normalization, removes obsolete
+runtime-mode variables, generates safe local cryptographic values, and reports names
+and readiness only. Provider doctors are read-only or simulation-only and never
+broadcast. The GitHub doctor verifies App identity, callback shape, and read-only
+permissions; KeeperHub and chain doctors fail before simulation when the RPC is not
+Ethereum Sepolia.
 
 ## OpenAI variables
 

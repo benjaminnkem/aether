@@ -4,8 +4,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
-import { ArrowRight2 } from "iconsax-react";
-import { Button } from "@aether/ui";
+import { SessionActions } from "@/components/auth/session-actions";
 
 const HeroField = dynamic(() => import("./hero-field"), { ssr: false });
 
@@ -49,18 +48,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
             <Link href="/#product">Product</Link>
             <Link href="/#security">Security</Link>
             <Link href="/#how-it-works">How it works</Link>
-            <Link className="secondary-cta" href="/login">
-              Sign in
-            </Link>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                window.location.href = "/app/overview";
-              }}
-            >
-              Open the testnet app <ArrowRight2 size={13} />
-            </Button>
+            <SessionActions />
           </div>
         </nav>
       </header>
@@ -89,7 +77,7 @@ export function Footer() {
           <Link href="/#product">Product</Link>
           <Link href="/#security">Security</Link>
           <Link href="/#how-it-works">How it works</Link>
-          <Link href="/login">Sign in</Link>
+          <Link href="/login">Account</Link>
         </div>
         <span className="a-status a-status--success">
           <i /> Live providers fail closed

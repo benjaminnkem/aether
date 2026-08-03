@@ -1,5 +1,6 @@
 import {
   ExecutionSafety,
+  arcadiaTopics,
   durableJobSchema,
   keeperStatusSchema,
   keeperSubmissionSchema,
@@ -230,6 +231,13 @@ export class ExecutionProcessor {
         "Provider correlation must be persisted before reconciliation.",
       );
     }
+    if (!execution.directExecutionId) {
+      const recovered = await this.recoverSubmissionFromRpc(
+        job,
+        execution,
+      ).catch(() => undefined);
+      if (recovered) return recovered;
+    }
     const status = keeperStatusSchema.parse(
       await this.keeperHub.reconcile(
         execution.providerCorrelationId,
@@ -277,6 +285,69 @@ export class ExecutionProcessor {
         providerStepLogs,
       },
       "execution.confirmed",
+    );
+    await this.store.enqueue("execution.verify", job);
+    return confirmed;
+  }
+
+  private async recoverSubmissionFromRpc(
+    job: DurableJob,
+    execution: ExecutionRecord,
+  ): Promise<ExecutionRecord | undefined> {
+    const observation = await this.chainReader.observeOracle(
+      execution.request.chainId,
+      execution.request.target,
+    );
+    if (
+      observation.oracle.toLowerCase() !==
+      execution.request.desiredOracle.toLowerCase()
+    ) {
+      return undefined;
+    }
+    const logRange = positiveIntegerEnv("AETHER_RPC_LOG_BLOCK_RANGE", 10);
+    const recoveryWindow = positiveIntegerEnv(
+      "AETHER_RPC_RECOVERY_MAX_BLOCKS",
+      500,
+    );
+    const fromBlock = Math.max(
+      execution.observationBlockNumber + 1,
+      observation.blockNumber - recoveryWindow + 1,
+    );
+    const desired = execution.request.desiredOracle.toLowerCase();
+    const expectedExecutor = process.env.AETHER_EXECUTOR_ADDRESS;
+    if (!expectedExecutor) return undefined;
+    let matchingLog:
+      | Awaited<ReturnType<ChainReader["getLogs"]>>[number]
+      | undefined;
+    for (
+      let cursor = fromBlock;
+      cursor <= observation.blockNumber && !matchingLog;
+      cursor += logRange
+    ) {
+      const logs = await this.chainReader.getLogs({
+        chainId: execution.request.chainId,
+        address: execution.request.target,
+        fromBlock: cursor,
+        toBlock: Math.min(observation.blockNumber, cursor + logRange - 1),
+        topics: [arcadiaTopics.oracleConfigured],
+      });
+      matchingLog = logs.find(
+        (log) =>
+          `0x${log.topics[2]?.slice(-40)}`.toLowerCase() === desired &&
+          `0x${log.topics[3]?.slice(-40)}`.toLowerCase() ===
+            expectedExecutor.toLowerCase(),
+      );
+    }
+    if (!matchingLog) return undefined;
+    const confirmed = await this.store.update(
+      job,
+      {
+        status: "confirmed",
+        retryLocked: false,
+        directExecutionId: "Provider ID unavailable · recovered from RPC",
+        transactionHash: matchingLog.transactionHash,
+      },
+      "execution.confirmed_from_rpc",
     );
     await this.store.enqueue("execution.verify", job);
     return confirmed;

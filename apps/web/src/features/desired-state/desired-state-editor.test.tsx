@@ -1,10 +1,22 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import DesiredStateEditor from "./desired-state-editor";
 import { aetherClient } from "@aether/sdk";
 
 describe("desired state editor", () => {
+  function renderEditor() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <DesiredStateEditor />
+      </QueryClientProvider>,
+    );
+  }
+
   async function fillValidDraft(user: ReturnType<typeof userEvent.setup>) {
     const values: Array<[string, string]> = [
       ["Release provenance", "v1.0.0"],
@@ -31,7 +43,7 @@ describe("desired state editor", () => {
       .spyOn(aetherClient, "validateDesiredState")
       .mockImplementation(async (value) => value);
     const user = userEvent.setup();
-    render(<DesiredStateEditor />);
+    renderEditor();
     await fillValidDraft(user);
     await user.click(screen.getByRole("button", { name: "Validate draft" }));
     await waitFor(() => expect(validate).toHaveBeenCalled());
@@ -42,7 +54,7 @@ describe("desired state editor", () => {
 
   it("reports ambiguous invalid units and addresses", async () => {
     const user = userEvent.setup();
-    render(<DesiredStateEditor />);
+    renderEditor();
     await fillValidDraft(user);
     const address = screen.getByLabelText("Approved oracle address");
     await user.clear(address);
@@ -56,7 +68,7 @@ describe("desired state editor", () => {
       async (value) => value,
     );
     const user = userEvent.setup();
-    render(<DesiredStateEditor />);
+    renderEditor();
     await fillValidDraft(user);
     await user.click(screen.getByRole("button", { name: "Validate draft" }));
     const save = await screen.findByRole("button", {
@@ -72,7 +84,7 @@ describe("desired state editor", () => {
       .spyOn(aetherClient, "validateDesiredState")
       .mockImplementation(async (value) => value);
     const user = userEvent.setup();
-    render(<DesiredStateEditor />);
+    renderEditor();
     await fillValidDraft(user);
     await user.click(screen.getByRole("tab", { name: "YAML" }));
     const yaml = screen.getByLabelText("Canonical YAML");

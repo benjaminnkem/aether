@@ -3,11 +3,12 @@
 import { useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { aetherClient, queryKeys } from "@aether/sdk";
-import { useUiStore } from "@/stores/ui";
+import { useSession } from "@/features/auth/use-session";
 
 export function useDashboard() {
-  const organizationId = useUiStore((state) => state.organizationId);
-  const protocolId = useUiStore((state) => state.protocolId);
+  const session = useSession();
+  const organizationId = session.data?.context?.organizationId ?? "";
+  const protocolId = session.data?.context?.protocolId ?? "";
   const queryClient = useQueryClient();
   const key = useMemo(
     () => queryKeys.dashboard(organizationId, protocolId),
@@ -26,6 +27,7 @@ export function useDashboard() {
   const query = useQuery({
     queryKey: key,
     queryFn: () => aetherClient.getDashboard(organizationId, protocolId),
+    enabled: Boolean(organizationId && protocolId),
     retry: false,
   });
   const update = (
@@ -39,7 +41,13 @@ export function useDashboard() {
       operationId: string;
       decision: "approve" | "reject";
     }) => aetherClient.approveOperation(operationId, decision),
-    onSuccess: update,
+    onSuccess: async (data) => {
+      update(data);
+      await queryClient.invalidateQueries({
+        queryKey: key,
+        refetchType: "active",
+      });
+    },
   });
   const scan = useMutation({
     mutationFn: () => aetherClient.runScan(),

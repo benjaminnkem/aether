@@ -41,6 +41,22 @@ export const organizationSchema = z.object({
   role: z.enum(["owner", "operator", "reviewer", "viewer"]),
 });
 
+export const authSessionSchema = z.object({
+  authenticated: z.literal(true),
+  user: z.object({
+    id: z.string().min(1),
+    email: z.string().email(),
+  }),
+  context: z
+    .object({
+      organizationId: z.string().min(1),
+      protocolId: z.string().min(1),
+      role: z.enum(["owner", "operator", "reviewer", "viewer"]),
+    })
+    .optional(),
+  destination: z.enum(["dashboard", "onboarding"]),
+});
+
 export const protocolSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
@@ -119,6 +135,27 @@ export const executionSchema = z.object({
   steps: z.array(operationStepSchema),
 });
 
+export const overviewSummarySchema = z.object({
+  healthScore: z.number().min(0).max(100),
+  alignedResources: z.number().int().nonnegative(),
+  totalResources: z.number().int().nonnegative(),
+  findingsBySeverity: z.object({
+    critical: z.number().int().nonnegative(),
+    high: z.number().int().nonnegative(),
+    medium: z.number().int().nonnegative(),
+    low: z.number().int().nonnegative(),
+  }),
+  connections: z.array(
+    z.object({ id: z.string(), label: z.string(), status: statusSchema }),
+  ),
+  lifecycle: z.object({
+    completed: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    current: z.string(),
+  }),
+  lastObservedAt: z.string(),
+});
+
 export const dashboardSchema = z.object({
   organization: organizationSchema.nullable(),
   protocols: z.array(protocolSchema),
@@ -135,6 +172,15 @@ export const dashboardSchema = z.object({
   execution: executionSchema.optional(),
   notifications: z.array(recordSchema),
   realtime: z.enum(["connected", "reconnecting", "offline"]),
+  overviewSummary: overviewSummarySchema.default({
+    healthScore: 0,
+    alignedResources: 0,
+    totalResources: 0,
+    findingsBySeverity: { critical: 0, high: 0, medium: 0, low: 0 },
+    connections: [],
+    lifecycle: { completed: 0, total: 0, current: "Not started" },
+    lastObservedAt: new Date(0).toISOString(),
+  }),
 });
 
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
@@ -165,14 +211,38 @@ export const desiredStateSchema = z.object({
   source: z.string().min(1),
 });
 
+export const githubDesiredStateSourceSchema = z.object({
+  repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
+  branch: z.string().min(1),
+  path: z.string().min(1),
+  commitSha: z.string().regex(/^[a-f0-9]{40}$/i),
+  commitUrl: z.string().url(),
+  fileUrl: z.string().url(),
+  fetchedAt: z.string().datetime(),
+  content: z.string().min(1).max(262_144),
+  manifest: desiredStateSchema,
+  manifestHash: z.string().regex(/^[a-f0-9]{64}$/i),
+  matchesActiveVersion: z.boolean(),
+  resolution: z.object({
+    repositoryContractId: z.string().min(1),
+    resolvedContractId: z.string().min(1),
+    matchBasis: z.literal("chain-and-implementation"),
+  }),
+});
+
 export type Organization = z.infer<typeof organizationSchema>;
+export type AuthSession = z.infer<typeof authSessionSchema>;
 export type Protocol = z.infer<typeof protocolSchema>;
 export type AetherRecord = z.infer<typeof recordSchema>;
 export type OperationStep = z.infer<typeof operationStepSchema>;
 export type Operation = z.infer<typeof operationSchema>;
 export type Execution = z.infer<typeof executionSchema>;
 export type Dashboard = z.infer<typeof dashboardSchema>;
+export type OverviewSummary = z.infer<typeof overviewSummarySchema>;
 export type DesiredState = z.infer<typeof desiredStateSchema>;
+export type GitHubDesiredStateSource = z.infer<
+  typeof githubDesiredStateSourceSchema
+>;
 
 export const routeTitles: Record<string, string> = {
   overview: "Overview",

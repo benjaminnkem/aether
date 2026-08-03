@@ -64,11 +64,15 @@ if (
   values.set("MONGODB_URI", "mongodb://127.0.0.1:27018/aether?replicaSet=rs0");
   migrated.set("MONGODB_URI", "migrated_local_compose_port");
 }
+if (!values.get("GITHUB_SETUP_URL") && values.get("GITHUB_CALLBACK_URL")) {
+  values.set("GITHUB_SETUP_URL", values.get("GITHUB_CALLBACK_URL"));
+  migrated.set("GITHUB_SETUP_URL", "renamed_from_github_callback_url");
+}
 const localDefaults = {
   NEXT_PUBLIC_AETHER_API_URL: "http://localhost:4000/v1",
   NEXT_PUBLIC_AETHER_APP_URL: "http://localhost:3000",
   NEXT_PUBLIC_AETHER_EXPLORER_URL: "https://sepolia.etherscan.io",
-  GITHUB_CALLBACK_URL: "http://localhost:4000/v1/github/callback",
+  GITHUB_SETUP_URL: "http://localhost:4000/v1/github/callback",
   AETHER_WEB_ORIGINS: "http://localhost:3000",
   MONGODB_URI: "mongodb://127.0.0.1:27018/aether?replicaSet=rs0",
   REDIS_URL: "redis://127.0.0.1:6379",
@@ -138,6 +142,7 @@ const remove = new Set([
   "KEEPERHUB_API_TOKEN",
   "KEEPERHUB_WORKFLOW_ID",
   "GITHUB_READ_TOKEN",
+  "GITHUB_CALLBACK_URL",
   "NEXT_PUBLIC_BASE_SEPOLIA_EXPLORER_URL",
   "NEXT_PUBLIC_AETHER_GITHUB_URL",
 ]);
@@ -171,8 +176,6 @@ const external = [
   "KEEPERHUB_API_KEY",
   "GITHUB_APP_ID",
   "GITHUB_APP_SLUG",
-  "GITHUB_CLIENT_ID",
-  "GITHUB_CLIENT_SECRET",
   "GITHUB_PRIVATE_KEY_BASE64",
   "OPENAI_API_KEY",
   "AETHER_CONTRACT_ADMIN_ADDRESS",

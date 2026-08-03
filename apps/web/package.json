@@ -10,7 +10,10 @@
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --grep-invert @visual",
+    "test:accessibility": "playwright test e2e/accessibility.spec.ts",
+    "test:visual": "playwright test e2e/visual.spec.ts",
+    "test:visual:update": "playwright test e2e/visual.spec.ts --update-snapshots"
   },
   "dependencies": {
     "@aether/sdk": "workspace:*",
@@ -43,6 +46,7 @@
     "zustand": "5.0.14"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "1.62.1",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",

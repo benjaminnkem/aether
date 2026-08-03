@@ -11,6 +11,8 @@ import {
   HierarchySquare2,
 } from "iconsax-react";
 import { useUiStore } from "@/stores/ui";
+import { aetherClient } from "@aether/sdk";
+import { useClearSession, useSession } from "@/features/auth/use-session";
 
 const items = [
   ["Overview", "/app/overview", Activity],
@@ -30,6 +32,8 @@ export function Sidebar({
   const pathname = usePathname();
   const open = useUiStore((state) => state.sidebarOpen);
   const setOpen = useUiStore((state) => state.setSidebarOpen);
+  const session = useSession();
+  const clearSession = useClearSession();
   return (
     <aside
       className={`sidebar ${open ? "is-open" : ""}`}
@@ -70,7 +74,7 @@ export function Sidebar({
       </nav>
       <div className="sidebar__footer">
         <div className="connection">
-          <i /> Live API required
+          <i /> {organization ? "Live API connected" : "Live API required"}
         </div>
         <div
           style={{
@@ -99,13 +103,26 @@ export function Sidebar({
                 fontWeight: 500,
               }}
             >
-              {organization ? "Tenant session" : "Sign in required"}
+              {session.data?.user.email ??
+                (organization ? "Tenant session" : "Sign in required")}
             </strong>
             <span style={{ color: "var(--ash)", fontSize: 9 }}>
               {organization?.role ?? "No membership loaded"}
             </span>
           </span>
         </div>
+        {session.data ? (
+          <button
+            className="sidebar__logout"
+            onClick={async () => {
+              await aetherClient.logout();
+              clearSession();
+              window.location.assign("/");
+            }}
+          >
+            Sign out
+          </button>
+        ) : null}
       </div>
     </aside>
   );

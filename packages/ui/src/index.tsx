@@ -167,10 +167,14 @@ export function Status({ status, label }: { status: string; label?: string }) {
         : tone === "warning"
           ? Warning2
           : InfoCircle;
+  const accessibleLabel = label ?? status.replaceAll("_", " ");
   return (
-    <span className={cn("a-status", `a-status--${tone}`)}>
+    <span
+      className={cn("a-status", `a-status--${tone}`)}
+      aria-label={accessibleLabel}
+    >
       <Icon size={13} aria-hidden="true" />
-      {label ?? status.replaceAll("_", " ")}
+      <span className="a-status__label">{accessibleLabel}</span>
     </span>
   );
 }
@@ -296,15 +300,31 @@ export function Tabs({
 }: {
   value: string;
   onValueChange: (value: string) => void;
-  tabs: Array<{ value: string; label: string }>;
+  tabs: Array<{
+    value: string;
+    label: string;
+    detail?: string;
+    status?: string;
+  }>;
   children: ReactNode;
 }) {
   return (
     <TabsPrimitive.Root value={value} onValueChange={onValueChange}>
       <TabsPrimitive.List className="a-tabs" aria-label="View options">
-        {tabs.map((tab) => (
-          <TabsPrimitive.Trigger key={tab.value} value={tab.value}>
-            {tab.label}
+        {tabs.map((tab, index) => (
+          <TabsPrimitive.Trigger
+            key={tab.value}
+            value={tab.value}
+            aria-label={tab.label}
+          >
+            <span className="a-tabs__index">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <span className="a-tabs__copy">
+              <strong>{tab.label}</strong>
+              {tab.detail ? <small>{tab.detail}</small> : null}
+            </span>
+            {tab.status ? <Status status={tab.status} label="" /> : null}
           </TabsPrimitive.Trigger>
         ))}
       </TabsPrimitive.List>

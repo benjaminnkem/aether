@@ -1,5 +1,6 @@
 import {
   ExecutionSafety,
+  arcadiaTopics,
   encodeSetOracleCalldata,
   type ChainReader,
   type DurableJob,
@@ -223,6 +224,61 @@ describe("ExecutionProcessor idempotency and retry safety", () => {
     });
     expect(store.execution.status).toBe("reconciling");
     expect(store.execution.retryLocked).toBe(true);
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("recovers an uncertain submission from executor-bound RPC evidence", async () => {
+    const transactionHash = `0x${"9".repeat(64)}`;
+    const executorAddress = "0x7055a7dc92b98d9fc7ccf9f9590fa1790e3a0570";
+    store.execution = {
+      ...store.execution,
+      status: "unknown",
+      retryLocked: true,
+      providerCorrelationId: "provider-correlation",
+    };
+    process.env.AETHER_EXECUTOR_ADDRESS = executorAddress;
+    chainReader.observeOracle = vi.fn(async () => ({
+      chainId: request.chainId,
+      blockNumber: baseExecution.observationBlockNumber + 5,
+      blockHash: `0x${"8".repeat(64)}`,
+      contract: request.target,
+      oracle: request.desiredOracle,
+      oracleUpdatedAt: 1_800_000_000,
+      fresh: true,
+      canonical: true,
+      observedAt: "2026-08-03T00:00:00.000Z",
+    }));
+    chainReader.getLogs = vi.fn(async () => [
+      {
+        address: request.target,
+        blockNumber: baseExecution.observationBlockNumber + 3,
+        blockHash: `0x${"8".repeat(64)}`,
+        transactionHash,
+        logIndex: 0,
+        topics: [
+          arcadiaTopics.oracleConfigured,
+          `0x${"0".repeat(24)}${"1".repeat(40)}`,
+          `0x${"0".repeat(24)}${request.desiredOracle.slice(2)}`,
+          `0x${"0".repeat(24)}${executorAddress.slice(2)}`,
+        ],
+        data: "0x",
+        removed: false,
+      },
+    ]);
+    const processor = new ExecutionProcessor(
+      store,
+      keeperHub,
+      chainReader,
+      simulator,
+    );
+
+    const result = await processor.reconcile(job);
+
+    expect(result.status).toBe("confirmed");
+    expect(result.transactionHash).toBe(transactionHash);
+    expect(store.enqueued).toContain("execution.verify");
+    expect(keeperHub.reconcile).not.toHaveBeenCalled();
+    expect(chainReader.getTransactionActor).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
   });
 

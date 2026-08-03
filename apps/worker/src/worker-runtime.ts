@@ -1,6 +1,7 @@
 import {
   durableJobSchema,
   queueNames,
+  redact,
   stableIdempotencyKey,
   arcadiaTopics,
   type DurableJob,
@@ -44,6 +45,7 @@ export class WorkerRuntime
   private readonly processor: ExecutionProcessor;
   private readonly chainReader: ChainReader;
   private readonly investigationAssistant: InvestigationAssistant;
+  private readonly rpcLogBlockRange: number;
 
   constructor(
     @InjectConnection() private readonly connection: Connection,
@@ -56,6 +58,12 @@ export class WorkerRuntime
   ) {
     this.chainReader = chainReader;
     this.investigationAssistant = investigationAssistant;
+    this.rpcLogBlockRange = boundedInteger(
+      process.env.AETHER_RPC_LOG_BLOCK_RANGE,
+      10,
+      1,
+      10_000,
+    );
     this.redis = new IORedis(
       process.env.REDIS_URL ?? "redis://127.0.0.1:6379",
       {
@@ -95,33 +103,132 @@ export class WorkerRuntime
         }),
       );
     }
+    await this.recoverLockedExecutions();
     await this.publishOutbox();
     this.outboxTimer = setInterval(() => void this.publishOutbox(), 1_000);
   }
 
+  private async recoverLockedExecutions() {
+    const queue = this.queues.get("execution.reconcile");
+    if (!queue) return;
+    const executions = await this.connection
+      .collection("executions")
+      .find({
+        status: { $in: ["unknown", "reconciling"] },
+        retryLocked: true,
+      })
+      .project({
+        organizationId: 1,
+        protocolId: 1,
+        executionId: 1,
+        idempotencyKey: 1,
+        providerCorrelationId: 1,
+      })
+      .toArray();
+    for (const execution of executions) {
+      const data = durableJobSchema.parse({
+        organizationId: execution.organizationId,
+        protocolId: execution.protocolId,
+        resourceId: execution.executionId,
+        idempotencyKey: stableIdempotencyKey(
+          String(execution.idempotencyKey),
+          "execution.reconcile",
+        ),
+        correlationId:
+          execution.providerCorrelationId ?? String(execution.executionId),
+      });
+      const existing = await queue.getJob(data.idempotencyKey);
+      const existingState = existing ? await existing.getState() : undefined;
+      if (existing && existingState === "failed") {
+        await existing.retry("failed");
+      } else if (existing && existingState === "delayed") {
+        await existing.promote();
+      } else if (!existing) {
+        await queue.add("execution.reconcile", data, {
+          jobId: data.idempotencyKey,
+        });
+      }
+    }
+  }
+
   private async process(name: QueueName, job: Job) {
     const data = durableJobSchema.parse(job.data);
-    switch (name) {
-      case "operation.simulate":
-        return this.processor.simulate(data);
-      case "execution.submit":
-        return this.processor.submit(data);
-      case "execution.reconcile":
-        return this.processor.reconcile(data);
-      case "execution.verify":
-        return this.processor.verify(data);
-      case "observation.scan":
-        return this.scan(data);
-      case "drift.evaluate":
-        return this.evaluateDrift(data);
-      case "investigation.run":
-        return this.investigate(data);
-      case "audit.dispatch":
-        return {
-          status: "completed",
-          queue: name,
+    const filter = {
+      organizationId: data.organizationId,
+      protocolId: data.protocolId,
+      queueName: name,
+      idempotencyKey: data.idempotencyKey,
+    };
+    const jobs = this.connection.collection("job_runs");
+    await jobs.updateOne(
+      filter,
+      {
+        $set: {
+          status: "running",
           resourceId: data.resourceId,
-        };
+          correlationId: data.correlationId,
+          attemptsMade: job.attemptsMade + 1,
+          updatedAt: new Date(),
+        },
+        $setOnInsert: { ...filter, createdAt: new Date() },
+      },
+      { upsert: true },
+    );
+    try {
+      let result: unknown;
+      switch (name) {
+        case "operation.simulate":
+          result = await this.processor.simulate(data);
+          break;
+        case "execution.submit":
+          result = await this.processor.submit(data);
+          break;
+        case "execution.reconcile":
+          result = await this.processor.reconcile(data);
+          break;
+        case "execution.verify":
+          result = await this.processor.verify(data);
+          break;
+        case "observation.scan":
+          result = await this.scan(data);
+          break;
+        case "drift.evaluate":
+          result = await this.evaluateDrift(data);
+          break;
+        case "investigation.run":
+          result = await this.investigate(data);
+          break;
+        case "audit.dispatch":
+          result = {
+            status: "completed",
+            queue: name,
+            resourceId: data.resourceId,
+          };
+          break;
+      }
+      await jobs.updateOne(filter, {
+        $set: {
+          status: "completed",
+          result: redact(result),
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        },
+        $unset: { error: "" },
+      });
+      return result;
+    } catch (error) {
+      const finalAttempt =
+        job.attemptsMade + 1 >= Number(job.opts.attempts ?? 1);
+      await jobs.updateOne(filter, {
+        $set: {
+          status: finalAttempt ? "failed" : "queued",
+          error:
+            error instanceof Error ? error.message : "Provider job failed.",
+          attemptsMade: job.attemptsMade + 1,
+          updatedAt: new Date(),
+        },
+      });
+      throw error;
     }
   }
 
@@ -162,12 +269,16 @@ export class WorkerRuntime
     const previousObservation = await this.connection
       .collection("observations")
       .findOne(tenant, { sort: { blockNumber: -1 } });
-    const fromBlock = Math.max(
+    const earliestSupportedBlock = Math.max(
       0,
-      previousObservation
-        ? Number(previousObservation.blockNumber) + 1
-        : observation.blockNumber - 5_000,
+      observation.blockNumber - this.rpcLogBlockRange + 1,
     );
+    const fromBlock = previousObservation
+      ? Math.max(
+          earliestSupportedBlock,
+          Number(previousObservation.blockNumber) + 1,
+        )
+      : earliestSupportedBlock;
     const logs = await this.chainReader.getLogs({
       chainId: activeLiveChain.chainId,
       address: String(contract.address),
@@ -263,8 +374,9 @@ export class WorkerRuntime
       desiredOracle.toLowerCase(),
     );
     const findingId = `drift_${findingKey.slice(0, 20)}`;
-    const matches =
+    const addressMatches =
       observedOracle.toLowerCase() === desiredOracle.toLowerCase();
+    const matches = addressMatches && observationValues.fresh === true;
     await this.connection.collection("drift_findings").updateOne(
       { ...tenant, findingId },
       {
@@ -280,6 +392,8 @@ export class WorkerRuntime
             blockNumber: observation.blockNumber,
             blockHash: observation.blockHash,
             origin: observationValues.origin,
+            addressMatches,
+            fresh: observationValues.fresh === true,
           },
           updatedAt: new Date(),
         },
@@ -375,9 +489,14 @@ export class WorkerRuntime
           stableIdempotencyKey(String(event.eventId), queueName),
         correlationId: payload.correlationId ?? String(event.eventId),
       });
-      await queue.add(queueName, data, {
-        jobId: data.idempotencyKey,
-      });
+      const existingJob = await queue.getJob(data.idempotencyKey);
+      if (existingJob && (await existingJob.getState()) === "failed") {
+        await existingJob.retry("failed");
+      } else if (!existingJob) {
+        await queue.add(queueName, data, {
+          jobId: data.idempotencyKey,
+        });
+      }
       await collection.updateOne(
         { _id: event._id, publishedAt: { $exists: false } },
         {
@@ -394,4 +513,19 @@ export class WorkerRuntime
     await Promise.all([...this.queues.values()].map((queue) => queue.close()));
     await this.redis.quit();
   }
+}
+
+function boundedInteger(
+  value: string | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+) {
+  const parsed = value === undefined ? fallback : Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(
+      `AETHER_RPC_LOG_BLOCK_RANGE must be an integer from ${minimum} to ${maximum}.`,
+    );
+  }
+  return parsed;
 }

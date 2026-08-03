@@ -11,3 +11,12 @@
 9. A second RPC is optional but, when set, is an independent observation source.
 10. External credentials and funds are manual authority boundaries and are listed only
     in `MANUAL_EXTERNAL_ACTIONS.md`.
+11. RPC event-log history reads use `AETHER_RPC_LOG_BLOCK_RANGE` (10 blocks by
+    default) so free-tier Sepolia providers can run scans. The pinned current state
+    remains authoritative; origin attribution is included only when its log is inside
+    the provider-supported window.
+12. Unknown KeeperHub outcomes may recover transaction evidence from at most
+    `AETHER_RPC_RECOVERY_MAX_BLOCKS` (500 by default), queried in provider-safe
+    chunks. Recovery requires the desired onchain postcondition, the exact emitted
+    event, and the configured KeeperHub executor as transaction actor before
+    verification continues.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { parse, stringify } from "yaml";
@@ -8,6 +8,7 @@ import {
   activeLiveChain,
   desiredStateSchema,
   type DesiredState,
+  type GitHubDesiredStateSource,
 } from "@aether/shared";
 import {
   Button,
@@ -21,6 +22,7 @@ import {
   ValidationSummary,
 } from "@aether/ui";
 import { aetherClient } from "@aether/sdk";
+import { useRefreshDashboard } from "@/features/dashboard/use-refresh-dashboard";
 
 const defaults: DesiredState = {
   version: "v1.0.0",
@@ -33,25 +35,32 @@ const defaults: DesiredState = {
   administrators: [""],
   guardians: [""],
   paused: false,
-  fee: { value: "50", unit: "bps" },
-  minimumExecutorGas: { value: "0.1", unit: "ether" },
+  fee: { value: "0", unit: "bps" },
+  minimumExecutorGas: { value: "0", unit: "ether" },
   maximumAutomaticTransaction: { value: "0", unit: "ether" },
   release: "",
   source: "",
 };
 
-export default function DesiredStateEditor() {
+export default function DesiredStateEditor({
+  githubSource,
+}: {
+  githubSource?: GitHubDesiredStateSource;
+}) {
+  const refreshDashboard = useRefreshDashboard();
   const [mode, setMode] = useState("form");
   const [issues, setIssues] = useState<string[]>([]);
   const [validatedFingerprint, setValidatedFingerprint] = useState("");
   const [yamlDraft, setYamlDraft] = useState(() => stringify(defaults));
+  const [baseline, setBaseline] = useState(defaults);
+  const loadedActiveCommit = useRef("");
   const { register, handleSubmit, watch, reset } = useForm<DesiredState>({
     defaultValues: defaults,
   });
   const values = watch();
   const dirty = useMemo(
-    () => JSON.stringify(values) !== JSON.stringify(defaults),
-    [values],
+    () => JSON.stringify(values) !== JSON.stringify(baseline),
+    [baseline, values],
   );
   const formFingerprint = useMemo(() => JSON.stringify(values), [values]);
   const yamlFingerprint = useMemo(() => {
@@ -65,7 +74,21 @@ export default function DesiredStateEditor() {
   const validated =
     activeFingerprint.length > 0 && validatedFingerprint === activeFingerprint;
   const hasUnsavedChanges =
-    mode === "code" ? yamlFingerprint !== JSON.stringify(defaults) : dirty;
+    mode === "code" ? yamlFingerprint !== JSON.stringify(baseline) : dirty;
+
+  useEffect(() => {
+    if (
+      !githubSource?.matchesActiveVersion ||
+      loadedActiveCommit.current === githubSource.commitSha
+    )
+      return;
+    loadedActiveCommit.current = githubSource.commitSha;
+    reset(githubSource.manifest);
+    setBaseline(githubSource.manifest);
+    setYamlDraft(stringify(githubSource.manifest));
+    setValidatedFingerprint(JSON.stringify(githubSource.manifest));
+    setIssues([]);
+  }, [githubSource, reset]);
 
   const validate = async (input: unknown) => {
     const result = desiredStateSchema.safeParse(input);
@@ -101,6 +124,51 @@ export default function DesiredStateEditor() {
 
   return (
     <div>
+      {githubSource ? (
+        <div className="github-source-banner a-card">
+          <div>
+            <span className="eyebrow">Pinned GitHub source</span>
+            <strong>{githubSource.repository}</strong>
+            <span>
+              {githubSource.branch}/{githubSource.path} · commit{" "}
+              <code>{githubSource.commitSha.slice(0, 12)}</code>
+            </span>
+            <span>
+              Resource {githubSource.resolution.repositoryContractId} →{" "}
+              <code>{githubSource.resolution.resolvedContractId}</code>
+            </span>
+          </div>
+          <div className="page-actions">
+            <a
+              className="a-button a-button--ghost"
+              href={githubSource.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View source
+            </a>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={githubSource.matchesActiveVersion}
+              onClick={() => {
+                reset(githubSource.manifest);
+                setYamlDraft(stringify(githubSource.manifest));
+                setMode("code");
+                setIssues([]);
+                setValidatedFingerprint("");
+                toast.success(
+                  "Repository version loaded. Validate it before activation.",
+                );
+              }}
+            >
+              {githubSource.matchesActiveVersion
+                ? "Repo version active"
+                : "Load repo version"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <div className="panel__head" style={{ marginBottom: 16 }}>
         <Tabs
           value={mode}
@@ -117,10 +185,10 @@ export default function DesiredStateEditor() {
         </Tabs>
         <span className="a-badge">
           {hasUnsavedChanges
-            ? "Unsaved changes"
-            : validated
-              ? "Schema valid"
-              : "Active values"}
+            ? validated
+              ? "Validated · unsaved"
+              : "Unsaved changes"
+            : "Active values"}
         </span>
       </div>
       <ValidationSummary errors={issues} />
@@ -243,7 +311,7 @@ export default function DesiredStateEditor() {
               <Button
                 type="button"
                 variant="primary"
-                disabled={!validated}
+                disabled={!validated || !hasUnsavedChanges}
                 onClick={() => {
                   const parsed = desiredStateSchema.safeParse(values);
                   if (!parsed.success || !validated) {
@@ -254,7 +322,10 @@ export default function DesiredStateEditor() {
                   }
                   void aetherClient
                     .saveDesiredState(parsed.data)
-                    .then(() => toast.success("Desired state version saved."))
+                    .then(async () => {
+                      await refreshDashboard();
+                      toast.success("Desired state version saved.");
+                    })
                     .catch(() =>
                       toast.error("The API could not save this desired state."),
                     );
@@ -290,7 +361,11 @@ export default function DesiredStateEditor() {
       </Tabs>
       <div style={{ marginTop: 16 }}>
         <DiffBlock
-          before={"No previous desired-state version loaded."}
+          before={
+            githubSource?.matchesActiveVersion
+              ? `version: ${baseline.version}\noracleAddress: ${baseline.oracleAddress.slice(0, 12)}…\nminimumExecutorGas: ${baseline.minimumExecutorGas.value} ETH`
+              : "No previous desired-state version loaded."
+          }
           after={`version: ${values.version}\noracleAddress: ${values.oracleAddress.slice(0, 12)}…\nminimumExecutorGas: ${values.minimumExecutorGas.value} ETH`}
         />
       </div>

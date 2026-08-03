@@ -8,6 +8,7 @@ import {
   getArcadiaDeployment,
 } from "../src/contract-artifacts";
 import { CredentialCipher } from "../src/security";
+import { simulationResultSchema } from "../src/contracts";
 import { activeLiveChain } from "@aether/shared";
 
 const request = buildSetOracleTransactionRequest({
@@ -38,6 +39,12 @@ const policy = {
 };
 
 describe("ExecutionSafety", () => {
+  it("normalizes a provider null error code on successful simulations", () => {
+    expect(
+      simulationResultSchema.parse({ ...simulation, errorCode: null }),
+    ).toEqual(simulation);
+  });
+
   it("uses generated selectors and exposes the deterministic Anvil deployment", () => {
     expect(arcadiaSelectors.setOracle).toBe("0x7adbf973");
     expect(arcadiaSelectors.oracleStatus).toBe("0x994c821d");

@@ -42,7 +42,7 @@ export function StickySequence({ children }: { children: ReactNode }) {
         const context = gsap.context(() => {
           gsap.fromTo(
             root.current,
-            { opacity: 0.7, y: 24 },
+            { opacity: 1, y: 24 },
             {
               opacity: 1,
               y: 0,

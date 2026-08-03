@@ -53,3 +53,10 @@ mainnet or production protocol use. Deployment scripts contain no signing materi
 ABIs and public addresses are server-side artifacts; credentials and signing material
 must remain in an operator keystore, hardware wallet, or secret manager and never
 appear in browser variables, fixtures, screenshots, or logs.
+
+Runtime configuration fails closed. Missing providers produce typed unavailable states
+and never substitute deterministic success data. GitHub installation state is signed,
+tenant-bound, expiring, and single-use. The durable connection stores installation
+identity and metadata; short-lived installation tokens are minted on demand and are
+not treated as persistent credentials. GitHub metadata, contents, and pull requests
+must be read-only, and the doctor rejects any write or admin permission.

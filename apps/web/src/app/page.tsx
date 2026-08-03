@@ -1,12 +1,5 @@
-import Link from "next/link";
-import {
-  ArrowRight2,
-  DocumentCode2,
-  Eye,
-  ShieldSecurity,
-  TickCircle,
-} from "iconsax-react";
-import { Button, Card, CodeBlock, Status } from "@aether/ui";
+import { DocumentCode2, Eye, ShieldSecurity, TickCircle } from "iconsax-react";
+import { Card, CodeBlock, Status } from "@aether/ui";
 import { activeLiveChain } from "@aether/shared";
 import {
   HeroBackground,
@@ -14,6 +7,10 @@ import {
 } from "@/components/marketing/marketing-shell";
 import { ProductComposition } from "@/components/marketing/product-composition";
 import { MotionReveal, StickySequence } from "@/components/marketing/motion";
+import {
+  SessionActions,
+  SessionProductCta,
+} from "@/components/auth/session-actions";
 
 const desiredYaml = `version: v2.4.1
 chainId: ${activeLiveChain.chainId}
@@ -41,14 +38,7 @@ export default function HomePage() {
               independently verifies the result.
             </p>
             <div className="hero-actions">
-              <Link href="/app/overview">
-                <Button variant="primary">
-                  Open the live testnet app <ArrowRight2 size={15} />
-                </Button>
-              </Link>
-              <Link href="#how-it-works">
-                <Button variant="secondary">See how it works</Button>
-              </Link>
+              <SessionActions hero />
             </div>
             <div className="trust-line">
               Execution reliability powered by KeeperHub integration. Aether
@@ -157,11 +147,7 @@ export default function HomePage() {
               <div className="eyebrow">{eyebrow}</div>
               <h3>{title}</h3>
               <p>{copy}</p>
-              <Link href="/app/overview">
-                <Button variant="ghost">
-                  Explore the product <ArrowRight2 size={14} />
-                </Button>
-              </Link>
+              <SessionProductCta />
             </div>
             <Card
               className="product-visual"
@@ -274,11 +260,7 @@ export default function HomePage() {
         <div className="marketing-container">
           <ProductComposition />
           <div className="hero-actions" style={{ justifyContent: "center" }}>
-            <Link href="/app/overview">
-              <Button variant="primary">
-                Open the control plane <ArrowRight2 size={14} />
-              </Button>
-            </Link>
+            <SessionActions hero />
           </div>
         </div>
       </section>

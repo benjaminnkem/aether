@@ -7,9 +7,11 @@ import { useUiStore } from "@/stores/ui";
 export function Topbar({
   title,
   protocolName,
+  realtime = "reconnecting",
 }: {
   title: string;
   protocolName?: string;
+  realtime?: "connected" | "reconnecting" | "offline";
 }) {
   const setSidebar = useUiStore((state) => state.setSidebarOpen);
   return (
@@ -23,12 +25,29 @@ export function Topbar({
           <HambergerMenu size={18} />
         </IconButton>
         <div className="breadcrumbs">
-          {protocolName ?? "No protocol loaded"}&nbsp; / &nbsp;
+          <span className="breadcrumbs__protocol">
+            {protocolName ?? "No protocol loaded"}&nbsp; / &nbsp;
+          </span>
           <strong>{title}</strong>
         </div>
       </div>
       <div className="topbar__actions">
-        <Status status="warning" label="Live API session" />
+        <Status
+          status={
+            realtime === "connected"
+              ? "healthy"
+              : realtime === "offline"
+                ? "critical"
+                : "warning"
+          }
+          label={
+            realtime === "connected"
+              ? "Realtime connected"
+              : realtime === "offline"
+                ? "Realtime offline"
+                : "Realtime reconnecting"
+          }
+        />
       </div>
     </header>
   );

@@ -70,3 +70,20 @@ GitHub is read-only and validates repository, release, commit, and pull-request
 provenance. The OpenAI boundary accepts only evidence and allowlists and returns a
 strict schema-validated advisory summary/typed suggestion; deterministic code still
 builds calldata, authorizes, approves, executes, and verifies.
+
+## Frontend runtime and routes
+
+The browser has one transport: credentialed Axios through `@aether/sdk` to `/v1`.
+TanStack Query owns session and server state; Zustand owns only ephemeral navigation,
+selection, and onboarding progress. Access and refresh tokens remain HttpOnly cookies.
+The SDK performs one CSRF-protected, single-flight refresh for concurrent expired
+requests and retries each request at most once.
+
+The retained routes are `/`, the signup/login/recovery surfaces, `/onboarding`, and
+the authenticated Overview, Protocol Setup, Desired State, Drift, Operation,
+KeeperHub Execution, and Audit Log routes under `/app`. Detail URLs use persisted IDs;
+unknown IDs never redirect to fabricated records.
+
+Production bundles contain no mock transport, provider mode, seeded identity, scenario
+selector, in-memory product state, or fake evidence. Test doubles, Anvil, Mailpit,
+recorded redacted provider envelopes, and Playwright route fixtures remain test-only.

@@ -1,9 +1,17 @@
-import axios, { type AxiosInstance } from "axios";
+import axios, {
+  type AxiosError,
+  type AxiosInstance,
+  type InternalAxiosRequestConfig,
+} from "axios";
 import {
+  authSessionSchema,
   dashboardSchema,
   desiredStateSchema,
+  githubDesiredStateSourceSchema,
   type Dashboard,
   type DesiredState,
+  type AuthSession,
+  type GitHubDesiredStateSource,
 } from "@aether/shared";
 
 declare const process: {
@@ -30,6 +38,7 @@ export function getAetherErrorMessage(
 export class AetherClient {
   private readonly http: AxiosInstance;
   private readonly baseURL: string;
+  private refreshPromise: Promise<void> | null = null;
 
   constructor(baseURL = "/v1") {
     this.baseURL = baseURL.replace(/\/$/, "");
@@ -39,6 +48,51 @@ export class AetherClient {
       headers: { "X-Aether-Client": "web" },
       timeout: 10_000,
     });
+    this.http.interceptors.response.use(
+      (response) => response,
+      async (error: AxiosError) => this.retryAfterRefresh(error),
+    );
+  }
+
+  private async retryAfterRefresh(error: AxiosError) {
+    const request = error.config as RetryableRequest | undefined;
+    const path = request?.url ?? "";
+    const excluded = [
+      "/auth/login",
+      "/auth/signup",
+      "/auth/refresh",
+      "/auth/logout",
+      "/auth/forgot-password",
+      "/auth/reset-password",
+    ].some((item) => path.includes(item));
+    if (
+      error.response?.status !== 401 ||
+      !request ||
+      request.aetherRetried ||
+      excluded
+    ) {
+      return Promise.reject(error);
+    }
+    request.aetherRetried = true;
+    this.refreshPromise ??= this.http
+      .post("/auth/refresh", {}, { headers: csrfHeaders() })
+      .then(() => undefined)
+      .finally(() => {
+        this.refreshPromise = null;
+      });
+    await this.refreshPromise;
+    return this.http.request(request);
+  }
+
+  async getSession(): Promise<AuthSession | null> {
+    try {
+      const response = await this.http.get("/auth/session");
+      return authSessionSchema.parse(response.data);
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401)
+        return null;
+      throw error;
+    }
   }
 
   async signup(email: string, password: string) {
@@ -162,7 +216,7 @@ export class AetherClient {
     };
   }
 
-  async runScan(): Promise<{
+  async runScan(idempotencyKey = crypto.randomUUID()): Promise<{
     id: string;
     status: string;
     idempotencyKey: string;
@@ -170,7 +224,12 @@ export class AetherClient {
     const response = await this.http.post(
       "/observations/scans",
       {},
-      { headers: csrfHeaders() },
+      {
+        headers: {
+          ...csrfHeaders(),
+          "Idempotency-Key": idempotencyKey,
+        },
+      },
     );
     return response.data as {
       id: string;
@@ -179,11 +238,19 @@ export class AetherClient {
     };
   }
 
-  async investigateFinding(findingId: string) {
+  async investigateFinding(
+    findingId: string,
+    idempotencyKey = crypto.randomUUID(),
+  ) {
     const response = await this.http.post(
       `/drift/${encodeURIComponent(findingId)}/investigate`,
       {},
-      { headers: csrfHeaders() },
+      {
+        headers: {
+          ...csrfHeaders(),
+          "Idempotency-Key": idempotencyKey,
+        },
+      },
     );
     return response.data as {
       findingId: string;
@@ -253,6 +320,32 @@ export class AetherClient {
     return response.data as { url: string };
   }
 
+  async getGitHubRepositories() {
+    const response = await this.http.get("/github/repositories");
+    return response.data as Array<{
+      full_name: string;
+      default_branch: string;
+      private: boolean;
+      html_url: string;
+    }>;
+  }
+
+  async getGitHubDesiredState(): Promise<GitHubDesiredStateSource> {
+    const response = await this.http.get("/github/desired-state-source");
+    return githubDesiredStateSourceSchema.parse(response.data);
+  }
+
+  async selectGitHubRepository(input: {
+    repository: string;
+    defaultBranch: string;
+    desiredStatePath: string;
+  }) {
+    const response = await this.http.put("/github/repository", input, {
+      headers: csrfHeaders(),
+    });
+    return response.data as typeof input & { connected: true };
+  }
+
   async validateProvider(provider: "keeperhub" | "openai" | "evm-rpc") {
     const response = await this.http.post(
       `/protocol-setup/providers/${provider}/validate`,
@@ -281,9 +374,18 @@ export const aetherClient = new AetherClient(
   process.env.NEXT_PUBLIC_AETHER_API_URL ?? "/v1",
 );
 export const queryKeys = {
+  session: ["session"] as const,
   dashboard: (organizationId: string, protocolId: string) =>
     ["dashboard", organizationId, protocolId] as const,
 };
+
+export function isAuthenticationError(error: unknown) {
+  return axios.isAxiosError(error) && error.response?.status === 401;
+}
+
+interface RetryableRequest extends InternalAxiosRequestConfig {
+  aetherRetried?: boolean;
+}
 export interface RealtimeEvent {
   id: string;
   type: string;

@@ -46,6 +46,12 @@ export class AuthController {
   }
 
   @Public()
+  @Get("session")
+  session(@Req() request: Request) {
+    return this.auth.session(request);
+  }
+
+  @Public()
   @Post("logout")
   logout(
     @Req() request: Request,

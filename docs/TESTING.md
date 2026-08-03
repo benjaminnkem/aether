@@ -6,6 +6,21 @@ No runtime mocks are allowed. Test doubles remain valid inside isolated tests.
 
 ## Required gates
 
+Start Docker Desktop, then use the consolidated no-broadcast command:
+
+```bash
+pnpm --filter @aether/web exec playwright install chromium
+docker compose up -d
+pnpm test:all
+```
+
+`test:all` runs provider doctors first, followed by formatting, lint, types, unit,
+isolated Mongo replica-set integration, security, accessibility, visual, browser,
+build, and production dependency audit gates. It deliberately stops on the first
+failure and never enables `LIVE_TESTNET_ACCEPTANCE`.
+
+The individual commands are:
+
 ```bash
 pnpm format:check
 pnpm lint
@@ -14,6 +29,8 @@ pnpm test
 pnpm test:integration
 pnpm test:security
 pnpm test:e2e
+pnpm test:accessibility
+pnpm test:visual
 pnpm build
 pnpm audit --prod
 ```
@@ -126,6 +143,19 @@ Install the browser and pass the full matrix:
 - keyboard operation;
 - provider-down states;
 - unauthorized role.
+
+Visual baselines cover the landing, authentication, Overview, every retained product
+route, desktop Chrome, Pixel 7, reduced motion, and stable test-only provider data.
+Accessibility coverage combines axe checks with keyboard navigation, focus return,
+live-region, status text/icon, touch-target, responsive-table/card, graph fallback,
+and 320px viewport assertions. Update approved baselines with
+`pnpm test:visual:update`; normal verification uses `pnpm test:visual`.
+
+Production-mock verification searches for runtime mode switches, scenario controls,
+fake hashes, seeded tenants, and direct fixtures; builds the production frontend; and
+confirms an empty database remains empty and unavailable providers fail explicitly.
+MSW or HTTP interception is permitted only from test files and must not enter the
+production dependency graph.
 
 ### Live-provider acceptance
 

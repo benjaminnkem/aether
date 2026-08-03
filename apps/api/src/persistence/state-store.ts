@@ -113,6 +113,7 @@ export class MongoStateStore implements StateStore, OnModuleInit {
       executions,
       audit,
       latestObservation,
+      jobRuns,
     ] = await Promise.all([
       this.models
         .Organization!.findOne({
@@ -151,6 +152,12 @@ export class MongoStateStore implements StateStore, OnModuleInit {
         .sort({ blockNumber: -1 })
         .lean()
         .exec(),
+      this.connection
+        .collection("job_runs")
+        .find(filter)
+        .sort({ updatedAt: -1 })
+        .limit(25)
+        .toArray(),
     ]);
     if (!organization || !protocol) {
       return dashboardSchema.parse({
@@ -218,6 +225,38 @@ export class MongoStateStore implements StateStore, OnModuleInit {
     const executionSimulation = latestExecution?.simulation as
       | Record<string, unknown>
       | undefined;
+    const lifecycleSteps = Array.isArray(latestExecution?.steps)
+      ? (latestExecution.steps as Array<Record<string, unknown>>)
+      : Array.isArray(plan?.steps)
+        ? (plan.steps as Array<Record<string, unknown>>)
+        : [];
+    const completedLifecycleSteps = lifecycleSteps.filter((step) =>
+      ["completed", "resolved"].includes(String(step.status)),
+    ).length;
+    const lifecycleTotal = latestExecution ? 3 : lifecycleSteps.length;
+    const lifecycleCompleted = latestExecution
+      ? ["verified", "partial"].includes(String(latestExecution.status))
+        ? 3
+        : latestExecution.transactionHash
+          ? 2
+          : 1
+      : completedLifecycleSteps;
+    const severityCount = (severity: string) =>
+      openDrift.filter(
+        (item) =>
+          String((item as Record<string, unknown>).severity) === severity,
+      ).length;
+    const healthScore = !latestObservation
+      ? 0
+      : severityCount("critical")
+        ? 35
+        : severityCount("high")
+          ? 55
+          : severityCount("medium")
+            ? 75
+            : openDrift.length
+              ? 90
+              : 100;
     return dashboardSchema.parse({
       organization: {
         id: String(org.organizationId),
@@ -230,7 +269,7 @@ export class MongoStateStore implements StateStore, OnModuleInit {
           organizationId: String(pro.organizationId),
           name: String(pro.name),
           environment: String(pro.environment ?? activeLiveChain.displayName),
-          health: Number(pro.health ?? 0),
+          health: healthScore,
           status:
             openDrift.length > 0
               ? "critical"
@@ -250,13 +289,22 @@ export class MongoStateStore implements StateStore, OnModuleInit {
       records: {
         networks: networks.map((item) => {
           const raw = item as Record<string, unknown>;
-          return makeRecord(
-            raw,
-            String(raw.networkId),
-            String(raw.name ?? `Chain ${raw.chainId ?? ""}`),
-            `Chain ID ${raw.chainId ?? "unavailable"}`,
-            "healthy",
-          );
+          const rpcMetadata = raw.rpcMetadata as
+            | Record<string, unknown>
+            | undefined;
+          return {
+            ...makeRecord(
+              raw,
+              String(raw.networkId),
+              String(raw.name ?? `Chain ${raw.chainId ?? ""}`),
+              "Live network boundary",
+              raw.chainId === activeLiveChain.chainId ? "healthy" : "warning",
+            ),
+            value: `Chain ${raw.chainId ?? "unavailable"}`,
+            meta: rpcMetadata?.validatedAt
+              ? `RPC verified · ${new Date(String(rpcMetadata.validatedAt)).toISOString()}`
+              : "RPC evidence pending",
+          };
         }),
         contracts: contracts.map((item) => {
           const raw = item as Record<string, unknown>;
@@ -269,6 +317,16 @@ export class MongoStateStore implements StateStore, OnModuleInit {
               raw.address ? "healthy" : "warning",
             ),
             value: raw.address ? String(raw.address) : undefined,
+            meta: [
+              raw.proxyType ? `Proxy ${String(raw.proxyType)}` : undefined,
+              raw.implementationAddress ? "Implementation verified" : undefined,
+              raw.abiProvenance
+                ? `ABI ${String(raw.abiProvenance).replaceAll("-", " ")}`
+                : undefined,
+              raw.owner ? "Owner verified" : undefined,
+            ]
+              .filter(Boolean)
+              .join(" · "),
           };
         }),
         connections: connections.map((item) => {
@@ -285,7 +343,9 @@ export class MongoStateStore implements StateStore, OnModuleInit {
             meta:
               raw.provider === "keeperhub" && metadata?.simulationReady
                 ? "Ethereum Sepolia · wallet funded · correction role verified · simulation ready"
-                : undefined,
+                : raw.provider === "github" && metadata?.accountLogin
+                  ? `${String(metadata.accountLogin)} · ${raw.repository ? String(raw.repository) : String(metadata.repositorySelection ?? "selected repositories")} · read-only`
+                  : undefined,
           };
         }),
         "desired-state": desiredVersions.map((item) => {
@@ -304,16 +364,27 @@ export class MongoStateStore implements StateStore, OnModuleInit {
         }),
         drift: drift.map((item) => {
           const raw = item as Record<string, unknown>;
+          const evidence = raw.evidence as Record<string, unknown> | undefined;
+          const freshnessViolation =
+            evidence?.addressMatches === true && evidence?.fresh === false;
           return {
             ...makeRecord(
               raw,
               String(raw.findingId),
-              String(raw.title ?? "Desired state drift"),
-              String(raw.networkId ?? activeLiveChain.displayName),
+              String(
+                raw.title ??
+                  (freshnessViolation
+                    ? "Oracle freshness violation"
+                    : "Desired state drift"),
+              ),
+              evidence?.blockNumber
+                ? `${activeLiveChain.displayName} · ${freshnessViolation ? "stale · " : ""}block ${String(evidence.blockNumber)}`
+                : activeLiveChain.displayName,
               String(raw.status ?? "open"),
             ),
             severity: raw.severity ?? "critical",
             value: typeof raw.observed === "string" ? raw.observed : undefined,
+            meta: typeof raw.desired === "string" ? raw.desired : undefined,
           };
         }),
         operations: operations.map((item) => {
@@ -333,18 +404,48 @@ export class MongoStateStore implements StateStore, OnModuleInit {
             String(raw.executionId),
             "KeeperHub direct execution",
             String(raw.transactionHash ?? raw.directExecutionId ?? ""),
-            String(raw.status ?? "queued"),
+            normalizeExecutionStatus(raw.status),
           );
         }),
         "audit-log": audit.map((item) => {
           const raw = item as Record<string, unknown>;
-          return makeRecord(
-            raw,
-            String(raw.eventId),
-            String(raw.eventType),
-            String(raw.actorId ?? "system"),
-            raw.result === "failed" ? "failed" : "completed",
-          );
+          const evidence = raw.evidence as Record<string, unknown> | undefined;
+          const actorId = String(raw.actorId ?? "system");
+          return {
+            ...makeRecord(
+              raw,
+              String(raw.eventId),
+              humanizeEventType(String(raw.eventType)),
+              actorId === "aether-worker"
+                ? "Aether worker"
+                : actorId === tenant.actorId
+                  ? `You · ${tenant.role}`
+                  : actorId,
+              raw.result === "failed" ? "failed" : "completed",
+            ),
+            value: String(
+              evidence?.transactionHash ?? raw.resourceId ?? raw.eventId,
+            ),
+            meta: raw.correlationId
+              ? `Correlation ${String(raw.correlationId)}`
+              : undefined,
+          };
+        }),
+        jobs: jobRuns.map((item) => {
+          const raw = item as Record<string, unknown>;
+          const status = String(raw.status ?? "queued");
+          return {
+            ...makeRecord(
+              raw,
+              `${String(raw.queueName)}:${String(raw.idempotencyKey)}`,
+              String(raw.queueName ?? "provider job"),
+              status === "failed"
+                ? String(raw.error ?? "The provider job failed.")
+                : `Attempt ${String(raw.attemptsMade ?? 1)}`,
+              status === "running" ? "executing" : status,
+            ),
+            meta: String(raw.resourceId ?? ""),
+          };
         }),
       },
       metrics: [
@@ -369,6 +470,35 @@ export class MongoStateStore implements StateStore, OnModuleInit {
           detail: "Durable execution intents",
         },
       ],
+      overviewSummary: {
+        healthScore,
+        alignedResources: Math.max(0, contracts.length - openDrift.length),
+        totalResources: contracts.length,
+        findingsBySeverity: {
+          critical: severityCount("critical"),
+          high: severityCount("high"),
+          medium: severityCount("medium"),
+          low: severityCount("low"),
+        },
+        connections: connections.map((item) => {
+          const raw = item as Record<string, unknown>;
+          return {
+            id: String(raw.provider),
+            label: String(raw.provider),
+            status: raw.status === "healthy" ? "healthy" : "warning",
+          };
+        }),
+        lifecycle: {
+          completed: lifecycleCompleted,
+          total: lifecycleTotal,
+          current: String(
+            latestExecution?.status ?? latestOperation?.status ?? "Not started",
+          ),
+        },
+        lastObservedAt: latestObservation
+          ? timestamp(latestObservation as Record<string, unknown>)
+          : timestamp(pro),
+      },
       operation:
         latestOperation && plan
           ? {
@@ -378,7 +508,10 @@ export class MongoStateStore implements StateStore, OnModuleInit {
                 "Deterministic setOracle(address) correction bound to immutable evidence.",
               planVersion: String(plan.planVersionId),
               planHash: String(plan.planHash),
-              status: String(latestOperation.status ?? "plan_ready"),
+              status:
+                latestExecution?.status === "partial"
+                  ? "correction_required"
+                  : String(latestOperation.status ?? "plan_ready"),
               risk: "high",
               createdAt: timestamp(latestOperation),
               evidence: request
@@ -456,7 +589,9 @@ export class MongoStateStore implements StateStore, OnModuleInit {
                   status:
                     latestExecution?.status === "verified"
                       ? "completed"
-                      : "queued",
+                      : latestExecution?.status === "partial"
+                        ? "partial"
+                        : "queued",
                   detail:
                     "Receipt finality and oracleStatus are read over RPC.",
                 },
@@ -468,18 +603,14 @@ export class MongoStateStore implements StateStore, OnModuleInit {
             id: String(latestExecution.executionId),
             operationId: String(latestExecution.operationId),
             directExecutionId: String(latestExecution.directExecutionId ?? ""),
-            status:
-              latestExecution.status === "verified"
-                ? "completed"
-                : latestExecution.status === "new" ||
-                    latestExecution.status === "intent_persisted"
-                  ? "queued"
-                  : String(latestExecution.status ?? "queued"),
+            status: normalizeExecutionStatus(latestExecution.status),
             network: activeLiveChain.displayName,
             currentStep:
               latestExecution.status === "verified"
                 ? "Independent verification complete"
-                : "Provider reconciliation",
+                : latestExecution.status === "partial"
+                  ? "Forward correction required"
+                  : "Provider reconciliation",
             startedAt: timestamp(latestExecution),
             updatedAt: timestamp(latestExecution),
             txHash: latestExecution.transactionHash
@@ -493,7 +624,9 @@ export class MongoStateStore implements StateStore, OnModuleInit {
               ? String(latestExecution.error)
               : undefined,
             reconciliation: latestExecution.retryLocked
-              ? "Automatic resubmission is locked pending reconciliation."
+              ? latestExecution.status === "partial"
+                ? "The transaction is final, but an independent postcondition failed. Create a forward correction; no rollback or automatic resubmission is allowed."
+                : "Automatic resubmission is locked pending reconciliation."
               : undefined,
             steps: [
               {
@@ -507,10 +640,9 @@ export class MongoStateStore implements StateStore, OnModuleInit {
                 id: "provider",
                 label: "KeeperHub direct execution",
                 type: "write",
-                status:
-                  latestExecution.status === "verified"
-                    ? "completed"
-                    : String(latestExecution.status ?? "queued"),
+                status: latestExecution.transactionHash
+                  ? "completed"
+                  : normalizeExecutionStatus(latestExecution.status),
                 detail: String(
                   latestExecution.directExecutionId ?? "Not submitted",
                 ),
@@ -522,9 +654,13 @@ export class MongoStateStore implements StateStore, OnModuleInit {
                 status:
                   latestExecution.status === "verified"
                     ? "completed"
-                    : "queued",
+                    : latestExecution.status === "partial"
+                      ? "partial"
+                      : "queued",
                 detail: latestExecution.transactionHash
-                  ? String(latestExecution.transactionHash)
+                  ? latestExecution.status === "partial"
+                    ? "The canonical transaction completed, but an independent postcondition failed."
+                    : String(latestExecution.transactionHash)
                   : "Awaiting a canonical receipt.",
               },
             ],
@@ -622,6 +758,27 @@ export class MongoStateStore implements StateStore, OnModuleInit {
       };
     });
   }
+}
+
+function normalizeExecutionStatus(value: unknown) {
+  switch (String(value ?? "queued")) {
+    case "new":
+    case "intent_persisted":
+      return "queued";
+    case "submitted":
+      return "executing";
+    case "pending":
+      return "confirming";
+    case "verified":
+      return "completed";
+    default:
+      return String(value ?? "queued");
+  }
+}
+
+function humanizeEventType(value: string) {
+  const words = value.replace(/[._-]+/g, " ");
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
 @Module({})

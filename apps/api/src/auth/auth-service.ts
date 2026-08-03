@@ -168,6 +168,30 @@ export class AuthService {
     return this.rotateSession(current, request, response);
   }
 
+  async session(request: Request) {
+    const claims = await this.accessClaims(request);
+    const user = await this.model("User")
+      .findOne({ userId: claims.sub })
+      .select("userId email")
+      .lean()
+      .exec();
+    if (!user) throw new UnauthorizedException("Session user is unavailable.");
+    const context =
+      claims.organizationId && claims.protocolId && claims.role
+        ? {
+            organizationId: claims.organizationId,
+            protocolId: claims.protocolId,
+            role: claims.role,
+          }
+        : undefined;
+    return {
+      authenticated: true as const,
+      user: { id: String(user.userId), email: String(user.email) },
+      context,
+      destination: context ? ("dashboard" as const) : ("onboarding" as const),
+    };
+  }
+
   async logout(request: Request, response: Response) {
     this.assertCsrf(request);
     const raw = request.cookies?.aether_refresh as string | undefined;
@@ -558,9 +582,9 @@ export class AuthService {
         )
         .lean()
         .exec());
-    // if (Number(record?.count ?? 0) > maximum) {
-    //   throw new HttpException("Try again later.", HttpStatus.TOO_MANY_REQUESTS);
-    // }
+    if (Number(record?.count ?? 0) > maximum) {
+      throw new HttpException("Try again later.", HttpStatus.TOO_MANY_REQUESTS);
+    }
   }
 
   private async authAudit(

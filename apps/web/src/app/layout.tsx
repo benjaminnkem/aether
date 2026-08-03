@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Bebas_Neue, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -11,6 +11,12 @@ const inter = Inter({
 const mono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
+  display: "swap",
+});
+const campaign = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-campaign",
   display: "swap",
 });
 
@@ -35,7 +41,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${mono.variable}`}
+      className={`${inter.variable} ${mono.variable} ${campaign.variable}`}
       data-scroll-behavior="smooth"
     >
       <body>
