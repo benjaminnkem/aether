@@ -15,10 +15,15 @@ import {
   Activity,
   Add,
   ArrowRight2,
+  CloudConnection,
+  Code,
   DocumentCode2,
   Filter,
+  HierarchySquare2,
+  Link1,
   Refresh,
   ShieldTick,
+  TickCircle,
   Warning2,
 } from "iconsax-react";
 import {
@@ -70,7 +75,7 @@ const descriptions = {
   overview:
     "Current protocol health, active risk, and the shortest path to investigation.",
   "protocol-setup":
-    "The networks, contracts, provenance, and execution adapter Aether observes.",
+    "Configure identity, observation targets, provenance, and the KeeperHub execution boundary.",
   "desired-state":
     "Versioned approved intent, deterministic safety rules, and human-readable units.",
   drift:
@@ -421,6 +426,12 @@ function Overview({
   );
 }
 
+function isHealthyStatus(status?: string) {
+  return ["healthy", "resolved", "completed", "connected"].includes(
+    status ?? "",
+  );
+}
+
 function ProtocolSetup({
   data,
 }: {
@@ -429,14 +440,28 @@ function ProtocolSetup({
   const searchParams = useSearchParams();
   const refreshDashboard = useRefreshDashboard();
   const requestedTab = searchParams.get("tab");
+  const allowedTabs = new Set([
+    "general",
+    "networks",
+    "contracts",
+    "github",
+    "keeperhub",
+  ]);
   const [tab, setTab] = useState(
-    requestedTab === "github" ? "github" : "general",
+    requestedTab && allowedTabs.has(requestedTab) ? requestedTab : "general",
   );
   const [dialog, setDialog] = useState<"network" | "contract" | null>(null);
   const [resourceValue, setResourceValue] = useState("");
   const protocol = data.protocols[0]!;
   const [protocolName, setProtocolName] = useState(protocol.name);
   const [governance, setGovernance] = useState(protocol.governance);
+  const networks = data.records.networks ?? [];
+  const contracts = data.records.contracts ?? [];
+  const connections = data.records.connections ?? [];
+  const githubConnection = connections.find((item) => item.id === "github");
+  const keeperhubConnection = connections.find(
+    (item) => item.id === "keeperhub",
+  );
   const setupMutation = useMutation({
     mutationFn: ({
       section,
@@ -463,6 +488,7 @@ function ProtocolSetup({
         "GitHub installation approval was requested from the organization owner.",
       );
     }
+    setTab("github");
     window.history.replaceState({}, "", "/app/protocol-setup?tab=github");
   }, [refreshDashboard, searchParams]);
   const tabs = [
@@ -476,116 +502,240 @@ function ProtocolSetup({
       value: "networks",
       label: "Networks",
       detail: "Sepolia observation",
-      status: (data.records.networks ?? []).length ? "healthy" : "warning",
+      status: networks.length ? "healthy" : "warning",
     },
     {
       value: "contracts",
       label: "Contracts",
       detail: "Targets & evidence",
-      status: (data.records.contracts ?? []).length ? "healthy" : "warning",
+      status: contracts.length ? "healthy" : "warning",
     },
     {
       value: "github",
       label: "GitHub",
       detail: "Release provenance",
-      status:
-        (data.records.connections ?? []).find((item) => item.id === "github")
-          ?.status ?? "warning",
+      status: githubConnection?.status ?? "warning",
     },
     {
       value: "keeperhub",
       label: "KeeperHub",
       detail: "Execution readiness",
-      status:
-        (data.records.connections ?? []).find((item) => item.id === "keeperhub")
-          ?.status ?? "warning",
+      status: keeperhubConnection?.status ?? "warning",
     },
   ];
+  const readyCount = tabs.filter((item) => isHealthyStatus(item.status)).length;
+  const readinessPct = Math.round((readyCount / tabs.length) * 100);
+  const selectTab = (value: string) => {
+    setTab(value);
+    window.history.replaceState({}, "", `/app/protocol-setup?tab=${value}`);
+  };
   return (
     <>
       <PageHeader
         title="Protocol Setup"
         description={descriptions["protocol-setup"]}
+        actions={
+          <Link href="/app/desired-state">
+            <Button variant="secondary">
+              Open desired state <ArrowRight2 size={14} />
+            </Button>
+          </Link>
+        }
       />
+      <div className="context-strip">
+        <span>
+          <i /> {protocol.name}
+        </span>
+        <Badge>{protocol.environment}</Badge>
+        <Status status={protocol.status} />
+        <span className="mono">{activeLiveChain.displayName}</span>
+      </div>
+      <section
+        className="setup-readiness a-card"
+        aria-label="Protocol setup readiness"
+      >
+        <div className="setup-readiness__summary">
+          <span className="visual-kicker">Configuration readiness</span>
+          <strong>
+            {readyCount}/{tabs.length} sections ready
+          </strong>
+          <p>
+            {readyCount === tabs.length
+              ? "Observation targets and execution boundary are configured."
+              : "Complete each section so scans, provenance, and KeeperHub execution can run."}
+          </p>
+          <div
+            className="alignment-track"
+            role="progressbar"
+            aria-valuenow={readinessPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Setup readiness ${readinessPct} percent`}
+          >
+            <i style={{ width: `${readinessPct}%` }} />
+          </div>
+        </div>
+        <ol className="setup-readiness__steps">
+          {tabs.map((item, index) => {
+            const ready = isHealthyStatus(item.status);
+            return (
+              <li key={item.value}>
+                <button
+                  type="button"
+                  className={
+                    tab === item.value
+                      ? "setup-readiness__step is-active"
+                      : "setup-readiness__step"
+                  }
+                  onClick={() => selectTab(item.value)}
+                  aria-current={tab === item.value ? "step" : undefined}
+                >
+                  <span className="setup-readiness__index" aria-hidden="true">
+                    {ready ? (
+                      <TickCircle size={16} variant="Bold" />
+                    ) : (
+                      String(index + 1).padStart(2, "0")
+                    )}
+                  </span>
+                  <span className="setup-readiness__copy">
+                    <strong>{item.label}</strong>
+                    <small>{item.detail}</small>
+                  </span>
+                  <Status status={item.status} />
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
       <div className="setup-workspace">
-        <Tabs value={tab} onValueChange={setTab} tabs={tabs}>
+        <Tabs value={tab} onValueChange={selectTab} tabs={tabs}>
           <TabContent className="setup-panel" value="general">
-            <div className="settings-form a-card">
+            <div className="settings-form a-card connection-setup-card">
+              <div className="panel__head">
+                <div>
+                  <span className="visual-kicker">01 · Identity</span>
+                  <h2>General protocol settings</h2>
+                  <p>
+                    Human-readable identity and the governance authority Aether
+                    attributes for approvals.
+                  </p>
+                </div>
+                <Status
+                  status={
+                    protocol.name && protocol.governance ? "healthy" : "warning"
+                  }
+                />
+              </div>
+              <div className="setup-info-grid" aria-label="Environment context">
+                <div className="setup-info-tile">
+                  <HierarchySquare2 size={18} aria-hidden="true" />
+                  <div>
+                    <strong>Live chain</strong>
+                    <span>
+                      {activeLiveChain.displayName} · {activeLiveChain.chainId}
+                    </span>
+                  </div>
+                </div>
+                <div className="setup-info-tile">
+                  <ShieldTick size={18} aria-hidden="true" />
+                  <div>
+                    <strong>Protocol status</strong>
+                    <span>{protocol.status.replaceAll("_", " ")}</span>
+                  </div>
+                </div>
+              </div>
               <div className="form-row">
-                <Field label="Protocol name">
+                <Field
+                  label="Protocol name"
+                  hint="Shown across overview, drift, and audit."
+                >
                   <Input
                     value={protocolName}
                     onChange={(event) => setProtocolName(event.target.value)}
+                    placeholder="Arcadia Market"
                   />
                 </Field>
-                <Field label="Environment">
-                  <Select defaultValue={protocol.environment}>
+                <Field
+                  label="Environment"
+                  hint="Mainnet is prohibited. Sepolia is the live target."
+                >
+                  <Select defaultValue={protocol.environment} disabled>
                     <option>{activeLiveChain.displayName}</option>
                   </Select>
                 </Field>
               </div>
-              <Field label="Governance authority">
+              <Field
+                label="Governance authority"
+                hint="Multisig, Safe, or operator address Aether records for approvals."
+              >
                 <Input
                   value={governance}
                   onChange={(event) => setGovernance(event.target.value)}
+                  placeholder="0x… or Safe name"
                 />
               </Field>
-              <Button
-                variant="primary"
-                disabled={setupMutation.isPending}
-                onClick={() =>
-                  setupMutation.mutate({
-                    section: "general",
-                    input: {
-                      name: protocolName,
-                      environment: protocol.environment,
-                      governanceAuthority: governance,
-                    },
-                  })
-                }
-              >
-                Save settings
-              </Button>
+              <div className="setup-actions">
+                <Button
+                  variant="primary"
+                  disabled={setupMutation.isPending}
+                  onClick={() =>
+                    setupMutation.mutate({
+                      section: "general",
+                      input: {
+                        name: protocolName,
+                        environment: protocol.environment,
+                        governanceAuthority: governance,
+                      },
+                    })
+                  }
+                >
+                  Save settings
+                </Button>
+              </div>
             </div>
           </TabContent>
           <TabContent className="setup-panel" value="networks">
             <SetupTable
+              kicker="02 · Observation"
               title="Observed networks"
-              records={data.records.networks ?? []}
+              description="Chains Aether pins for RPC observation, freshness checks, and executor readiness."
+              emptyTitle="No networks configured"
+              emptyDescription="Add Ethereum Sepolia so Aether can pin observations and verify postconditions."
+              records={networks}
               actionLabel="Add network"
               onAction={() => setDialog("network")}
             />
           </TabContent>
           <TabContent className="setup-panel" value="contracts">
             <SetupTable
+              kicker="03 · Targets"
               title="Observed contracts"
-              records={data.records.contracts ?? []}
+              description="Allowlisted addresses used for drift evaluation and correction planning."
+              emptyTitle="No contracts configured"
+              emptyDescription="Register the protocol contracts Aether should observe, including proxies."
+              records={contracts}
               actionLabel="Add contract"
               onAction={() => setDialog("contract")}
             />
           </TabContent>
           <TabContent className="setup-panel" value="github">
-            <GitHubConnectionPanel
-              record={(data.records.connections ?? []).find(
-                (item) => item.id === "github",
-              )}
-            />
+            <GitHubConnectionPanel record={githubConnection} />
           </TabContent>
           <TabContent className="setup-panel" value="keeperhub">
-            <ConnectionPanel
-              title="KeeperHub execution adapter"
-              description=""
-              record={(data.records.connections ?? []).find(
-                (item) => item.id === "keeperhub",
-              )}
-            />
+            <KeeperHubConnectionPanel record={keeperhubConnection} />
           </TabContent>
         </Tabs>
       </div>
       <Dialog
         open={dialog !== null}
-        onOpenChange={(open) => !open && setDialog(null)}
-        title={`Add ${dialog ?? "resource"}`}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDialog(null);
+            setResourceValue("");
+          }
+        }}
+        title={dialog === "network" ? "Add network" : "Add contract"}
         description="The API validates and persists this resource for the selected protocol."
       >
         <div className="form-stack">
@@ -618,8 +768,22 @@ function ProtocolSetup({
               }
             />
           </Field>
+          <div className="a-callout">
+            <ShieldTick size={18} aria-hidden="true" />
+            <div>
+              <strong>Fail-closed validation</strong>
+              <p>
+                Resources are only stored when the API accepts them. Invalid
+                chain or address input leaves existing setup unchanged.
+              </p>
+            </div>
+          </div>
           <Button
             variant="primary"
+            disabled={
+              setupMutation.isPending ||
+              (dialog === "contract" && !resourceValue.trim())
+            }
             onClick={() => {
               if (!dialog) return;
               setupMutation.mutate({
@@ -633,6 +797,7 @@ function ProtocolSetup({
                     : { address: resourceValue, name: "Contract resource" },
               });
               setDialog(null);
+              setResourceValue("");
             }}
           >
             Validate and add
@@ -694,23 +859,28 @@ function GitHubConnectionPanel({ record }: { record?: AetherRecord }) {
     <div className="settings-form a-card connection-setup-card">
       <div className="panel__head">
         <div>
-          <span className="visual-kicker">Read-only provenance</span>
+          <span className="visual-kicker">04 · Provenance</span>
           <h2>GitHub App</h2>
           <p>
-            Release, pull-request, and desired-state evidence without repository
-            writes.
+            Read-only release, pull-request, and desired-state evidence. Never
+            used for repository writes.
           </p>
         </div>
         <Status status={record?.status ?? "warning"} />
       </div>
       <div className="connection-identity">
-        <div className="connection-logo">GH</div>
+        <div className="connection-logo" aria-hidden="true">
+          <Code size={20} />
+        </div>
         <div>
           <strong>{record?.meta ?? "No installation connected"}</strong>
           <span>
             {record?.subtitle ?? "Install the Aether GitHub App to continue."}
           </span>
         </div>
+        {isHealthyStatus(record?.status) ? (
+          <span className="connection-pulse" aria-hidden="true" />
+        ) : null}
       </div>
       {record?.status === "healthy" ? (
         <>
@@ -733,7 +903,7 @@ function GitHubConnectionPanel({ record }: { record?: AetherRecord }) {
           </div>
           <Field
             label="Desired-state path"
-            hint="Repository-relative path read by Aether."
+            hint="Repository-relative path read by Aether as provenance evidence."
           >
             <Input
               value={desiredStatePath}
@@ -742,39 +912,50 @@ function GitHubConnectionPanel({ record }: { record?: AetherRecord }) {
           </Field>
           {repositories.isError ? (
             <div className="a-callout a-callout--danger">
-              The installation cannot read any repositories. Review the selected
-              repository permissions in GitHub.
+              <Warning2 size={18} aria-hidden="true" />
+              <div>
+                <strong>Repository access failed</strong>
+                <p>
+                  The installation cannot read any repositories. Review the
+                  selected repository permissions in GitHub.
+                </p>
+              </div>
             </div>
           ) : null}
-          <Button
-            variant="primary"
-            disabled={!selected || save.isPending}
-            onClick={() => save.mutate()}
-          >
-            Save provenance source
-          </Button>
+          <div className="setup-actions">
+            <Button
+              variant="primary"
+              disabled={!selected || save.isPending}
+              onClick={() => save.mutate()}
+            >
+              Save provenance source
+            </Button>
+          </div>
         </>
       ) : (
-        <Button
-          variant="primary"
-          disabled={install.isPending}
-          onClick={() => install.mutate()}
-        >
-          Install GitHub App
-        </Button>
+        <div className="setup-actions">
+          <Button
+            variant="primary"
+            disabled={install.isPending}
+            onClick={() => install.mutate()}
+          >
+            <Link1 size={16} aria-hidden="true" />
+            Install GitHub App
+          </Button>
+        </div>
       )}
       <div className="permission-grid" aria-label="GitHub permission boundary">
         <span>
-          <ShieldTick size={16} /> Metadata read
+          <ShieldTick size={16} aria-hidden="true" /> Metadata read
         </span>
         <span>
-          <ShieldTick size={16} /> Contents read
+          <ShieldTick size={16} aria-hidden="true" /> Contents read
         </span>
         <span>
-          <ShieldTick size={16} /> Pull requests read
+          <ShieldTick size={16} aria-hidden="true" /> Pull requests read
         </span>
         <span>
-          <Warning2 size={16} /> Repository writes denied
+          <Warning2 size={16} aria-hidden="true" /> Repository writes denied
         </span>
       </div>
     </div>
@@ -782,84 +963,94 @@ function GitHubConnectionPanel({ record }: { record?: AetherRecord }) {
 }
 
 function SetupTable({
+  kicker,
   title,
+  description,
+  emptyTitle,
+  emptyDescription,
   records,
   actionLabel,
   onAction,
 }: {
+  kicker: string;
   title: string;
+  description: string;
+  emptyTitle: string;
+  emptyDescription: string;
   records: AetherRecord[];
   actionLabel: string;
   onAction: () => void;
 }) {
   return (
-    <Panel
-      title={title}
-      action={
-        <Button size="sm" onClick={onAction}>
-          <Add size={14} /> {actionLabel}
+    <section className="panel a-card setup-resource-panel">
+      <div className="panel__head setup-resource-panel__head">
+        <div>
+          <span className="visual-kicker">{kicker}</span>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        <Button size="sm" variant="secondary" onClick={onAction}>
+          <Add size={14} aria-hidden="true" /> {actionLabel}
         </Button>
-      }
-    >
-      <DataTable
-        caption={title}
-        columns={["Resource", "Status", "Value", "Details"]}
-        rows={records.map((item) => ({
-          id: item.id,
-          Resource: (
-            <>
-              <div className="record-title">{item.title}</div>
-              <div className="record-subtitle">{item.subtitle}</div>
-            </>
-          ),
-          Status: <Status status={item.status} />,
-          Value: item.value ? (
-            <code className="evidence-value">{item.value}</code>
-          ) : (
-            <span className="muted">Pending</span>
-          ),
-          Details: item.meta ? (
-            <div className="evidence-cluster">
-              {item.meta.split(" · ").map((detail) => (
-                <span className="evidence-chip" key={detail}>
-                  <ShieldTick size={13} aria-hidden="true" /> {detail}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <span className="muted">Evidence pending</span>
-          ),
-        }))}
-      />
-      <ResponsiveCards records={records} />
-    </Panel>
+      </div>
+      <div className="panel__body">
+        {records.length ? (
+          <>
+            <DataTable
+              caption={title}
+              columns={["Resource", "Status", "Value", "Details"]}
+              rows={records.map((item) => ({
+                id: item.id,
+                Resource: (
+                  <>
+                    <div className="record-title">{item.title}</div>
+                    <div className="record-subtitle">{item.subtitle}</div>
+                  </>
+                ),
+                Status: <Status status={item.status} />,
+                Value: item.value ? (
+                  <code className="evidence-value">{item.value}</code>
+                ) : (
+                  <span className="muted">Pending</span>
+                ),
+                Details: item.meta ? (
+                  <div className="evidence-cluster">
+                    {item.meta.split(" · ").map((detail) => (
+                      <span className="evidence-chip" key={detail}>
+                        <ShieldTick size={13} aria-hidden="true" /> {detail}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="muted">Evidence pending</span>
+                ),
+              }))}
+            />
+            <ResponsiveCards records={records} />
+          </>
+        ) : (
+          <EmptyState
+            title={emptyTitle}
+            description={emptyDescription}
+            action={
+              <Button variant="primary" size="sm" onClick={onAction}>
+                <Add size={14} aria-hidden="true" /> {actionLabel}
+              </Button>
+            }
+          />
+        )}
+      </div>
+    </section>
   );
 }
 
-function ConnectionPanel({
-  title,
-  description,
-  record: connection,
-}: {
-  title: string;
-  description: string;
-  record?: AetherRecord;
-}) {
+function KeeperHubConnectionPanel({ record }: { record?: AetherRecord }) {
   const refreshDashboard = useRefreshDashboard();
   const connect = useMutation({
-    mutationFn: async () => {
-      if (title.toLowerCase().includes("github")) {
-        const { url } = await aetherClient.getGitHubInstallUrl();
-        window.location.assign(url);
-        return;
-      }
-      await aetherClient.validateProvider("keeperhub");
-    },
+    mutationFn: () => aetherClient.validateProvider("keeperhub"),
     onSuccess: async () => {
-      if (!title.toLowerCase().includes("github")) {
-        await refreshDashboard();
-        toast.success("Live connection state refreshed.");
-      }
+      await refreshDashboard();
+      toast.success("Live connection state refreshed.");
     },
     onError: (error) =>
       toast.error(
@@ -869,30 +1060,87 @@ function ConnectionPanel({
         ),
       ),
   });
+  const ready = isHealthyStatus(record?.status);
   return (
-    <div className="settings-form a-card">
+    <div className="settings-form a-card connection-setup-card">
       <div className="panel__head">
         <div>
-          <h2>{title}</h2>
-          <p>{description}</p>
+          <span className="visual-kicker">05 · Execution</span>
+          <h2>KeeperHub execution adapter</h2>
+          <p>
+            Direct execution transport for simulated, approved corrections.
+            Aether retains policy, approval, and verification authority.
+          </p>
         </div>
-        <Status status={connection?.status ?? "warning"} />
+        <Status status={record?.status ?? "warning"} />
       </div>
-      <Field label="Connection">
-        <Input readOnly value={connection?.subtitle ?? "Not configured"} />
-      </Field>
+      <div className="connection-identity">
+        <div className="connection-logo" aria-hidden="true">
+          <CloudConnection size={20} />
+        </div>
+        <div>
+          <strong>
+            {record?.title ?? "KeeperHub organization not validated"}
+          </strong>
+          <span>
+            {record?.subtitle ??
+              "Validate the live adapter before simulation or submission."}
+          </span>
+        </div>
+        {ready ? (
+          <span className="connection-pulse" aria-hidden="true" />
+        ) : null}
+      </div>
+      <div className="setup-info-grid" aria-label="Execution trust boundary">
+        <div className="setup-info-tile">
+          <ShieldTick size={18} aria-hidden="true" />
+          <div>
+            <strong>Simulation first</strong>
+            <span>Exact request must match plan hash before approval.</span>
+          </div>
+        </div>
+        <div className="setup-info-tile">
+          <Activity size={18} aria-hidden="true" />
+          <div>
+            <strong>Idempotent submit</strong>
+            <span>Unknown outcomes lock automatic resubmission.</span>
+          </div>
+        </div>
+      </div>
       <div className="a-callout">
-        <ShieldTick size={18} />
+        <ShieldTick size={18} aria-hidden="true" />
         <div>
           <strong>Least privilege</strong>
-          <p>{connection?.meta}</p>
+          <p>
+            {record?.meta ??
+              "KeeperHub signs only allowlisted corrections after bound simulation and approval. OpenAI never authorizes transactions."}
+          </p>
         </div>
       </div>
-      <Button disabled={connect.isPending} onClick={() => connect.mutate()}>
-        {title.toLowerCase().includes("github")
-          ? "Install GitHub App"
-          : "Validate live connection"}
-      </Button>
+      <div className="permission-grid" aria-label="KeeperHub trust boundary">
+        <span>
+          <ShieldTick size={16} aria-hidden="true" /> Exact simulation
+        </span>
+        <span>
+          <ShieldTick size={16} aria-hidden="true" /> Bound approval
+        </span>
+        <span>
+          <ShieldTick size={16} aria-hidden="true" /> Direct execution only
+        </span>
+        <span>
+          <Warning2 size={16} aria-hidden="true" /> No autonomous policy
+        </span>
+      </div>
+      <div className="setup-actions">
+        <Button
+          variant={ready ? "secondary" : "primary"}
+          disabled={connect.isPending}
+          onClick={() => connect.mutate()}
+        >
+          <Refresh size={16} aria-hidden="true" />
+          {connect.isPending ? "Validating…" : "Validate live connection"}
+        </Button>
+      </div>
     </div>
   );
 }
