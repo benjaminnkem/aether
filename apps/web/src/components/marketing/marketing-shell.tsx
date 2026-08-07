@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
 import { SessionActions } from "@/components/auth/session-actions";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const HeroField = dynamic(() => import("./hero-field"), { ssr: false });
 
@@ -48,6 +49,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
             <Link href="/#product">Product</Link>
             <Link href="/#security">Security</Link>
             <Link href="/#how-it-works">How it works</Link>
+            <ThemeToggle compact className="theme-toggle--marketing" />
             <SessionActions />
           </div>
         </nav>

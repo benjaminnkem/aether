@@ -8,6 +8,7 @@ import { aetherClient } from "@aether/sdk";
 import { activeLiveChain } from "@aether/shared";
 import { Button, Field, Input } from "@aether/ui";
 import { useSession } from "@/features/auth/use-session";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const copy = {
   login: [
@@ -54,6 +55,9 @@ export function AuthPage({ kind }: { kind: keyof typeof copy }) {
         </span>
       </section>
       <section className="auth-panel">
+        <div className="auth-panel__theme">
+          <ThemeToggle compact />
+        </div>
         <form
           className="auth-form"
           onSubmit={async (event) => {

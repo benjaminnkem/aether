@@ -3,6 +3,7 @@
 import { HambergerMenu } from "iconsax-react";
 import { IconButton, Status } from "@aether/ui";
 import { useUiStore } from "@/stores/ui";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Topbar({
   title,
@@ -16,7 +17,7 @@ export function Topbar({
   const setSidebar = useUiStore((state) => state.setSidebarOpen);
   return (
     <header className="topbar">
-      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+      <div className="topbar__lead">
         <IconButton
           className="mobile-trigger"
           label="Open navigation"
@@ -32,6 +33,7 @@ export function Topbar({
         </div>
       </div>
       <div className="topbar__actions">
+        <ThemeToggle compact className="theme-toggle--topbar" />
         <Status
           status={
             realtime === "connected"

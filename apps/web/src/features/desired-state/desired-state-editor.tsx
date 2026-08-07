@@ -122,12 +122,18 @@ export default function DesiredStateEditor({
     }
   };
 
+  const statusLabel = hasUnsavedChanges
+    ? validated
+      ? "Validated · unsaved"
+      : "Unsaved changes"
+    : "Active values";
+
   return (
-    <div>
+    <div className="desired-editor">
       {githubSource ? (
         <div className="github-source-banner a-card">
           <div>
-            <span className="eyebrow">Pinned GitHub source</span>
+            <span className="visual-kicker">Pinned GitHub source</span>
             <strong>{githubSource.repository}</strong>
             <span>
               {githubSource.branch}/{githubSource.path} · commit{" "}
@@ -136,6 +142,9 @@ export default function DesiredStateEditor({
             <span>
               Resource {githubSource.resolution.repositoryContractId} →{" "}
               <code>{githubSource.resolution.resolvedContractId}</code>
+              {githubSource.matchesActiveVersion
+                ? " · matches active version"
+                : " · differs from active version"}
             </span>
           </div>
           <div className="page-actions">
@@ -169,144 +178,166 @@ export default function DesiredStateEditor({
           </div>
         </div>
       ) : null}
-      <div className="panel__head" style={{ marginBottom: 16 }}>
-        <Tabs
-          value={mode}
-          onValueChange={(nextMode) => {
-            if (nextMode === "code") setYamlDraft(stringify(values));
-            setMode(nextMode);
-          }}
-          tabs={[
-            { value: "form", label: "Form" },
-            { value: "code", label: "YAML" },
-          ]}
-        >
-          <span />
-        </Tabs>
-        <span className="a-badge">
-          {hasUnsavedChanges
-            ? validated
-              ? "Validated · unsaved"
-              : "Unsaved changes"
-            : "Active values"}
-        </span>
+
+      <div className="desired-editor__toolbar a-card">
+        <div>
+          <span className="visual-kicker">Manifest editor</span>
+          <p>
+            Form and YAML share one Zod schema. Validate before saving a new
+            immutable version.
+          </p>
+        </div>
+        <div className="desired-editor__toolbar-actions">
+          <Tabs
+            value={mode}
+            onValueChange={(nextMode) => {
+              if (nextMode === "code") setYamlDraft(stringify(values));
+              setMode(nextMode);
+            }}
+            tabs={[
+              { value: "form", label: "Form" },
+              { value: "code", label: "YAML" },
+            ]}
+          >
+            <span />
+          </Tabs>
+          <span
+            className={
+              validated
+                ? "a-badge a-badge--success"
+                : hasUnsavedChanges
+                  ? "a-badge a-badge--warning"
+                  : "a-badge"
+            }
+          >
+            {statusLabel}
+          </span>
+        </div>
       </div>
+
       <ValidationSummary errors={issues} />
+
       <Tabs value={mode} onValueChange={setMode} tabs={[]}>
         <TabContent value="form">
           <form
-            className="settings-form a-card"
+            className="settings-form a-card desired-form"
             onSubmit={handleSubmit((input) => void validate(input))}
           >
-            <div className="form-row">
-              <Field label="Manifest version">
-                <Input {...register("version")} />
-              </Field>
-              <Field label="Release provenance">
-                <Input {...register("release")} />
-              </Field>
-            </div>
-            <div className="form-row">
-              <Field label="Network">
-                <Select {...register("networkId")}>
-                  <option value={activeLiveChain.slug}>
-                    {activeLiveChain.displayName}
-                  </option>
-                </Select>
-              </Field>
-              <Field label="Chain ID">
+            <section
+              className="desired-form__section"
+              aria-labelledby="ds-identity"
+            >
+              <h3 id="ds-identity">Identity & release</h3>
+              <div className="form-row">
+                <Field label="Manifest version">
+                  <Input {...register("version")} />
+                </Field>
+                <Field label="Release provenance">
+                  <Input {...register("release")} />
+                </Field>
+              </div>
+              <div className="form-row">
+                <Field label="Network">
+                  <Select {...register("networkId")}>
+                    <option value={activeLiveChain.slug}>
+                      {activeLiveChain.displayName}
+                    </option>
+                  </Select>
+                </Field>
+                <Field label="Chain ID">
+                  <Input
+                    type="number"
+                    {...register("chainId", { valueAsNumber: true })}
+                  />
+                </Field>
+              </div>
+            </section>
+
+            <section
+              className="desired-form__section"
+              aria-labelledby="ds-targets"
+            >
+              <h3 id="ds-targets">Contract targets</h3>
+              <div className="form-row">
+                <Field label="Contract resource">
+                  <Input {...register("contractId")} />
+                </Field>
+                <Field label="Contract version">
+                  <Input {...register("contractVersion")} />
+                </Field>
+              </div>
+              <Field label="Approved implementation address">
                 <Input
-                  type="number"
-                  {...register("chainId", { valueAsNumber: true })}
+                  className="mono"
+                  {...register("implementationAddress")}
                 />
               </Field>
-            </div>
-            <div className="form-row">
-              <Field label="Contract resource">
-                <Input {...register("contractId")} />
+              <Field label="Approved oracle address">
+                <Input className="mono" {...register("oracleAddress")} />
               </Field>
-              <Field label="Contract version">
-                <Input {...register("contractVersion")} />
-              </Field>
-            </div>
-            <Field label="Approved implementation address">
-              <Input className="mono" {...register("implementationAddress")} />
-            </Field>
-            <Field label="Approved oracle address">
-              <Input className="mono" {...register("oracleAddress")} />
-            </Field>
-            <div className="form-row">
-              <Field label="Administrator">
-                <Input className="mono" {...register("administrators.0")} />
-              </Field>
-              <Field label="Guardian">
-                <Input className="mono" {...register("guardians.0")} />
-              </Field>
-            </div>
-            <div className="form-row">
-              <Field
-                label="Protocol fee"
-                hint={`${values.fee.value} basis points`}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 100px",
-                    gap: 8,
-                  }}
+              <div className="form-row">
+                <Field label="Administrator">
+                  <Input className="mono" {...register("administrators.0")} />
+                </Field>
+                <Field label="Guardian">
+                  <Input className="mono" {...register("guardians.0")} />
+                </Field>
+              </div>
+            </section>
+
+            <section
+              className="desired-form__section"
+              aria-labelledby="ds-policy"
+            >
+              <h3 id="ds-policy">Safety limits</h3>
+              <div className="form-row">
+                <Field
+                  label="Protocol fee"
+                  hint={`${values.fee.value} basis points`}
                 >
-                  <Input inputMode="numeric" {...register("fee.value")} />
-                  <Select {...register("fee.unit")}>
-                    <option value="bps">bps</option>
-                  </Select>
-                </div>
-              </Field>
-              <Field
-                label="Minimum executor gas"
-                hint={`${values.minimumExecutorGas.value} native token`}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 100px",
-                    gap: 8,
-                  }}
+                  <div className="unit-field">
+                    <Input inputMode="numeric" {...register("fee.value")} />
+                    <Select {...register("fee.unit")}>
+                      <option value="bps">bps</option>
+                    </Select>
+                  </div>
+                </Field>
+                <Field
+                  label="Minimum executor gas"
+                  hint={`${values.minimumExecutorGas.value} native token`}
                 >
-                  <Input {...register("minimumExecutorGas.value")} />
-                  <Select {...register("minimumExecutorGas.unit")}>
+                  <div className="unit-field">
+                    <Input {...register("minimumExecutorGas.value")} />
+                    <Select {...register("minimumExecutorGas.unit")}>
+                      <option value="ether">ETH</option>
+                    </Select>
+                  </div>
+                </Field>
+              </div>
+              <Field
+                label="Maximum automatic transaction value"
+                hint="Zero prevents native-value automation."
+              >
+                <div className="unit-field">
+                  <Input {...register("maximumAutomaticTransaction.value")} />
+                  <Select {...register("maximumAutomaticTransaction.unit")}>
                     <option value="ether">ETH</option>
                   </Select>
                 </div>
               </Field>
-            </div>
-            <Field
-              label="Maximum automatic transaction value"
-              hint="Zero prevents native-value automation."
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 100px",
-                  gap: 8,
-                }}
-              >
-                <Input {...register("maximumAutomaticTransaction.value")} />
-                <Select {...register("maximumAutomaticTransaction.unit")}>
-                  <option value="ether">ETH</option>
-                </Select>
-              </div>
-            </Field>
-            <Field label="Source">
-              <Input {...register("source")} />
-            </Field>
-            <label className="a-field">
-              <span className="a-field__label">Emergency state</span>
-              <span className="context-strip">
-                <input type="checkbox" {...register("paused")} />
-                Pause protocol in desired state
-              </span>
-            </label>
-            <div className="page-actions">
+              <Field label="Source">
+                <Input {...register("source")} />
+              </Field>
+              <label className="a-field desired-pause">
+                <span className="a-field__label">Emergency state</span>
+                <span className="desired-pause__control">
+                  <input type="checkbox" {...register("paused")} />
+                  Pause protocol in desired state
+                </span>
+              </label>
+            </section>
+
+            <div className="desired-editor__actions">
               <Button type="submit">Validate draft</Button>
               <Button
                 type="button"
@@ -333,11 +364,16 @@ export default function DesiredStateEditor({
               >
                 Save new version
               </Button>
+              <span className="desired-editor__hint muted">
+                {validated
+                  ? "Ready to persist an immutable version."
+                  : "Validation is required before save."}
+              </span>
             </div>
           </form>
         </TabContent>
         <TabContent value="code">
-          <div className="settings-form a-card">
+          <div className="settings-form a-card desired-yaml">
             <Field
               label="Canonical YAML"
               hint="Form and code modes use the same browser-safe Zod schema."
@@ -353,22 +389,34 @@ export default function DesiredStateEditor({
                 }}
               />
             </Field>
-            <Button variant="primary" onClick={() => void validateYaml()}>
-              Validate YAML
-            </Button>
+            <div className="desired-editor__actions">
+              <Button variant="primary" onClick={() => void validateYaml()}>
+                Validate YAML
+              </Button>
+              <span className="desired-editor__hint muted">
+                Invalid YAML never activates a version.
+              </span>
+            </div>
           </div>
         </TabContent>
       </Tabs>
-      <div style={{ marginTop: 16 }}>
+
+      <section className="desired-diff a-card" aria-label="Semantic diff">
+        <div className="panel__head">
+          <div>
+            <span className="visual-kicker">Semantic diff</span>
+            <h3>Baseline vs draft</h3>
+          </div>
+        </div>
         <DiffBlock
           before={
-            githubSource?.matchesActiveVersion
+            githubSource?.matchesActiveVersion || baseline.oracleAddress
               ? `version: ${baseline.version}\noracleAddress: ${baseline.oracleAddress.slice(0, 12)}…\nminimumExecutorGas: ${baseline.minimumExecutorGas.value} ETH`
               : "No previous desired-state version loaded."
           }
           after={`version: ${values.version}\noracleAddress: ${values.oracleAddress.slice(0, 12)}…\nminimumExecutorGas: ${values.minimumExecutorGas.value} ETH`}
         />
-      </div>
+      </section>
     </div>
   );
 }

@@ -28,8 +28,9 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="dark"
-      enableSystem={false}
+      defaultTheme="system"
+      enableSystem
+      storageKey="aether-theme"
       disableTransitionOnChange
     >
       <QueryClientProvider client={client}>
