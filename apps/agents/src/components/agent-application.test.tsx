@@ -4,7 +4,7 @@ import {
   FlightRecorder,
   type ActiveRun,
   type PublicConfiguration,
-} from "./savings-application";
+} from "./agent-application";
 
 const config: PublicConfiguration = {
   chainId: 11155111,

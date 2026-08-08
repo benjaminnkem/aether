@@ -14,6 +14,7 @@ import {
   requireWalletSession,
   SessionError,
 } from "@/server/session";
+import { lendingMissionFor, LendingConfigurationError } from "@/server/lending";
 
 const requestSchema = z
   .object({
@@ -21,7 +22,13 @@ const requestSchema = z
       .string()
       .regex(/^\d+(\.\d+)?$/)
       .max(80),
+    borrowAmount: z
+      .string()
+      .regex(/^\d+(\.\d+)?$/)
+      .max(80)
+      .optional(),
     clientRequestId: z.string().uuid(),
+    scenario: z.enum(["NORMAL", "BLOCKED_BORROWING"]).default("NORMAL"),
   })
   .strict();
 const missionResponseSchema = z
@@ -33,23 +40,44 @@ export async function POST(request: NextRequest) {
   try {
     assertMutationOrigin(request);
     const beneficiary = await requireWalletSession();
-    if (!configuration().liveExecutionEnabled) {
+    const lending =
+      new URL(request.url).searchParams.get("product") === "lending";
+    const config = configuration();
+    if (
+      lending
+        ? !config.lendingLiveExecutionEnabled
+        : !config.liveExecutionEnabled
+    ) {
       return NextResponse.json(
         {
           code: "LIVE_EXECUTION_DISABLED",
-          message:
-            "Live savings execution is disabled. No mission or transaction was created.",
+          message: `Live ${lending ? "lending" : "savings"} execution is disabled. No mission or transaction was created.`,
         },
         { status: 503 },
       );
     }
     const input = requestSchema.parse(await request.json());
-    const intent = resolveIntent(
-      beneficiary,
-      input.amount,
-      input.clientRequestId,
-    );
-    const missionInput = missionFor(intent);
+    if (!lending && input.scenario !== "NORMAL") {
+      return NextResponse.json(
+        {
+          code: "INVALID_AGENT_REQUEST",
+          message: "The selected scenario is available only for lending.",
+        },
+        { status: 400 },
+      );
+    }
+    const intent = lending
+      ? undefined
+      : resolveIntent(beneficiary, input.amount, input.clientRequestId);
+    const missionInput = lending
+      ? lendingMissionFor(
+          beneficiary,
+          input.amount,
+          input.borrowAmount ?? "",
+          input.clientRequestId,
+          input.scenario,
+        )
+      : missionFor(intent!);
     const client = aetherClient();
     const mission = missionResponseSchema.parse(
       await client.createMission(
@@ -59,7 +87,7 @@ export async function POST(request: NextRequest) {
     );
     const runRequest = {
       input: {},
-      externalId: `savings:${input.clientRequestId}`,
+      externalId: `${lending ? `lending:${input.scenario.toLowerCase()}` : "savings"}:${input.clientRequestId}`,
     };
     const run = runResponseSchema.parse(
       await client.createRun(
@@ -73,7 +101,9 @@ export async function POST(request: NextRequest) {
         runId: run.runId,
         missionId: mission.missionId,
         viewToken: issueRunViewToken(run.runId, beneficiary),
-        operationKey: intent.operationKey,
+        operationKey:
+          intent?.operationKey ??
+          `lending:${input.scenario.toLowerCase()}:${input.clientRequestId}`,
       },
       { status: 201 },
     );
@@ -84,14 +114,19 @@ export async function POST(request: NextRequest) {
         { status: error.status },
       );
     }
-    if (error instanceof z.ZodError || error instanceof SavingsInputError) {
+    if (
+      error instanceof z.ZodError ||
+      error instanceof SavingsInputError ||
+      error instanceof LendingConfigurationError
+    ) {
       return NextResponse.json(
         {
-          code: "INVALID_SAVINGS_REQUEST",
+          code: "INVALID_AGENT_REQUEST",
           message:
-            error instanceof SavingsInputError
+            error instanceof SavingsInputError ||
+            error instanceof LendingConfigurationError
               ? error.message
-              : "Savings request is invalid.",
+              : "The agent request is invalid.",
         },
         { status: 400 },
       );

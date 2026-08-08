@@ -70,7 +70,7 @@ export function clearSessions(response: NextResponse) {
       httpOnly: true,
       sameSite: "strict",
       secure: isProduction(),
-      path: "/savings-app",
+      path: "/",
       maxAge: 0,
     });
   }
@@ -138,7 +138,7 @@ export function establishWalletSession(
     httpOnly: true,
     sameSite: "strict",
     secure: isProduction(),
-    path: "/savings-app",
+    path: "/",
     maxAge: 0,
   });
 }
@@ -222,7 +222,7 @@ function setCookie(
     httpOnly: true,
     sameSite: "strict",
     secure: isProduction(),
-    path: "/savings-app",
+    path: "/",
     maxAge,
   });
 }

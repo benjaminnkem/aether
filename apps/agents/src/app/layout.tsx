@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "Savings · Aether external application",
+  title: "Agent· Aether external application",
   description:
-    "Create and follow real Sepolia savings missions through the public Aether API.",
+    "Create and follow real Sepolia agents missions through the public Aether API.",
 };
 
 export default function Layout({

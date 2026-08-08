@@ -28,6 +28,7 @@ export class RunCoordinator
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private timer?: NodeJS.Timeout;
+  private scanPromise?: Promise<void>;
   private stopping = false;
   private scanning = false;
   private readonly active = new Map<string, Promise<void>>();
@@ -39,14 +40,28 @@ export class RunCoordinator
   ) {}
 
   onApplicationBootstrap() {
-    this.timer = setInterval(() => void this.scan(), 1000);
+    this.timer = setInterval(() => this.triggerScan(), 1000);
     this.timer.unref();
-    void this.scan();
+    this.triggerScan();
   }
   async onApplicationShutdown() {
     this.stopping = true;
     if (this.timer) clearInterval(this.timer);
+    if (this.scanPromise) await Promise.allSettled([this.scanPromise]);
     await Promise.allSettled([...this.active.values()]);
+  }
+  private triggerScan() {
+    if (this.stopping || this.scanPromise) return;
+    const work = this.scan();
+    this.scanPromise = work;
+    void work.then(
+      () => {
+        if (this.scanPromise === work) this.scanPromise = undefined;
+      },
+      () => {
+        if (this.scanPromise === work) this.scanPromise = undefined;
+      },
+    );
   }
   start(runId: string) {
     if (!this.active.has(runId)) {
@@ -625,6 +640,23 @@ export class RunCoordinator
       return {};
     }
     if (state === "PRECONDITION_CHECK") {
+      if (definition.executionGate?.kind === "BLOCKED") {
+        await this.store.transitionStep(
+          context.workspaceId,
+          context.runId,
+          stepId,
+          "FAILED_KNOWN",
+          definition.executionGate.reason,
+        );
+        await this.store.transitionRun(
+          context.workspaceId,
+          context.runId,
+          context.fencingToken,
+          "DEGRADED",
+          "A declared execution gate blocked the next write. Earlier verified effects require recovery.",
+        );
+        return {};
+      }
       await this.store.transitionStep(
         context.workspaceId,
         context.runId,
@@ -1465,6 +1497,35 @@ export class RunCoordinator
       (item) => item.id === target.stepId,
     )!;
     const compensation = step.compensation!;
+    const existingPostcondition = await this.verifyProof(
+      compensation.proof,
+      {},
+    );
+    if (existingPostcondition.result === "UNKNOWN")
+      throw new ProviderRequestError(
+        "Recovery precondition evidence is unavailable or disagrees across RPC providers.",
+        503,
+        undefined,
+        false,
+        "RPC_DISAGREEMENT",
+      );
+    if (existingPostcondition.result === "PASS") {
+      await this.store.transitionStep(
+        context.workspaceId,
+        context.runId,
+        String(target.stepId),
+        "COMPENSATING",
+        "Recovery postcondition already holds. No transaction is required.",
+      );
+      await this.store.transitionStep(
+        context.workspaceId,
+        context.runId,
+        String(target.stepId),
+        "COMPENSATED",
+        "Recovery postcondition independently verified without another write.",
+      );
+      return {};
+    }
     const spent = context.steps
       .filter((item) => item.state === "COMPENSATED")
       .reduce(

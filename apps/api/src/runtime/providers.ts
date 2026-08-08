@@ -89,13 +89,14 @@ export class KeeperHubHttpClient implements KeeperHubClient {
   }
   async simulate(workspaceId: string, action: MissionAction) {
     const credentials = await this.credentials(workspaceId);
-    const result = await this.request(
+    const response = await this.raw(
       `${credentials.baseUrl}/execute/contract-call`,
       { method: "POST", body: JSON.stringify(keeperBody(action, true)) },
       false,
       credentials.apiKey,
+      [400, 422],
     );
-    return simulationResultSchema.parse(result);
+    return simulationResultSchema.parse(normalizeSimulation(response.body));
   }
   async submit(workspaceId: string, key: string, action: MissionAction) {
     const credentials = await this.credentials(workspaceId);
@@ -138,6 +139,7 @@ export class KeeperHubHttpClient implements KeeperHubClient {
     init: RequestInit,
     ambiguous: boolean,
     key: string,
+    acceptedErrorStatuses: readonly number[] = [],
   ) {
     const started = Date.now();
     let response: Response;
@@ -170,6 +172,10 @@ export class KeeperHubHttpClient implements KeeperHubClient {
         this.healthState.success(started);
         return { body: replay.data, headers: response.headers };
       }
+    }
+    if (acceptedErrorStatuses.includes(response.status)) {
+      this.healthState.success(started);
+      return { body: unwrap(payload), headers: response.headers };
     }
     if (!response.ok) {
       const retryAfterMs =
@@ -224,6 +230,22 @@ export class KeeperHubHttpClient implements KeeperHubClient {
       ).replace(/\/$/, ""),
     };
   }
+}
+
+function normalizeSimulation(value: unknown) {
+  const record = z.record(z.string(), z.unknown()).parse(value);
+  return {
+    success: record.success,
+    status: record.status,
+    from: record.from,
+    to: record.to,
+    value: record.value,
+    gasEstimate: record.gasEstimate,
+    simulatedReturnValue: record.simulatedReturnValue,
+    wouldRevert: record.wouldRevert,
+    revertReason: record.revertReason,
+    error: record.error,
+  };
 }
 
 function normalizeKeeperStatus(value: unknown) {

@@ -157,6 +157,13 @@ export const missionStepSchema = z
     retryClass: retryClassSchema,
     proof: proofSchema,
     compensation: compensationSchema.optional(),
+    executionGate: z
+      .object({
+        kind: z.literal("BLOCKED"),
+        reason: z.string().trim().min(1).max(240),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

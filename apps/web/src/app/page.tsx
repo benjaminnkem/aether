@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+const agentsRuntime =
+  process.env.AETHER_AGENT_RUNTIME_ORIGIN ?? "http://localhost:3001";
+
 export default function HomePage() {
   return (
     <main id="main-content">
@@ -26,11 +29,25 @@ export default function HomePage() {
           executes only pre-authorized recovery actions.
         </p>
         <div className="actions">
-          <Link className="pill pill-primary" href="/demo">
-            View fixed Sepolia scenarios
+          <Link
+            className="pill pill-secondary"
+            href={`${agentsRuntime}?product=savings`}
+          >
+            Open savings agent
           </Link>
+          <Link
+            className="pill pill-secondary"
+            href={`${agentsRuntime}?product=lending`}
+          >
+            Open lending agent app
+          </Link>
+
           <Link className="pill pill-secondary" href="/app/overview">
             Open mission control
+          </Link>
+
+          <Link className="pill pill-primary" href="/demo">
+            View Demos
           </Link>
         </div>
       </section>

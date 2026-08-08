@@ -335,6 +335,8 @@ export function RunView({
       </ConsoleShell>
     );
   const steps = asArray(run.steps);
+  const attempts = asArray(run.attempts);
+  const plans = asArray(run.plans);
   const reconciliation = asArray(run.reconciliation);
   const transactions = transactionRows(run);
   return (
@@ -504,18 +506,32 @@ export function RunView({
         <section className="section span-2">
           <h2>Persisted timeline</h2>
           {events.length ? (
-            events.map((event) => (
-              <div className="timeline" key={String(event.eventId)}>
-                <span>{String(event.sequence)}</span>
-                <div>
-                  <strong>{String(event.message)}</strong>
-                  <small>
-                    {new Date(String(event.createdAt)).toLocaleString()}
-                  </small>
+            events.map((event) => {
+              const context = timelineEventContext(
+                event,
+                steps,
+                attempts,
+                plans,
+                run.recoveryStartedAt,
+              );
+              return (
+                <div className="timeline" key={String(event.eventId)}>
+                  <span>{String(event.sequence)}</span>
+                  <div>
+                    {context ? (
+                      <small className="timeline-step">
+                        {context.phase} · Step: {context.stepId}
+                      </small>
+                    ) : null}
+                    <strong>{String(event.message)}</strong>
+                    <small>
+                      {new Date(String(event.createdAt)).toLocaleString()}
+                    </small>
+                  </div>
+                  <Status value={event.state} />
                 </div>
-                <Status value={event.state} />
-              </div>
-            ))
+              );
+            })
           ) : (
             <p>Waiting for the next recorded transition…</p>
           )}
@@ -776,6 +792,67 @@ function isTimelineEvent(value: Record<string, unknown>): value is Record<
     typeof value.message === "string" &&
     typeof value.createdAt === "string"
   );
+}
+
+export function timelineStepId(
+  event: Record<string, unknown>,
+  steps: Array<Record<string, unknown>>,
+  attempts: Array<Record<string, unknown>>,
+) {
+  const data =
+    event.data && typeof event.data === "object" && !Array.isArray(event.data)
+      ? (event.data as Record<string, unknown>)
+      : undefined;
+  if (typeof data?.stepId === "string") return data.stepId;
+  if (typeof data?.executionAttemptId !== "string") return undefined;
+  const attempt = attempts.find(
+    (item) => item.executionAttemptId === data.executionAttemptId,
+  );
+  if (typeof attempt?.stepId === "string") return attempt.stepId;
+  if (typeof attempt?.stepRunId !== "string") return undefined;
+  const stepId = steps.find(
+    (step) => step.stepRunId === attempt.stepRunId,
+  )?.stepId;
+  return typeof stepId === "string" ? stepId : undefined;
+}
+
+export function timelineEventContext(
+  event: Record<string, unknown>,
+  steps: Array<Record<string, unknown>>,
+  attempts: Array<Record<string, unknown>>,
+  plans: Array<Record<string, unknown>>,
+  recoveryStartedAt?: unknown,
+) {
+  const stepId = timelineStepId(event, steps, attempts);
+  if (!stepId) return undefined;
+  const data =
+    event.data && typeof event.data === "object" && !Array.isArray(event.data)
+      ? (event.data as Record<string, unknown>)
+      : undefined;
+  const attempt = attempts.find(
+    (item) => item.executionAttemptId === data?.executionAttemptId,
+  );
+  const plan = plans.find((item) => item.planId === attempt?.planId);
+  const recoveryStart = new Date(String(recoveryStartedAt ?? "")).valueOf();
+  const eventTime = new Date(String(event.createdAt ?? "")).valueOf();
+  const recoveryState = ["COMPENSATING", "COMPENSATED"].includes(
+    String(event.state),
+  );
+  const recoveryEvent = String(event.type ?? "").startsWith("recovery.");
+  const afterRecoveryStarted =
+    !Number.isNaN(recoveryStart) &&
+    !Number.isNaN(eventTime) &&
+    eventTime >= recoveryStart;
+  return {
+    stepId,
+    phase:
+      plan?.kind === "COMPENSATION" ||
+      recoveryState ||
+      recoveryEvent ||
+      afterRecoveryStarted
+        ? ("Recovery" as const)
+        : ("Mission" as const),
+  };
 }
 const missionTemplate = JSON.stringify(
   {

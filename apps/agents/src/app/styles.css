@@ -127,6 +127,21 @@ pre {
   color: var(--ink);
   background: var(--cloud);
 }
+.button-danger-outline {
+  margin-top: 12px;
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+}
+.button-danger-outline:hover:not(:disabled) {
+  color: white;
+  background: var(--danger);
+}
+.scenario-note {
+  margin: 12px 0 0;
+  color: var(--mute);
+  font-size: 13px;
+}
 .button:disabled {
   opacity: 0.42;
   cursor: not-allowed;

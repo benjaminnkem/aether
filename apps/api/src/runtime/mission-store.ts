@@ -1141,9 +1141,18 @@ export class MissionStore {
     runId: string,
     definition: MissionDefinition,
   ): Promise<Document> {
+    const verifiedStepIds = new Set(
+      (
+        await this.connection
+          .collection("mission_step_runs")
+          .find({ workspaceId, runId, state: "VERIFIED" })
+          .project({ stepId: 1 })
+          .toArray()
+      ).map((step) => String(step.stepId)),
+    );
     const actions = [...definition.steps]
       .reverse()
-      .filter((step) => step.compensation)
+      .filter((step) => step.compensation && verifiedStepIds.has(step.id))
       .map((step) => ({
         forwardStepId: step.id,
         compensationId: step.compensation!.id,

@@ -376,6 +376,13 @@ footer p {
   display: block;
   color: var(--mute);
 }
+.timeline .timeline-step {
+  margin-bottom: 2px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
 .section-heading-row {
   margin-top: 0;
 }

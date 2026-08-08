@@ -16,7 +16,6 @@ if (result.error && result.error.code !== "ENOENT") {
 }
 
 const apiUrl = requiredPublicUrl("NEXT_PUBLIC_AETHER_API_URL");
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {

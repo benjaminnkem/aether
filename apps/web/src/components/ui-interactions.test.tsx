@@ -3,8 +3,60 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { useState } from "react";
 import { Dialog, Drawer, PermissionState, Status } from "@aether/ui";
+import { timelineEventContext, timelineStepId } from "./app/views";
 
 describe("Aether design-system interactions", () => {
+  it("resolves timeline events to their mission step", () => {
+    const steps = [
+      { stepRunId: "step-run-1", stepId: "revoke-repayment-approval" },
+    ];
+    const attempts = [
+      { executionAttemptId: "attempt-1", stepRunId: "step-run-1" },
+    ];
+    expect(
+      timelineStepId(
+        { data: { stepId: "supply-collateral" } },
+        steps,
+        attempts,
+      ),
+    ).toBe("supply-collateral");
+    expect(
+      timelineStepId(
+        { data: { executionAttemptId: "attempt-1" } },
+        steps,
+        attempts,
+      ),
+    ).toBe("revoke-repayment-approval");
+    expect(timelineStepId({ data: {} }, steps, attempts)).toBeUndefined();
+    expect(
+      timelineEventContext(
+        {
+          data: { executionAttemptId: "attempt-1" },
+          createdAt: "2026-08-09T00:01:00.000Z",
+          state: "ACKNOWLEDGED",
+        },
+        steps,
+        [{ ...attempts[0], planId: "plan-1" }],
+        [{ planId: "plan-1", kind: "COMPENSATION" }],
+      ),
+    ).toEqual({
+      phase: "Recovery",
+      stepId: "revoke-repayment-approval",
+    });
+    expect(
+      timelineEventContext(
+        {
+          data: { stepId: "supply-collateral" },
+          createdAt: "2026-08-09T00:01:00.000Z",
+          state: "VERIFIED",
+        },
+        steps,
+        attempts,
+        [],
+      ),
+    ).toEqual({ phase: "Mission", stepId: "supply-collateral" });
+  });
+
   it("opens and closes an accessible dialog", async () => {
     const user = userEvent.setup();
     render(

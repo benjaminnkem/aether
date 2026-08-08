@@ -11,14 +11,14 @@ config({
 
 /** @type {import("next").NextConfig} */
 const nextConfig = {
-  basePath: "/savings-app",
+  basePath: "/agents",
   distDir: process.env.SAVINGS_NEXT_DIST_DIR ?? ".next",
   poweredByHeader: false,
   async redirects() {
     return [
       {
         source: "/",
-        destination: "/savings-app",
+        destination: "/agents",
         permanent: false,
         basePath: false,
       },

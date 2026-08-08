@@ -20,7 +20,7 @@ Groq is optional. It may produce a schema-validated incident summary from bounde
 
 - `apps/api` — NestJS API, inline run coordinator, Mongo-backed leases and fencing, SSE streams, authentication, approvals, audit, and provider adapters.
 - `apps/web` — Next.js operator console and the fixed `/demo` scenarios.
-- `apps/savings-app` — separately deployable Savings client at `/savings-app`; it uses only the public v1 API through a scoped server-side agent key.
+- `apps/agents` — separately deployable Savings client at `/agents`; it uses only the public v1 API through a scoped server-side agent key.
 - `packages/shared` — strict request and mission schemas.
 - `packages/backend` — state transitions, persistence models, hashing, encryption, and safety boundaries.
 - `packages/sdk` — typed fetch client and reconnectable run stream parser.
@@ -54,11 +54,13 @@ Important server-only variables are documented in `.env.example`:
 
 Never expose these through `NEXT_PUBLIC_*` variables.
 
-### External Savings application
+### External savings and lending applications
 
-The Savings application is intentionally isolated from Aether internals. Configure the `SAVINGS_*` variables in `.env`, create an Aether agent key with mission/run/read receipt scopes, deploy `AetherSavingsVault` on Sepolia, and start the workspace with `pnpm dev`. The application is served at `http://localhost:3001/savings-app`.
+The savings and lending agents use the public Aether API through a restricted server-side API key. Configure the `SAVINGS_*` and relevant `LENDING_*` variables in `.env`, then start the workspace with `pnpm dev`. The agent runtime is available at `http://localhost:3001?product=savings` and `http://localhost:3001?product=lending`. The Aether landing page links to those URLs using `AETHER_AGENT_RUNTIME_ORIGIN`.
 
 Its normal path never replays or fabricates execution. When `SAVINGS_LIVE_EXECUTION_ENABLED=false`, it stops before mission creation. A connected wallet signs an ownership challenge only; the signature is not transaction authority and no private key reaches either application server.
+
+The lending integration targets a configured Sepolia pool. Its closed-cycle mission supplies collateral, opens variable-rate debt, repays the full debt, withdraws collateral, revokes both approvals, and independently verifies the terminal balances and allowances. The local Sepolia configuration uses uncapped LINK collateral and borrows USDC because the Aave Sepolia USDC supply cap may already be full. The executor must hold enough USDC to cover interest accrued before repayment. Known failures use only the frozen repayment, withdrawal, and revocation actions; uncertain writes remain retry-locked until reconciled.
 
 Deploy the fixed-purpose savings vault only with the explicit live command:
 

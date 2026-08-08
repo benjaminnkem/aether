@@ -15,6 +15,15 @@ export type PublicConfiguration = {
   maximumAmount: string;
   executorAddress: string;
   explorerUrl: string;
+  product?: "savings" | "lending";
+  collateralAmount?: string;
+  borrowAmount?: string;
+  minimumBorrowAmount?: string;
+  maximumBorrowAmount?: string;
+  borrowTokenSymbol?: string;
+  lendingPoolAddress?: string;
+  collateralTokenAddress?: string;
+  borrowTokenAddress?: string;
 };
 export type ActiveRun = {
   runId: string;
@@ -29,29 +38,43 @@ const TERMINAL_STATES = new Set([
   "NEEDS_ATTENTION",
   "ABORTED_SAFE",
 ]);
-const apiBase = "/savings-app/api";
+const apiBase = () => {
+  return "/agents/api";
+};
 
-export function SavingsApplication() {
+export function AgentApplication({
+  mode = "savings",
+}: {
+  mode?: "savings" | "lending";
+}) {
+  const isLending = mode === "lending";
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [config, setConfig] = useState<PublicConfiguration>();
   const [wallet, setWallet] = useState("");
   const [amount, setAmount] = useState("");
+  const [borrowAmount, setBorrowAmount] = useState("");
   const [activeRun, setActiveRun] = useState<ActiveRun>();
   const [run, setRun] = useState<RecordValue>();
   const [events, setEvents] = useState<RecordValue[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const productQuery = `product=${encodeURIComponent(mode)}`;
 
   const loadConfiguration = useCallback(async () => {
-    const response = await fetch(`${apiBase}/config`, { cache: "no-store" });
+    const response = await fetch(`${apiBase()}/config?${productQuery}`, {
+      cache: "no-store",
+    });
     if (response.status === 401) {
       setAuthenticated(false);
       return;
     }
     if (!response.ok) throw await responseError(response);
     setAuthenticated(true);
-    setConfig((await response.json()) as PublicConfiguration);
-  }, []);
+    const next = (await response.json()) as PublicConfiguration;
+    setConfig(next);
+    if (isLending && next.collateralAmount) setAmount(next.collateralAmount);
+    if (isLending && next.borrowAmount) setBorrowAmount(next.borrowAmount);
+  }, [isLending, productQuery]);
 
   useEffect(() => {
     void loadConfiguration().catch((error: unknown) => {
@@ -63,7 +86,7 @@ export function SavingsApplication() {
   const refreshRun = useCallback(async () => {
     if (!activeRun) return;
     const response = await fetch(
-      `${apiBase}/runs/${encodeURIComponent(activeRun.runId)}`,
+      `${apiBase()}/runs/${encodeURIComponent(activeRun.runId)}`,
       {
         headers: { "X-Savings-Run-Token": activeRun.viewToken },
         cache: "no-store",
@@ -114,6 +137,7 @@ export function SavingsApplication() {
   if (!authenticated) {
     return (
       <AccessScreen
+        isLending={isLending}
         message={message}
         onAuthenticated={() => {
           setMessage("");
@@ -128,8 +152,8 @@ export function SavingsApplication() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/savings-app" aria-label="Savings home">
-          SAVINGS / AETHER
+        <a className="brand" href="/agents" aria-label="Savings home">
+          {isLending ? "LENDING / AETHER" : "SAVINGS / AETHER"}
         </a>
         <div className="topbar-meta">
           <span className="network-dot" aria-hidden="true" />
@@ -147,11 +171,14 @@ export function SavingsApplication() {
         {!activeRun ? (
           <SetupView
             config={config}
+            isLending={isLending}
             wallet={wallet}
             amount={amount}
+            borrowAmount={borrowAmount}
             busy={busy}
             message={message}
             onAmount={setAmount}
+            onBorrowAmount={setBorrowAmount}
             onConnect={async () => {
               setBusy(true);
               setMessage("");
@@ -163,24 +190,26 @@ export function SavingsApplication() {
                 setBusy(false);
               }
             }}
-            onSubmit={async () => {
+            onSubmit={async (scenario) => {
               setBusy(true);
               setMessage(
                 "Creating an immutable mission and starting preflight…",
               );
               try {
                 const response = await jsonRequest<ActiveRun>(
-                  `${apiBase}/runs`,
+                  `${apiBase()}/runs?${productQuery}`,
                   {
                     method: "POST",
                     body: JSON.stringify({
                       amount,
+                      ...(isLending ? { borrowAmount } : {}),
+                      ...(isLending ? { scenario } : {}),
                       clientRequestId: crypto.randomUUID(),
                     }),
                   },
                 );
                 sessionStorage.setItem(
-                  `savings:run:${response.runId}`,
+                  `aether:${mode}:run:${response.runId}`,
                   response.viewToken,
                 );
                 setEvents([]);
@@ -208,6 +237,7 @@ export function SavingsApplication() {
                     setRun(undefined);
                     setEvents([]);
                     setAmount("");
+                    setBorrowAmount("");
                     setMessage("");
                   }
                 : undefined
@@ -220,19 +250,48 @@ export function SavingsApplication() {
 }
 
 function AccessScreen({
+  isLending,
   message,
   onAuthenticated,
 }: {
+  isLending: boolean;
   message: string;
   onAuthenticated: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+
+  const onSubmit = async (accessToken: string) => {
+    try {
+      setLocalMessage("");
+      await jsonRequest(`${apiBase()}/session`, {
+        method: "POST",
+        body: JSON.stringify({ accessToken }),
+      });
+      onAuthenticated();
+    } catch (error) {
+      setLocalMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    const accessToken = "UpGSu-uD72pwndaSnPHVJgZ6U7V_Lh85";
+    setAccessToken(accessToken);
+    onSubmit(accessToken);
+  }, []);
+
   return (
     <main id="main-content" className="access-layout">
       <section className="access-copy">
         <p className="eyebrow">External application</p>
-        <h1>PUT SAVINGS ON RECORD.</h1>
+        <h1>
+          {isLending
+            ? "PUT A LENDING POSITION ON RECORD."
+            : "PUT SAVINGS ON RECORD."}
+        </h1>
         <p>
           This application creates real Sepolia missions through Aether’s public
           API. It never receives a wallet private key and never invents
@@ -247,22 +306,11 @@ function AccessScreen({
           const accessToken = String(
             new FormData(event.currentTarget).get("accessToken") ?? "",
           );
-          try {
-            setLocalMessage("");
-            await jsonRequest(`${apiBase}/session`, {
-              method: "POST",
-              body: JSON.stringify({ accessToken }),
-            });
-            onAuthenticated();
-          } catch (error) {
-            setLocalMessage(errorMessage(error));
-          } finally {
-            setBusy(false);
-          }
+          onSubmit(accessToken);
         }}
       >
         <p className="eyebrow">Restricted access</p>
-        <h2>Open Savings</h2>
+        <h2>{isLending ? "Open Lending" : "Open Savings"}</h2>
         <label htmlFor="access-token">Application access code</label>
         <input
           id="access-token"
@@ -270,6 +318,8 @@ function AccessScreen({
           type="password"
           autoComplete="current-password"
           required
+          value={accessToken}
+          onChange={(e) => setAccessToken(e.target.value)}
         />
         <button className="button button-primary" type="submit" disabled={busy}>
           {busy ? "Checking…" : "Continue"}
@@ -284,21 +334,27 @@ function AccessScreen({
 
 function SetupView(props: {
   config: PublicConfiguration;
+  isLending: boolean;
   wallet: string;
   amount: string;
+  borrowAmount: string;
   busy: boolean;
   message: string;
   onAmount: (value: string) => void;
+  onBorrowAmount: (value: string) => void;
   onConnect: () => Promise<void>;
-  onSubmit: () => Promise<void>;
+  onSubmit: (scenario: "NORMAL" | "BLOCKED_BORROWING") => Promise<void>;
 }) {
   const {
     config,
+    isLending,
     wallet,
     amount,
+    borrowAmount,
     busy,
     message,
     onAmount,
+    onBorrowAmount,
     onConnect,
     onSubmit,
   } = props;
@@ -306,10 +362,15 @@ function SetupView(props: {
     <>
       <section className="hero">
         <p className="eyebrow">Real Sepolia execution</p>
-        <h1>SAVE WITH A COMPLETE RECORD.</h1>
+        <h1>
+          {isLending
+            ? "OPEN A LENDING POSITION WITH A COMPLETE RECORD."
+            : "SAVE WITH A COMPLETE RECORD."}
+        </h1>
         <p className="hero-copy">
-          Connect the beneficiary wallet, review the fixed contracts and amount,
-          then let Aether create, execute, verify, and receipt the mission.
+          {isLending
+            ? "Connect the requesting wallet, review the fixed protocol and collateral, then follow every KeeperHub write and independent proof."
+            : "Connect the beneficiary wallet, review the fixed contracts and amount, then let Aether create, execute, verify, and receipt the mission."}
         </p>
       </section>
       <section className="workspace">
@@ -317,8 +378,12 @@ function SetupView(props: {
           <div className="section-heading">
             <span>01</span>
             <div>
-              <h2>Beneficiary</h2>
-              <p>The connected address owns the recorded savings balance.</p>
+              <h2>{isLending ? "Requester" : "Beneficiary"}</h2>
+              <p>
+                {isLending
+                  ? "The connected address authorizes the request. The configured executor owns the protocol position."
+                  : "The connected address owns the recorded savings balance."}
+              </p>
             </div>
           </div>
           {wallet ? (
@@ -346,7 +411,7 @@ function SetupView(props: {
             </div>
           </div>
           <label className="amount-field">
-            <span>Amount to save</span>
+            <span>{isLending ? "Collateral amount" : "Amount to save"}</span>
             <div>
               <input
                 value={amount}
@@ -362,6 +427,26 @@ function SetupView(props: {
               {config.tokenSymbol}
             </small>
           </label>
+          {isLending && (
+            <label className="amount-field">
+              <span>Amount to borrow</span>
+              <div>
+                <input
+                  value={borrowAmount}
+                  onChange={(event) => onBorrowAmount(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  disabled={!wallet || busy}
+                />
+                <strong>{config.borrowTokenSymbol ?? "Borrow asset"}</strong>
+              </div>
+              <small>
+                Allowed: {config.minimumBorrowAmount ?? "not configured"}–
+                {config.maximumBorrowAmount ?? "not configured"}{" "}
+                {config.borrowTokenSymbol ?? ""}
+              </small>
+            </label>
+          )}
         </div>
         <aside className="review-panel" aria-labelledby="review-title">
           <p className="eyebrow">Exact execution boundary</p>
@@ -379,12 +464,12 @@ function SetupView(props: {
               mono
             />
             <Fact
-              label="Savings vault"
+              label={isLending ? "Lending pool" : "Savings vault"}
               value={short(config.vaultAddress)}
               mono
             />
             <Fact
-              label="Beneficiary"
+              label={isLending ? "Requester" : "Beneficiary"}
               value={wallet ? short(wallet) : "Connect wallet"}
               mono={Boolean(wallet)}
             />
@@ -394,8 +479,32 @@ function SetupView(props: {
                 amount ? `${amount} ${config.tokenSymbol}` : "Enter amount"
               }
             />
-            <Fact label="Writes" value="Approve exact amount → deposit" />
-            <Fact label="Known failure" value="Revoke unused approval" />
+            {isLending && (
+              <Fact
+                label="Borrow amount"
+                value={
+                  borrowAmount
+                    ? `${borrowAmount} ${config.borrowTokenSymbol ?? ""}`
+                    : "Enter amount"
+                }
+              />
+            )}
+            <Fact
+              label="Writes"
+              value={
+                isLending
+                  ? "Approve → supply → borrow → repay → withdraw → revoke"
+                  : "Approve exact amount → deposit"
+              }
+            />
+            <Fact
+              label="Known failure"
+              value={
+                isLending
+                  ? "Repay debt → withdraw collateral → revoke remaining approvals"
+                  : "Revoke unused approval"
+              }
+            />
             <Fact
               label="Uncertain outcome"
               value="Retry locked until reconciled"
@@ -414,18 +523,49 @@ function SetupView(props: {
             className="button button-primary full-width"
             type="button"
             disabled={
-              !wallet || !amount || busy || !config.liveExecutionEnabled
+              !wallet ||
+              !amount ||
+              (isLending && !borrowAmount) ||
+              busy ||
+              !config.liveExecutionEnabled
             }
-            onClick={() => void onSubmit()}
+            onClick={() => void onSubmit("NORMAL")}
           >
-            {busy ? "Starting mission…" : "Confirm and save"}
+            {busy
+              ? "Starting mission…"
+              : isLending
+                ? "Open lending position"
+                : "Confirm and save"}
           </button>
+          {isLending && (
+            <button
+              className="button button-danger-outline full-width"
+              type="button"
+              disabled={
+                !wallet ||
+                !amount ||
+                !borrowAmount ||
+                busy ||
+                !config.liveExecutionEnabled
+              }
+              onClick={() => void onSubmit("BLOCKED_BORROWING")}
+            >
+              {busy ? "Starting mission…" : "Open lending (blocked borrowing)"}
+            </button>
+          )}
+          {isLending && (
+            <p className="scenario-note">
+              Runs real supply and approval writes, blocks borrowing before any
+              borrow broadcast, then executes and verifies the declared cleanup
+              transactions.
+            </p>
+          )}
           <p className="form-message" role="status" aria-live="polite">
             {message}
           </p>
         </aside>
       </section>
-      <ContractStrip config={config} />
+      <ContractStrip config={config} isLending={isLending} />
     </>
   );
 }
@@ -467,7 +607,7 @@ export function FlightRecorder(props: {
               type="button"
               onClick={onNew}
             >
-              New savings mission
+              New {config.product === "lending" ? "lending" : "savings"} mission
             </button>
           )}
         </div>
@@ -858,7 +998,13 @@ function RawRecord({
     </details>
   );
 }
-function ContractStrip({ config }: { config: PublicConfiguration }) {
+function ContractStrip({
+  config,
+  isLending,
+}: {
+  config: PublicConfiguration;
+  isLending: boolean;
+}) {
   return (
     <section className="contract-strip">
       <div>
@@ -866,7 +1012,7 @@ function ContractStrip({ config }: { config: PublicConfiguration }) {
         <h2>Nothing is selected by conversation.</h2>
       </div>
       <AddressRow
-        label="Savings vault"
+        label={isLending ? "Lending pool" : "Savings vault"}
         value={config.vaultAddress}
         explorer={`${config.explorerUrl}/address/${config.vaultAddress}`}
       />
@@ -932,7 +1078,7 @@ function Status({ value }: { value: unknown }) {
 function LoadingScreen() {
   return (
     <main id="main-content" className="loading-screen">
-      <p className="eyebrow">Savings / Aether</p>
+      <p className="eyebrow">Aether external application</p>
       <h1>CHECKING THE EXECUTION BOUNDARY.</h1>
     </main>
   );
@@ -957,7 +1103,7 @@ async function connectAndVerifyWallet() {
     });
   }
   const challenge = await jsonRequest<{ message: string }>(
-    `${apiBase}/wallet/challenge`,
+    `${apiBase()}/wallet/challenge`,
     { method: "POST", body: "{}" },
   );
   const signature = (await provider.request({
@@ -965,7 +1111,7 @@ async function connectAndVerifyWallet() {
     params: [challenge.message, address],
   })) as string;
   const verified = await jsonRequest<{ address: string }>(
-    `${apiBase}/wallet/verify`,
+    `${apiBase()}/wallet/verify`,
     {
       method: "POST",
       body: JSON.stringify({ address, signature }),
@@ -982,7 +1128,7 @@ async function streamEvents(
 ) {
   while (!signal.aborted) {
     const response = await fetch(
-      `${apiBase}/runs/${encodeURIComponent(active.runId)}/stream?after=${cursor()}`,
+      `${apiBase()}/runs/${encodeURIComponent(active.runId)}/stream?after=${cursor()}`,
       {
         headers: {
           Accept: "text/event-stream",
@@ -1046,7 +1192,7 @@ async function responseError(response: Response) {
   );
 }
 async function logout() {
-  await jsonRequest(`${apiBase}/session`, { method: "DELETE", body: "{}" });
+  await jsonRequest(`${apiBase()}/session`, { method: "DELETE", body: "{}" });
 }
 function downloadReceipt(active: ActiveRun, receipt: RecordValue) {
   const blob = new Blob([JSON.stringify(receipt, null, 2)], {

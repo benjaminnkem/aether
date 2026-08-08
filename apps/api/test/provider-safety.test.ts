@@ -57,6 +57,41 @@ describe("provider safety", () => {
     });
   });
 
+  it("preserves structured simulation reverts returned with HTTP 400", async () => {
+    process.env.KEEPERHUB_API_KEY = "kh_test";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: false,
+            status: "simulated",
+            from: "0x2222222222222222222222222222222222222222",
+            to: action.contractAddress,
+            value: "0",
+            wouldRevert: true,
+            revertReason: "Error(51)",
+            error: "Error(51)",
+            originalError: "untrusted provider detail",
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    await expect(
+      new KeeperHubHttpClient(connection).simulate("ws", action),
+    ).resolves.toEqual({
+      success: false,
+      status: "simulated",
+      from: "0x2222222222222222222222222222222222222222",
+      to: action.contractAddress,
+      value: "0",
+      wouldRevert: true,
+      revertReason: "Error(51)",
+      error: "Error(51)",
+    });
+  });
+
   it("normalizes KeeperHub status metadata before strict validation", async () => {
     process.env.KEEPERHUB_API_KEY = "kh_test";
     vi.stubGlobal(
