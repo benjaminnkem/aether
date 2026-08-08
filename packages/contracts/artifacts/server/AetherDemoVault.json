@@ -1,0 +1,192 @@
+{
+  "contractName": "AetherDemoVault",
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        { "name": "executor", "type": "address", "internalType": "address" }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "INITIAL_SOURCE_BALANCE",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_ACTION_AMOUNT",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "actionCount",
+      "inputs": [{ "name": "", "type": "bytes32", "internalType": "bytes32" }],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "authorizeDestination",
+      "inputs": [
+        { "name": "runKey", "type": "bytes32", "internalType": "bytes32" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "blockedDestinationDeposit",
+      "inputs": [{ "name": "", "type": "bytes32", "internalType": "bytes32" }],
+      "outputs": [],
+      "stateMutability": "pure"
+    },
+    {
+      "type": "function",
+      "name": "depositDestination",
+      "inputs": [
+        { "name": "runKey", "type": "bytes32", "internalType": "bytes32" },
+        { "name": "amount", "type": "uint256", "internalType": "uint256" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "destinationAuthorized",
+      "inputs": [
+        { "name": "runKey", "type": "bytes32", "internalType": "bytes32" }
+      ],
+      "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "destinationBalance",
+      "inputs": [
+        { "name": "runKey", "type": "bytes32", "internalType": "bytes32" }
+      ],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "inTransitBalance",
+      "inputs": [
+        { "name": "runKey", "type": "bytes32", "internalType": "bytes32" }
+      ],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "keeperHubExecutor",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "restoreSource",
+      "inputs": [
+        { "name": "runKey", "type": "bytes32", "internalType": "bytes32" },
+        { "name": "amount", "type": "uint256", "internalType": "uint256" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "revokeAuthorization",
+      "inputs": [
+        { "name": "runKey", "type": "bytes32", "internalType": "bytes32" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "sourceBalance",
+      "inputs": [
+        { "name": "runKey", "type": "bytes32", "internalType": "bytes32" }
+      ],
+      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "withdrawSource",
+      "inputs": [
+        { "name": "runKey", "type": "bytes32", "internalType": "bytes32" },
+        { "name": "amount", "type": "uint256", "internalType": "uint256" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "DemoAction",
+      "inputs": [
+        {
+          "name": "runKey",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "action",
+          "type": "bytes4",
+          "indexed": true,
+          "internalType": "bytes4"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "count",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "AlreadyExecuted",
+      "inputs": [
+        { "name": "actionKey", "type": "bytes32", "internalType": "bytes32" }
+      ]
+    },
+    { "type": "error", "name": "AmountOutOfRange", "inputs": [] },
+    { "type": "error", "name": "AuthorizationRequired", "inputs": [] },
+    { "type": "error", "name": "DemoFailure", "inputs": [] },
+    { "type": "error", "name": "ExecutorOnly", "inputs": [] },
+    { "type": "error", "name": "InsufficientSource", "inputs": [] },
+    { "type": "error", "name": "InsufficientTransit", "inputs": [] }
+  ],
+  "methodIdentifiers": {
+    "INITIAL_SOURCE_BALANCE()": "22fb899d",
+    "MAX_ACTION_AMOUNT()": "667bc2c7",
+    "actionCount(bytes32)": "5f5ce9ce",
+    "authorizeDestination(bytes32)": "9e3f179e",
+    "blockedDestinationDeposit(bytes32)": "f3379970",
+    "depositDestination(bytes32,uint256)": "22405e78",
+    "destinationAuthorized(bytes32)": "da35b51b",
+    "destinationBalance(bytes32)": "9fdb05c2",
+    "inTransitBalance(bytes32)": "67eb238c",
+    "keeperHubExecutor()": "fe478786",
+    "restoreSource(bytes32,uint256)": "07ef37fd",
+    "revokeAuthorization(bytes32)": "3c633a21",
+    "sourceBalance(bytes32)": "e81d421c",
+    "withdrawSource(bytes32,uint256)": "ce5c724a"
+  },
+  "deployments": {}
+}

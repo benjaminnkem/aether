@@ -4,5 +4,4 @@ export interface ServerContractArtifact {
   methodIdentifiers: Readonly<Record<string, string>>;
   deployments: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
-export const arcadiaMarketArtifact: ServerContractArtifact;
-export const mockOracleArtifact: ServerContractArtifact;
+export const aetherDemoVaultArtifact: ServerContractArtifact;

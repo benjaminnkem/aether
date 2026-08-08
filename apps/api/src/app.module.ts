@@ -1,62 +1,81 @@
 import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
+import { MongooseModule } from "@nestjs/mongoose";
 import { loadRootEnvironment } from "@aether/backend";
 import { AuthGuard } from "./auth/auth";
 import { AuthController } from "./auth/auth-controller";
 import { AuthService } from "./auth/auth-service";
-import { GitHubController } from "./github/github-controller";
-import { GitHubService } from "./github/github-service";
 import {
+  ApiKeysController,
+  ApprovalsController,
   AuditController,
-  DashboardController,
-  DesiredStateController,
-  ExecutionController,
-  ObservationController,
-  OperationController,
-  ProtocolSetupController,
-  RealtimeController,
+  DemoController,
+  KeeperHubIntegrationController,
+  MissionsController,
+  PolicyController,
+  RunsController,
   SystemController,
-} from "./http/controllers";
+  WebhooksController,
+} from "./http/v1-controllers";
 import { StructuredLogger } from "./observability/logger";
-import { PersistenceModule } from "./persistence/state-store";
+import { MissionStore } from "./runtime/mission-store";
+import {
+  DualRpcObserver,
+  GroqIncidentSummarizer,
+  KeeperHubHttpClient,
+} from "./runtime/providers";
+import { RunCoordinator } from "./runtime/run-coordinator";
 
 loadRootEnvironment();
 
-const jwtSecret = process.env.AETHER_ACCESS_TOKEN_SECRET;
-if (!jwtSecret || jwtSecret.length < 32) {
+const jwtSecret = required("AETHER_ACCESS_TOKEN_SECRET");
+if (jwtSecret.length < 32) {
   throw new Error(
-    "AETHER_ACCESS_TOKEN_SECRET of at least 32 characters is required.",
+    "AETHER_ACCESS_TOKEN_SECRET must contain at least 32 characters.",
   );
 }
 
 @Module({
   imports: [
+    MongooseModule.forRoot(required("MONGODB_URI"), {
+      serverSelectionTimeoutMS: 10_000,
+      maxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE ?? 20),
+    }),
     JwtModule.register({
       global: true,
       secret: jwtSecret,
       signOptions: { audience: "aether-api", issuer: "aether" },
     }),
-    PersistenceModule.register(),
   ],
   controllers: [
     SystemController,
     AuthController,
-    GitHubController,
-    DashboardController,
-    ProtocolSetupController,
-    DesiredStateController,
-    ObservationController,
-    OperationController,
-    ExecutionController,
+    MissionsController,
+    RunsController,
+    ApprovalsController,
     AuditController,
-    RealtimeController,
+    KeeperHubIntegrationController,
+    ApiKeysController,
+    PolicyController,
+    DemoController,
+    WebhooksController,
   ],
   providers: [
     StructuredLogger,
     AuthService,
-    GitHubService,
+    MissionStore,
+    KeeperHubHttpClient,
+    DualRpcObserver,
+    GroqIncidentSummarizer,
+    RunCoordinator,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
 })
 export class AppModule {}
+
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required.`);
+  return value;
+}

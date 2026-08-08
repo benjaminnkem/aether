@@ -1,112 +1,52 @@
 "use client";
-
-import Image from "next/image";
 import { useState } from "react";
-import { toast } from "sonner";
-import { aetherClient } from "@aether/sdk";
-import { activeLiveChain } from "@aether/shared";
-import { Button, Field, Input, Status } from "@aether/ui";
-import { useUiStore } from "@/stores/ui";
+import { AetherClient, getAetherErrorMessage } from "@aether/sdk";
 
+const api = new AetherClient(process.env.NEXT_PUBLIC_AETHER_API_URL ?? "/v1");
 export function Onboarding() {
-  const setOrganization = useUiStore((state) => state.setOrganization);
-  const setProtocol = useUiStore((state) => state.setProtocol);
-  const [pending, setPending] = useState(false);
-
+  const [message, setMessage] = useState("");
   return (
-    <main id="main-content" className="onboarding">
-      <aside className="onboarding__rail">
-        <Image
-          src="/brand/aether-lockup.svg"
-          alt="Aether"
-          width={170}
-          height={32}
-          style={{ width: 170, height: 32 }}
-        />
-        <ol className="onboarding__steps">
-          {["Account", "Organization", "Protocol", "Live providers"].map(
-            (step, index) => (
-              <li key={step} className={index === 1 ? "is-active" : ""}>
-                <span className="onboarding__step">{index + 1}</span>
-                {step}
-              </li>
-            ),
-          )}
-        </ol>
-        <Status status="warning" label="Provider setup required" />
-      </aside>
-      <section className="onboarding__main">
-        <form
-          className="onboarding__content"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            setPending(true);
-            const form = new FormData(event.currentTarget);
-            try {
-              const result = await aetherClient.onboard({
-                organizationName: String(form.get("organizationName") ?? ""),
-                protocolName: String(form.get("protocolName") ?? ""),
-                governanceAuthority: String(
-                  form.get("governanceAuthority") ?? "",
-                ),
-              });
-              setOrganization(result.organizationId);
-              setProtocol(result.protocolId);
-              toast.success("Organization and protocol created.");
-              window.location.href = "/app/protocol-setup";
-            } catch {
-              toast.error(
-                "Onboarding could not be persisted. Sign in and retry.",
-              );
-            } finally {
-              setPending(false);
-            }
-          }}
-        >
-          <div className="eyebrow">Live onboarding</div>
-          <h1 style={{ color: "var(--paper)", fontWeight: 500, fontSize: 34 }}>
-            Create your operating context.
-          </h1>
-          <p style={{ color: "var(--fog)", maxWidth: 620 }}>
-            These records are written to MongoDB. No sample protocol, provider
-            response, transaction, or execution is created automatically.
-          </p>
-          <div className="settings-form a-card" style={{ marginTop: 24 }}>
-            <Field label="Organization name">
-              <Input
-                name="organizationName"
-                required
-                minLength={2}
-                placeholder="Your protocol organization"
-              />
-            </Field>
-            <Field label="Protocol name">
-              <Input
-                name="protocolName"
-                required
-                minLength={2}
-                placeholder="Protocol name"
-              />
-            </Field>
-            <Field label="Governance authority">
-              <Input
-                name="governanceAuthority"
-                required
-                placeholder="Safe address or governance description"
-              />
-            </Field>
-            <div className="a-callout">
-              {activeLiveChain.displayName} ({activeLiveChain.chainId}) is the
-              only live network permitted in this release. Configure RPC,
-              contracts, GitHub, OpenAI, and KeeperHub after this record is
-              created.
-            </div>
-            <Button type="submit" variant="primary" disabled={pending}>
-              Create organization and protocol
-            </Button>
-          </div>
-        </form>
+    <main id="main-content" className="auth-page">
+      <section>
+        <span className="brand">AETHER</span>
+        <p className="eyebrow">Workspace setup</p>
+        <h1>Name the operating workspace.</h1>
+        <p>
+          Membership and role are resolved by the server on every request.
+          Provider credentials are configured after this step.
+        </p>
       </section>
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          setMessage("Creating workspace…");
+          try {
+            await api.onboard(String(data.get("workspaceName")));
+            window.location.href = "/app/settings/integrations";
+          } catch (error) {
+            setMessage(
+              getAetherErrorMessage(error, "Workspace could not be created."),
+            );
+          }
+        }}
+      >
+        <h2>Workspace</h2>
+        <label>
+          Workspace name
+          <input
+            name="workspaceName"
+            minLength={2}
+            maxLength={100}
+            required
+            placeholder="Operations"
+          />
+        </label>
+        <button className="pill pill-primary" type="submit">
+          Create workspace
+        </button>
+        <p aria-live="polite">{message}</p>
+      </form>
     </main>
   );
 }

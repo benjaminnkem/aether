@@ -1,99 +1,25 @@
-import { expect, test, type Page } from "@playwright/test";
-import {
-  authenticatedSession,
-  dashboardFixture,
-  githubDesiredStateFixture,
-} from "./fixtures/dashboard";
-
-async function installProductRoutes(page: Page) {
-  await page.route("**/v1/auth/session", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(authenticatedSession),
-    }),
-  );
-  await page.route("**/v1/dashboard**", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(dashboardFixture),
-    }),
-  );
-  await page.route("**/v1/github/repositories", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([
-        {
-          full_name: "benjaminnkem/aether",
-          default_branch: "main",
-          private: false,
-          html_url: "https://github.com/benjaminnkem/aether",
-        },
-      ]),
-    }),
-  );
-  await page.route("**/v1/github/desired-state-source", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(githubDesiredStateFixture),
-    }),
-  );
-}
-
-async function hideDevelopmentChrome(page: Page) {
-  await page.addStyleTag({
-    content: "nextjs-portal { display: none !important; }",
-  });
-}
-
-test.describe("@visual visual baselines", () => {
-  test.use({ colorScheme: "dark", reducedMotion: "reduce" });
-
-  test("marketing landing", async ({ page }) => {
-    await page.route("**/v1/auth/session", (route) =>
-      route.fulfill({ status: 401 }),
-    );
-    await page.goto("/");
-    await hideDevelopmentChrome(page);
-    await expect(page).toHaveScreenshot("landing.png", {
-      fullPage: true,
-      animations: "disabled",
-    });
-  });
-
-  test("authentication", async ({ page }) => {
-    await page.route("**/v1/auth/session", (route) =>
-      route.fulfill({ status: 401 }),
-    );
-    await page.goto("/login");
-    await hideDevelopmentChrome(page);
-    await expect(page).toHaveScreenshot("login.png", {
-      fullPage: true,
-      animations: "disabled",
-    });
-  });
-
-  for (const [name, route] of [
-    ["overview", "/app/overview"],
-    ["protocol-setup", "/app/protocol-setup?tab=github"],
-    ["desired-state", "/app/desired-state"],
-    ["drift", "/app/drift"],
-    ["operation", "/app/operations/operation-1"],
-    ["execution", "/app/executions/execution-1"],
-    ["audit", "/app/audit-log"],
-  ] as const) {
+import { expect, test } from "@playwright/test";
+test.describe("@visual production surfaces", () => {
+  test.use({ reducedMotion: "reduce", colorScheme: "light" });
+  for (const [name, path] of [
+    ["landing", "/"],
+    ["login", "/login"],
+    ["demo", "/demo"],
+  ] as const)
     test(name, async ({ page }) => {
-      await installProductRoutes(page);
-      await page.goto(route);
-      await hideDevelopmentChrome(page);
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      if (path === "/demo")
+        await page.route("**/v1/demo/scenarios", (route) =>
+          route.fulfill({
+            json: { liveExecutionEnabled: false, replays: [], scenarios: [] },
+          }),
+        );
+      await page.goto(path);
+      await page.addStyleTag({
+        content: "nextjs-portal{display:none!important}",
+      });
       await expect(page).toHaveScreenshot(`${name}.png`, {
         fullPage: true,
         animations: "disabled",
       });
     });
-  }
 });

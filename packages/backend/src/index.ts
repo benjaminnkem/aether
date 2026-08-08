@@ -1,6 +1,6 @@
 export * from "./contracts";
 export * from "./chains";
-export * from "./contract-artifacts";
+export * from "./domain";
 export * from "./environment";
 export * from "./models";
 export * from "./safety";

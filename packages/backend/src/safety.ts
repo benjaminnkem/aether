@@ -1,120 +1,64 @@
 import {
-  policyEnvelopeSchema,
-  simulationResultSchema,
-  transactionRequestSchema,
-  type PolicyEnvelope,
-  type TransactionRequest,
-  type BoundApproval,
-} from "./contracts";
-import { stableHash } from "./security";
-import { encodeSetOracleCalldata } from "./contract-artifacts";
-
-export interface SafetyInput {
-  request: TransactionRequest;
-  policy: PolicyEnvelope;
-  planHash: string;
-  simulation: unknown;
-  approvals: BoundApproval[];
-  planCreatedBy?: string;
-  now?: Date;
-}
+  actionSchema,
+  type MissionAction,
+  type MissionDefinition,
+} from "@aether/shared";
+import { contentHash } from "./domain";
 
 export class SafetyViolation extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-  ) {
+  constructor(message: string) {
     super(message);
     this.name = "SafetyViolation";
   }
 }
 
-export class ExecutionSafety {
-  static planHash(request: TransactionRequest, desiredStateVersionId: string) {
-    return stableHash({
-      desiredStateVersionId,
-      request: transactionRequestSchema.parse(request),
-    });
-  }
-
-  authorize(input: SafetyInput): void {
-    const request = transactionRequestSchema.parse(input.request);
-    const policy = policyEnvelopeSchema.parse(input.policy);
-    const simulation = simulationResultSchema.parse(input.simulation);
-    const now = input.now ?? new Date();
-
-    if (!policy.allowedChainIds.includes(request.chainId)) {
-      throw new SafetyViolation(
-        "CHAIN_NOT_ALLOWED",
-        "Chain is not allowlisted.",
-      );
-    }
-    if (
-      !policy.allowedTargets.some(
-        (target) => target.toLowerCase() === request.target.toLowerCase(),
-      )
-    ) {
-      throw new SafetyViolation(
-        "TARGET_NOT_ALLOWED",
-        "Target is not allowlisted.",
-      );
-    }
-    if (!policy.allowedFunctions.includes(request.functionSignature)) {
-      throw new SafetyViolation(
-        "FUNCTION_NOT_ALLOWED",
-        "Function is not allowlisted.",
-      );
-    }
-    if (
-      request.calldata.toLowerCase() !==
-      encodeSetOracleCalldata(request.desiredOracle)
-    ) {
-      throw new SafetyViolation(
-        "CALLDATA_MISMATCH",
-        "Calldata must encode the exact approved setOracle(address) request.",
-      );
-    }
-    if (BigInt(request.valueWei) > BigInt(policy.maximumValueWei)) {
-      throw new SafetyViolation(
-        "VALUE_LIMIT_EXCEEDED",
-        "Value exceeds policy.",
-      );
-    }
-    if (request.valueWei !== "0") {
-      throw new SafetyViolation(
-        "MVP_ZERO_VALUE_REQUIRED",
-        "The MVP correction must transfer zero value.",
-      );
-    }
-    if (
-      simulation.planHash !== input.planHash ||
-      !simulation.success ||
-      !simulation.postconditionMatched
-    ) {
-      throw new SafetyViolation(
-        "SIMULATION_NOT_BOUND",
-        "A successful exact-request simulation is required.",
-      );
-    }
-
-    const distinctApprovers = new Set(
-      input.approvals
-        .filter(
-          (approval) =>
-            approval.decision === "approve" &&
-            approval.planHash === input.planHash &&
-            approval.simulationId === simulation.simulationId &&
-            (!policy.prohibitSelfApproval ||
-              approval.actorId !== input.planCreatedBy) &&
-            new Date(approval.expiresAt) > now,
-        )
-        .map((approval) => approval.actorId),
+export function validateAction(
+  action: MissionAction,
+  definition: MissionDefinition,
+): MissionAction {
+  const parsed = actionSchema.parse(action);
+  if (parsed.chainId !== 11155111)
+    throw new SafetyViolation(
+      "Writes are restricted to Ethereum Sepolia 11155111.",
     );
-    if (distinctApprovers.size < policy.approvalThreshold) {
-      throw new SafetyViolation(
-        "APPROVAL_THRESHOLD_NOT_MET",
-        "Unexpired approvals bound to this plan and simulation are required.",
-      );
-    }
-  }
+  if (
+    !definition.authorityPolicy.allowedTargets.some(
+      (item) => item.toLowerCase() === parsed.contractAddress.toLowerCase(),
+    )
+  )
+    throw new SafetyViolation(
+      "Target is not authorized by the mission version.",
+    );
+  if (
+    !definition.authorityPolicy.allowedFunctions.includes(parsed.functionName)
+  )
+    throw new SafetyViolation(
+      "Function is not authorized by the mission version.",
+    );
+  if (
+    BigInt(parsed.valueWei) > BigInt(definition.authorityPolicy.maximumValueWei)
+  )
+    throw new SafetyViolation("Native value exceeds the mission limit.");
+  return parsed;
+}
+
+export function planHash(input: {
+  missionVersionHash: string;
+  runId: string;
+  stepId: string;
+  kind: "FORWARD" | "COMPENSATION";
+  action: MissionAction;
+  proof: unknown;
+}): string {
+  return contentHash(input);
+}
+
+export function assertSimulationBinding(
+  plan: { requestBodyHash: string },
+  broadcastAction: MissionAction,
+): void {
+  if (plan.requestBodyHash !== contentHash(broadcastAction))
+    throw new SafetyViolation(
+      "Broadcast request differs from the simulated request.",
+    );
 }

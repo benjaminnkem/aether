@@ -34,7 +34,7 @@ describe("Aether design-system interactions", () => {
       return (
         <>
           <button onClick={() => setOpen(true)}>Open evidence</button>
-          <Drawer open={open} onOpenChange={setOpen} title="Oracle evidence">
+          <Drawer open={open} onOpenChange={setOpen} title="Chain evidence">
             <p>Block-pinned fact</p>
           </Drawer>
         </>
@@ -45,7 +45,7 @@ describe("Aether design-system interactions", () => {
     const trigger = screen.getByRole("button", { name: "Open evidence" });
     await user.click(trigger);
     expect(
-      screen.getByRole("dialog", { name: "Oracle evidence" }),
+      screen.getByRole("dialog", { name: "Chain evidence" }),
     ).toBeVisible();
     await user.keyboard("{Escape}");
     expect(trigger).toHaveFocus();

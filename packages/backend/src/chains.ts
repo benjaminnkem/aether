@@ -1,21 +1,23 @@
-import { activeLiveChain, assertLiveExecutionChain } from "@aether/shared";
+import { assertLiveExecutionChain } from "@aether/shared";
 
 export function validateRuntimeChainEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ): void {
-  const raw = environment.AETHER_CHAIN_ID;
-  if (!raw) throw new Error("AETHER_CHAIN_ID is required.");
-  const chainId = Number(raw);
-  if (!Number.isSafeInteger(chainId)) {
-    throw new Error("AETHER_CHAIN_ID must be an integer.");
-  }
-  assertLiveExecutionChain(chainId);
-  if (environment.AETHER_MAINNET_DISABLED !== "true") {
-    throw new Error("AETHER_MAINNET_DISABLED must be true.");
-  }
-  if (!environment[activeLiveChain.rpcEnvironmentVariable]) {
+  const allowed = (environment.AETHER_ALLOWED_CHAIN_IDS ?? "11155111")
+    .split(",")
+    .map((value) => Number(value.trim()));
+  if (allowed.length !== 1 || !Number.isSafeInteger(allowed[0])) {
     throw new Error(
-      `${activeLiveChain.rpcEnvironmentVariable} is required for ${activeLiveChain.displayName}.`,
+      "AETHER_ALLOWED_CHAIN_IDS must contain only Ethereum Sepolia (11155111).",
+    );
+  }
+  assertLiveExecutionChain(allowed[0]!);
+  if (
+    !environment.SEPOLIA_RPC_PRIMARY_URL ||
+    !environment.SEPOLIA_RPC_SECONDARY_URL
+  ) {
+    throw new Error(
+      "SEPOLIA_RPC_PRIMARY_URL and SEPOLIA_RPC_SECONDARY_URL are required.",
     );
   }
 }

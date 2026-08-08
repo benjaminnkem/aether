@@ -19,7 +19,7 @@ import type { Request, Response } from "express";
 import * as argon2 from "argon2";
 import nodemailer from "nodemailer";
 import { registerModels, type TenantContext } from "@aether/backend";
-import { activeLiveChain } from "@aether/shared";
+import type { WorkspaceRole } from "@aether/shared";
 import { z } from "zod";
 
 const credentialsSchema = z.object({
@@ -35,9 +35,6 @@ const accessClaimsSchema = z.object({
   sub: z.string().min(1),
   sid: z.string().min(1),
   actorId: z.string().min(1),
-  organizationId: z.string().min(1).optional(),
-  protocolId: z.string().min(1).optional(),
-  role: z.enum(["owner", "operator", "reviewer", "viewer"]).optional(),
 });
 
 type AnyModel = Model<Record<string, unknown>>;
@@ -176,19 +173,14 @@ export class AuthService {
       .lean()
       .exec();
     if (!user) throw new UnauthorizedException("Session user is unavailable.");
-    const context =
-      claims.organizationId && claims.protocolId && claims.role
-        ? {
-            organizationId: claims.organizationId,
-            protocolId: claims.protocolId,
-            role: claims.role,
-          }
-        : undefined;
+    const context = await this.tenantContext(claims.sub);
     return {
       authenticated: true as const,
       user: { id: String(user.userId), email: String(user.email) },
       context,
-      destination: context ? ("dashboard" as const) : ("onboarding" as const),
+      destination: context.workspaceId
+        ? ("dashboard" as const)
+        : ("onboarding" as const),
     };
   }
 
@@ -281,40 +273,46 @@ export class AuthService {
   }
 
   async onboard(input: unknown, request: Request) {
+    this.assertCsrf(request);
     const claims = await this.accessClaims(request);
     const parsed = z
       .object({
-        organizationName: z.string().trim().min(2).max(100),
-        protocolName: z.string().trim().min(2).max(100),
-        governanceAuthority: z.string().trim().min(1).max(200),
+        workspaceName: z.string().trim().min(2).max(100),
       })
       .parse(input);
     if (await this.model("Membership").exists({ userId: claims.sub })) {
       throw new ConflictException(
-        "This account already belongs to an organization.",
+        "This account already belongs to a workspace.",
       );
     }
-    const organizationId = `org_${randomUUID()}`;
-    const protocolId = `pro_${randomUUID()}`;
-    await this.model("Organization").create({
-      organizationId,
-      name: parsed.organizationName,
+    const workspaceId = `ws_${randomUUID()}`;
+    const slug = `${parsed.workspaceName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 60)}-${workspaceId.slice(-6)}`;
+    await this.model("Workspace").create({
+      workspaceId,
+      name: parsed.workspaceName,
+      slug,
+      status: "ACTIVE",
+      defaultChainId: 11155111,
     });
     await this.model("Membership").create({
-      organizationId,
+      workspaceId,
       userId: claims.sub,
-      role: "owner",
+      role: "OWNER",
     });
-    await this.model("Protocol").create({
-      organizationId,
-      protocolId,
-      name: parsed.protocolName,
-      environment: activeLiveChain.displayName,
-      governance: parsed.governanceAuthority,
-      status: "setup_required",
-      health: 0,
+    await this.model("WorkspacePolicy").create({
+      workspaceId,
+      policyId: `pol_${randomUUID()}`,
+      emergencyPause: false,
+      allowedChainIds: [11155111],
+      maximumWritesPerMission: 32,
+      maximumValueWei: "0",
+      maximumRecoverySpendWei: "0",
     });
-    return { organizationId, protocolId, role: "owner" as const };
+    return { workspaceId, role: "OWNER" as const };
   }
 
   private async createSession(
@@ -326,7 +324,7 @@ export class AuthService {
   ) {
     const context = await this.tenantContext(userId);
     const refresh = await this.jwt.signAsync(
-      { sub: userId, sid: sessionId, actorId: userId, ...context },
+      { sub: userId, sid: sessionId, actorId: userId },
       {
         secret: required("AETHER_REFRESH_TOKEN_SECRET"),
         audience: "aether-refresh",
@@ -351,13 +349,7 @@ export class AuthService {
       ipHash: hash(request.ip ?? ""),
       lastUsedAt: new Date(),
     });
-    const access = await this.setCookies(
-      response,
-      userId,
-      sessionId,
-      refresh,
-      context,
-    );
+    const access = await this.setCookies(response, userId, sessionId, refresh);
     return { authenticated: true as const, userId, context, ...access };
   }
 
@@ -391,14 +383,13 @@ export class AuthService {
     userId: string,
     sessionId: string,
     refresh: string,
-    context: Partial<TenantContext>,
-  ): Promise<{ accessToken: string; accessTokenExpiresInSeconds: number }> {
+  ): Promise<{ accessTokenExpiresInSeconds: number }> {
     const secure = process.env.NODE_ENV === "production";
     const accessTokenExpiresInSeconds = Number(
       process.env.AETHER_ACCESS_TOKEN_TTL_SECONDS ?? 900,
     );
     const access = await this.jwt.signAsync(
-      { sub: userId, sid: sessionId, actorId: userId, ...context },
+      { sub: userId, sid: sessionId, actorId: userId },
       {
         secret: required("AETHER_ACCESS_TOKEN_SECRET"),
         audience: "aether-api",
@@ -430,7 +421,6 @@ export class AuthService {
       path: "/",
     });
     return {
-      accessToken: access,
       accessTokenExpiresInSeconds,
     };
   }
@@ -468,16 +458,9 @@ export class AuthService {
       .lean()
       .exec();
     if (!membership) return {};
-    const protocol = await this.model("Protocol")
-      .findOne({ organizationId: membership.organizationId })
-      .sort({ createdAt: 1 })
-      .lean()
-      .exec();
-    if (!protocol) return {};
     return {
-      organizationId: String(membership.organizationId),
-      protocolId: String(protocol.protocolId),
-      role: membership.role as TenantContext["role"],
+      workspaceId: String(membership.workspaceId),
+      role: membership.role as WorkspaceRole,
     };
   }
 

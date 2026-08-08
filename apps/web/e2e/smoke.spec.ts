@@ -1,124 +1,132 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test("marketing and real authentication surfaces render", async ({ page }) => {
+async function authenticate(page: Page) {
+  await page.context().addCookies([
+    {
+      name: "aether_access",
+      value: "browser-test",
+      url: "http://localhost:3000",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+}
+test("landing and authentication use production copy", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /KNOW WHAT LANDED/ }),
+  ).toBeVisible();
+  await expect(page.getByText(/AI-powered|self-healing/i)).toHaveCount(0);
   await page.goto("/signup");
   await expect(
-    page.getByRole("heading", { name: "Create your Aether account" }),
+    page.getByRole("heading", { name: /Create your workspace account/ }),
   ).toBeVisible();
-  await expect(page.getByLabel("Work email")).toBeEditable();
-  await expect(page.getByLabel("Password")).toBeEditable();
+  await expect(page.getByLabel("Email")).toBeEditable();
+});
+test("protected routes require the secure session cookie", async ({ page }) => {
+  await page.goto("/app/overview");
+  await expect(page).toHaveURL(/\/login\?returnTo=/);
+});
+test("all primary routes render on desktop and mobile", async ({ page }) => {
+  await authenticate(page);
+  await page.route("**/v1/missions", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/v1/approvals", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/v1/audit", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  for (const path of [
+    "/app/overview",
+    "/app/missions",
+    "/app/missions/new",
+    "/app/approvals",
+    "/app/audit",
+    "/app/settings/integrations",
+    "/app/settings/api-keys",
+    "/app/settings/policy",
+  ]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  }
+});
+test("demo replay is explicitly labeled and never invents evidence", async ({
+  page,
+}) => {
+  await page.route("**/v1/demo/scenarios", (route) =>
+    route.fulfill({
+      json: {
+        liveExecutionEnabled: false,
+        scenarios: ["HAPPY_PATH", "PARTIAL_FAILURE", "UNKNOWN_OUTCOME"],
+        replays: [],
+      },
+    }),
+  );
+  await page.goto("/demo");
+  await expect(
+    page.getByRole("heading", { name: /See every write/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/will not fabricate transaction evidence/i),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Live execution disabled" }),
+  ).toHaveCount(3);
 });
 
-test("browser SDK uses the configured API origin", async ({ page }) => {
-  const apiBase = process.env.NEXT_PUBLIC_AETHER_API_URL?.replace(/\/$/, "");
-  expect(apiBase).toBeTruthy();
-  let requestedUrl: string | null = null;
-  await page.route(`${apiBase}/auth/login`, async (route) => {
-    requestedUrl = route.request().url();
+test("live demo opens its isolated flight recorder with the view token", async ({
+  page,
+}) => {
+  await page.route("**/v1/demo/scenarios", (route) =>
+    route.fulfill({
+      json: {
+        liveExecutionEnabled: true,
+        launchToken: "launch-token-that-is-long-enough-for-the-demo-route",
+        scenarios: ["HAPPY_PATH", "PARTIAL_FAILURE", "UNKNOWN_OUTCOME"],
+        replays: [],
+      },
+    }),
+  );
+  await page.route("**/v1/demo/runs", async (route) => {
+    expect(route.request().method()).toBe("POST");
     await route.fulfill({
-      status: 401,
-      contentType: "application/json",
-      body: JSON.stringify({ code: "AUTHENTICATION_FAILED" }),
+      json: {
+        runId: "run_demo_browser",
+        scenario: "HAPPY_PATH",
+        live: true,
+        viewToken: "view-token-for-run-demo-browser",
+      },
     });
   });
-
-  await page.goto("/login");
-  await page.getByLabel("Work email").fill("endpoint-check@example.invalid");
-  await page.getByLabel("Password").fill("not-a-real-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
-
-  await expect.poll(() => requestedUrl).toBe(`${apiBase}/auth/login`);
-});
-
-test("signup creates an authenticated session and continues to onboarding", async ({
-  page,
-}) => {
-  const apiBase = process.env.NEXT_PUBLIC_AETHER_API_URL?.replace(/\/$/, "");
-  expect(apiBase).toBeTruthy();
-  await page.route(`${apiBase}/auth/signup`, (route) =>
-    route.fulfill({
-      status: 201,
-      contentType: "application/json",
-      body: JSON.stringify({
-        authenticated: true,
-        userId: "usr_browser_test",
-        email: "new-user@example.invalid",
-        accessToken: "browser-test-access-token",
-        accessTokenExpiresInSeconds: 900,
-        context: {},
-      }),
-    }),
-  );
-
-  await page.goto("/signup");
-  await page.getByLabel("Full name").fill("Browser Test");
-  await page.getByLabel("Work email").fill("new-user@example.invalid");
-  await page.getByLabel("Password").fill("correct-horse-battery-staple");
-  await page.getByRole("button", { name: "Create account" }).click();
-
-  await expect(page).toHaveURL(/\/onboarding$/);
-});
-
-test("dashboard returns to sign in when the API denies the session", async ({
-  page,
-}) => {
-  await page.route("**/v1/dashboard**", (route) =>
-    route.fulfill({
-      status: 401,
-      contentType: "application/json",
-      body: JSON.stringify({ code: "AUTHENTICATION_REQUIRED" }),
-    }),
-  );
-  await page.goto("/app/overview");
-  await expect(page).toHaveURL(/\/login\?returnTo=/, { timeout: 15_000 });
+  await page.route("**/v1/demo/runs/run_demo_browser**", async (route) => {
+    expect(route.request().headers()["x-demo-run-token"]).toBe(
+      "view-token-for-run-demo-browser",
+    );
+    if (route.request().url().includes("/stream")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: 'event: boundary\ndata: {"runId":"run_demo_browser","state":"COMPLETED"}\n\n',
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        runId: "run_demo_browser",
+        state: "COMPLETED",
+        stateReason: "Every fixed write was independently verified.",
+        objective: "Complete the fixed Sepolia demonstration.",
+        steps: [],
+        reconciliation: [],
+      },
+    });
+  });
+  await page.goto("/demo");
+  await page.getByRole("button", { name: "Run on Sepolia" }).first().click();
+  await expect(page).toHaveURL(/\/demo\/runs\/run_demo_browser$/);
   await expect(
-    page.getByRole("heading", { name: "Welcome back" }),
+    page.getByRole("heading", { name: "run_demo_browser" }),
   ).toBeVisible();
-  await expect(page.getByText(/Demo controls/i)).toHaveCount(0);
-});
-
-test("mobile and reduced motion keep navigation usable", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
-  await expect(page.locator("main")).toBeVisible();
-  await page.goto("/login");
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-});
-
-test("removed fixed resource URLs do not fabricate records", async ({
-  page,
-}) => {
-  await page.route("**/v1/auth/session", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        authenticated: true,
-        user: { id: "usr_test", email: "test@example.invalid" },
-        context: {
-          organizationId: "org_test",
-          protocolId: "pro_test",
-          role: "owner",
-        },
-        destination: "dashboard",
-      }),
-    }),
-  );
-  await page.route("**/v1/dashboard**", (route) =>
-    route.fulfill({
-      status: 404,
-      contentType: "application/json",
-      body: JSON.stringify({ code: "RESOURCE_NOT_FOUND" }),
-    }),
-  );
-  await page.goto("/app/operations/op-oracle-restoration");
-  await expect(
-    page.getByText(/live API did not return a valid response/i),
-  ).toBeVisible({ timeout: 15_000 });
-  await page.goto("/app/executions/exec-kh-8314");
-  await expect(
-    page.getByText(/live API did not return a valid response/i),
-  ).toBeVisible({ timeout: 15_000 });
 });

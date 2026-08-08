@@ -21,6 +21,9 @@ env:
   AETHER_ACCESS_TOKEN_SECRET: ci-only-access-secret-at-least-32-characters
   AETHER_REFRESH_TOKEN_SECRET: ci-only-refresh-secret-at-least-32-characters
   AETHER_COOKIE_SECRET: ci-only-cookie-secret-at-least-32-characters
+  AETHER_ALLOWED_CHAIN_IDS: "11155111"
+  SEPOLIA_RPC_PRIMARY_URL: http://127.0.0.1:8545
+  SEPOLIA_RPC_SECONDARY_URL: http://127.0.0.1:8546
   NEXT_PUBLIC_AETHER_API_URL: http://127.0.0.1:4000/v1
 
 jobs:
@@ -52,15 +55,8 @@ jobs:
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
           --health-interval 10s --health-timeout 5s --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s --health-timeout 5s --health-retries 10
     env:
       MONGODB_URI: mongodb://127.0.0.1:27017/aether_ci
-      REDIS_URL: redis://127.0.0.1:6379
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -104,15 +100,13 @@ jobs:
     environment: live-ethereum-sepolia
     runs-on: ubuntu-latest
     env:
-      AETHER_CHAIN_ID: "11155111"
-      AETHER_MAINNET_DISABLED: "true"
+      AETHER_ALLOWED_CHAIN_IDS: "11155111"
       NEXT_PUBLIC_AETHER_EXPLORER_URL: https://sepolia.etherscan.io
-      AETHER_DEPLOYMENT_REGISTRY_PATH: packages/contracts/deployments/11155111.json
-      AETHER_RPC_URL: ${{ secrets.AETHER_RPC_URL }}
+      SEPOLIA_RPC_PRIMARY_URL: ${{ secrets.SEPOLIA_RPC_PRIMARY_URL }}
+      SEPOLIA_RPC_SECONDARY_URL: ${{ secrets.SEPOLIA_RPC_SECONDARY_URL }}
       KEEPERHUB_API_KEY: ${{ secrets.KEEPERHUB_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
-      GITHUB_PRIVATE_KEY_BASE64: ${{ secrets.GITHUB_PRIVATE_KEY_BASE64 }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      DEMO_VAULT_ADDRESS: ${{ secrets.DEMO_VAULT_ADDRESS }}
       LIVE_TEST_EMAIL: ${{ secrets.LIVE_TEST_EMAIL }}
       LIVE_TEST_PASSWORD: ${{ secrets.LIVE_TEST_PASSWORD }}
     steps:
@@ -127,5 +121,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm chain:doctor
       - run: pnpm keeperhub:doctor
-      - run: pnpm openai:doctor
-      - run: pnpm test:live
+      - run: pnpm groq:doctor
+      - run: pnpm test:live:sepolia

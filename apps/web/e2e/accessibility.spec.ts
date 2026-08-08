@@ -1,41 +1,25 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { authenticatedSession, dashboardFixture } from "./fixtures/dashboard";
-
-async function expectNoSeriousViolations(page: Page) {
-  const results = await new AxeBuilder({ page }).analyze();
+async function clean(page: Page) {
+  const result = await new AxeBuilder({ page }).analyze();
   expect(
-    results.violations.filter((violation) =>
-      ["serious", "critical"].includes(violation.impact ?? ""),
+    result.violations.filter((item) =>
+      ["serious", "critical"].includes(item.impact ?? ""),
     ),
   ).toEqual([]);
 }
-
-test("public and product critical surfaces pass automated accessibility checks", async ({
+test("public, auth, demo, and flight recorder have no serious accessibility violations", async ({
   page,
 }) => {
-  await page.route("**/v1/auth/session", (route) =>
-    route.fulfill({ status: 401 }),
-  );
   await page.goto("/");
-  await expectNoSeriousViolations(page);
-
-  await page.unroute("**/v1/auth/session");
-  await page.route("**/v1/auth/session", (route) =>
+  await clean(page);
+  await page.goto("/login");
+  await clean(page);
+  await page.route("**/v1/demo/scenarios", (route) =>
     route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(authenticatedSession),
+      json: { liveExecutionEnabled: false, replays: [], scenarios: [] },
     }),
   );
-  await page.route("**/v1/dashboard**", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(dashboardFixture),
-    }),
-  );
-  await page.goto("/app/overview");
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await expectNoSeriousViolations(page);
+  await page.goto("/demo");
+  await clean(page);
 });

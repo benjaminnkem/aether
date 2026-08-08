@@ -1,400 +1,355 @@
-import axios, {
-  type AxiosError,
-  type AxiosInstance,
-  type InternalAxiosRequestConfig,
-} from "axios";
 import {
-  authSessionSchema,
-  dashboardSchema,
-  desiredStateSchema,
-  githubDesiredStateSourceSchema,
-  type Dashboard,
-  type DesiredState,
-  type AuthSession,
-  type GitHubDesiredStateSource,
+  apiErrorSchema,
+  createMissionSchema,
+  createRunSchema,
 } from "@aether/shared";
 
-declare const process: {
-  env: Record<string, string | undefined>;
-};
-
-export function getAetherErrorMessage(
-  error: unknown,
-  fallback: string,
-): string {
-  if (!axios.isAxiosError(error)) return fallback;
-  const data = error.response?.data as
-    | { message?: unknown; error?: unknown }
-    | undefined;
-  const message =
-    typeof data?.message === "string"
-      ? data.message
-      : typeof data?.error === "string"
-        ? data.error
-        : undefined;
-  return message && message.length <= 240 ? message : fallback;
+export class AetherApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+    readonly correlationId: string,
+    readonly details?: unknown,
+  ) {
+    super(message);
+    this.name = "AetherApiError";
+  }
 }
 
 export class AetherClient {
-  private readonly http: AxiosInstance;
-  private readonly baseURL: string;
-  private refreshPromise: Promise<void> | null = null;
+  private refreshPromise?: Promise<void>;
 
-  constructor(baseURL = "/v1") {
-    this.baseURL = baseURL.replace(/\/$/, "");
-    this.http = axios.create({
-      baseURL: this.baseURL,
-      withCredentials: true,
-      headers: { "X-Aether-Client": "web" },
-      timeout: 10_000,
+  constructor(private readonly baseUrl = "/v1") {}
+
+  session() {
+    return this.request<Record<string, unknown>>("/auth/session", {
+      allowUnauthenticated: true,
     });
-    this.http.interceptors.response.use(
-      (response) => response,
-      async (error: AxiosError) => this.retryAfterRefresh(error),
+  }
+  signup(email: string, password: string) {
+    return this.request("/auth/signup", {
+      method: "POST",
+      body: { email, password },
+      refresh: false,
+    });
+  }
+  login(email: string, password: string) {
+    return this.request("/auth/login", {
+      method: "POST",
+      body: { email, password },
+      refresh: false,
+    });
+  }
+  logout() {
+    return this.request("/auth/logout", { method: "POST", body: {} });
+  }
+  onboard(workspaceName: string) {
+    return this.request("/auth/onboarding", {
+      method: "POST",
+      body: { workspaceName },
+    });
+  }
+  forgotPassword(email: string) {
+    return this.request("/auth/forgot-password", {
+      method: "POST",
+      body: { email },
+      refresh: false,
+    });
+  }
+  resetPassword(token: string, password: string) {
+    return this.request("/auth/reset-password", {
+      method: "POST",
+      body: { token, password },
+      refresh: false,
+    });
+  }
+
+  listMissions() {
+    return this.request<{ items: Array<Record<string, unknown>> }>("/missions");
+  }
+  mission(id: string) {
+    return this.request<Record<string, unknown>>(
+      `/missions/${encodeURIComponent(id)}`,
     );
   }
-
-  private async retryAfterRefresh(error: AxiosError) {
-    const request = error.config as RetryableRequest | undefined;
-    const path = request?.url ?? "";
-    const excluded = [
-      "/auth/login",
-      "/auth/signup",
-      "/auth/refresh",
-      "/auth/logout",
-      "/auth/forgot-password",
-      "/auth/reset-password",
-    ].some((item) => path.includes(item));
-    if (
-      error.response?.status !== 401 ||
-      !request ||
-      request.aetherRetried ||
-      excluded
-    ) {
-      return Promise.reject(error);
-    }
-    request.aetherRetried = true;
-    this.refreshPromise ??= this.http
-      .post("/auth/refresh", {}, { headers: csrfHeaders() })
-      .then(() => undefined)
-      .finally(() => {
-        this.refreshPromise = null;
-      });
-    await this.refreshPromise;
-    return this.http.request(request);
-  }
-
-  async getSession(): Promise<AuthSession | null> {
-    try {
-      const response = await this.http.get("/auth/session");
-      return authSessionSchema.parse(response.data);
-    } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 401)
-        return null;
-      throw error;
-    }
-  }
-
-  async signup(email: string, password: string) {
-    const response = await this.http.post("/auth/signup", { email, password });
-    return response.data as {
-      authenticated: true;
-      userId: string;
-      email: string;
-      accessToken: string;
-      accessTokenExpiresInSeconds: number;
-      context: Record<string, unknown>;
-    };
-  }
-
-  async login(email: string, password: string) {
-    const response = await this.http.post("/auth/login", { email, password });
-    return response.data as { authenticated: true; userId: string };
-  }
-
-  async forgotPassword(email: string) {
-    const response = await this.http.post("/auth/forgot-password", { email });
-    return response.data as { ok: true };
-  }
-
-  async resetPassword(token: string, password: string) {
-    const response = await this.http.post("/auth/reset-password", {
-      token,
-      password,
+  createMission(input: unknown, idempotencyKey = crypto.randomUUID()) {
+    return this.request("/missions", {
+      method: "POST",
+      body: createMissionSchema.parse(input),
+      idempotencyKey,
     });
-    return response.data as { ok: true };
   }
-
-  async logout() {
-    const response = await this.http.post(
-      "/auth/logout",
-      {},
-      { headers: csrfHeaders() },
-    );
-    return response.data as { ok: true };
-  }
-
-  async onboard(input: {
-    organizationName: string;
-    protocolName: string;
-    governanceAuthority: string;
-  }) {
-    const response = await this.http.post("/auth/onboarding", input);
-    await this.http.post("/auth/refresh", {}, { headers: csrfHeaders() });
-    return response.data as {
-      organizationId: string;
-      protocolId: string;
-      role: "owner";
-    };
-  }
-
-  async getDashboard(
-    organizationId: string,
-    protocolId: string,
-  ): Promise<Dashboard> {
-    const response = await this.http.get("/dashboard", {
-      params: { organizationId, protocolId },
-    });
-    return dashboardSchema.parse(response.data);
-  }
-
-  subscribeEvents(
-    afterSequence: number,
-    listener: (event: RealtimeEvent) => void,
-    onError?: () => void,
-  ): () => void {
-    if (typeof EventSource === "undefined") return () => undefined;
-    const source = new EventSource(
-      `${this.baseURL}/events?after=${Math.max(0, afterSequence)}`,
-      { withCredentials: true },
-    );
-    const handleEvent = (raw: Event) => {
-      if (!(raw instanceof MessageEvent) || typeof raw.data !== "string")
-        return;
-      try {
-        listener(JSON.parse(raw.data) as RealtimeEvent);
-      } catch {
-        onError?.();
-      }
-    };
-    source.onmessage = handleEvent;
-    source.onerror = () => onError?.();
-    return () => source.close();
-  }
-
-  async approveOperation(
-    operationId: string,
-    decision: "approve" | "reject",
-  ): Promise<Dashboard> {
-    const response = await this.http.post(
-      `/operations/${encodeURIComponent(operationId)}/approval`,
-      {
-        decision,
-      },
-      { headers: csrfHeaders() },
-    );
-    return dashboardSchema.parse(response.data);
-  }
-
-  async validateDesiredState(input: DesiredState): Promise<DesiredState> {
-    const parsed = desiredStateSchema.parse(input);
-    const response = await this.http.post("/desired-state/validate", parsed, {
-      headers: csrfHeaders(),
-    });
-    return desiredStateSchema.parse(response.data);
-  }
-
-  async saveDesiredState(input: DesiredState) {
-    const parsed = desiredStateSchema.parse(input);
-    const response = await this.http.post("/desired-state/versions", parsed, {
-      headers: csrfHeaders(),
-    });
-    return response.data as {
-      id: string;
-      active: true;
-      manifest: DesiredState;
-    };
-  }
-
-  async runScan(idempotencyKey = crypto.randomUUID()): Promise<{
-    id: string;
-    status: string;
-    idempotencyKey: string;
-  }> {
-    const response = await this.http.post(
-      "/observations/scans",
-      {},
-      {
-        headers: {
-          ...csrfHeaders(),
-          "Idempotency-Key": idempotencyKey,
-        },
-      },
-    );
-    return response.data as {
-      id: string;
-      status: string;
-      idempotencyKey: string;
-    };
-  }
-
-  async investigateFinding(
-    findingId: string,
+  createMissionVersion(
+    id: string,
+    definition: unknown,
     idempotencyKey = crypto.randomUUID(),
   ) {
-    const response = await this.http.post(
-      `/drift/${encodeURIComponent(findingId)}/investigate`,
-      {},
+    return this.request(`/missions/${encodeURIComponent(id)}/versions`, {
+      method: "POST",
+      body: definition,
+      idempotencyKey,
+    });
+  }
+  archiveMission(id: string, idempotencyKey = crypto.randomUUID()) {
+    return this.request(`/missions/${encodeURIComponent(id)}/archive`, {
+      method: "POST",
+      body: {},
+      idempotencyKey,
+    });
+  }
+  createRun(
+    missionId: string,
+    input: unknown,
+    idempotencyKey = crypto.randomUUID(),
+  ) {
+    return this.request<Record<string, unknown>>(
+      `/missions/${encodeURIComponent(missionId)}/runs`,
+      { method: "POST", body: createRunSchema.parse(input), idempotencyKey },
+    );
+  }
+  run(id: string) {
+    return this.request<Record<string, unknown>>(
+      `/runs/${encodeURIComponent(id)}`,
+    );
+  }
+  demoRun(id: string, viewToken: string) {
+    return this.request<Record<string, unknown>>(
+      `/demo/runs/${encodeURIComponent(id)}`,
       {
-        headers: {
-          ...csrfHeaders(),
-          "Idempotency-Key": idempotencyKey,
-        },
+        allowUnauthenticated: true,
+        headers: { "X-Demo-Run-Token": viewToken },
       },
     );
-    return response.data as {
-      findingId: string;
-      status: "queued";
-      idempotencyKey: string;
-    };
   }
-
-  async generatePlan(findingId: string) {
-    const response = await this.http.post(
-      `/drift/${encodeURIComponent(findingId)}/plan`,
-      {},
-      { headers: csrfHeaders() },
+  timeline(id: string, after = 0) {
+    return this.request<Array<Record<string, unknown>>>(
+      `/runs/${encodeURIComponent(id)}/timeline?after=${after}`,
     );
-    return response.data;
   }
-
-  async simulateOperation(operationId: string) {
-    const response = await this.http.post(
-      `/operations/${encodeURIComponent(operationId)}/simulation`,
-      {},
-      { headers: csrfHeaders() },
+  receipt(id: string) {
+    return this.request<Record<string, unknown>>(
+      `/runs/${encodeURIComponent(id)}/receipt`,
     );
-    return response.data as {
-      status: "queued";
-      executionId: string;
-      idempotencyKey: string;
-    };
   }
-
-  async executeOperation(operationId: string) {
-    const response = await this.http.post(
-      `/operations/${encodeURIComponent(operationId)}/execution`,
-      {},
-      { headers: csrfHeaders() },
-    );
-    return response.data as {
-      id: string;
-      operationId: string;
-      status: string;
-      idempotencyKey: string;
-    };
-  }
-
-  async updateProtocolSetup(
-    section: "general" | "networks" | "contracts" | "github" | "keeperhub",
-    input: Record<string, unknown>,
-  ): Promise<{ section: string; value: Record<string, unknown> }> {
-    const response = await this.http.put(
-      `/protocol-setup/${encodeURIComponent(section)}`,
-      input,
-      { headers: csrfHeaders() },
-    );
-    return response.data as {
-      section: string;
-      value: Record<string, unknown>;
-    };
-  }
-
-  async getProtocolSetup() {
-    const response = await this.http.get("/protocol-setup");
-    return response.data as Record<string, unknown>;
-  }
-
-  async getGitHubInstallUrl() {
-    const response = await this.http.get("/github/install-url");
-    return response.data as { url: string };
-  }
-
-  async getGitHubRepositories() {
-    const response = await this.http.get("/github/repositories");
-    return response.data as Array<{
-      full_name: string;
-      default_branch: string;
-      private: boolean;
-      html_url: string;
-    }>;
-  }
-
-  async getGitHubDesiredState(): Promise<GitHubDesiredStateSource> {
-    const response = await this.http.get("/github/desired-state-source");
-    return githubDesiredStateSourceSchema.parse(response.data);
-  }
-
-  async selectGitHubRepository(input: {
-    repository: string;
-    defaultBranch: string;
-    desiredStatePath: string;
-  }) {
-    const response = await this.http.put("/github/repository", input, {
-      headers: csrfHeaders(),
+  controlRun(
+    id: string,
+    action: "pause" | "resume" | "cancel",
+    idempotencyKey = crypto.randomUUID(),
+  ) {
+    return this.request(`/runs/${encodeURIComponent(id)}/${action}`, {
+      method: "POST",
+      body: {},
+      idempotencyKey,
     });
-    return response.data as typeof input & { connected: true };
   }
-
-  async validateProvider(provider: "keeperhub" | "openai" | "evm-rpc") {
-    const response = await this.http.post(
-      `/protocol-setup/providers/${provider}/validate`,
-      {},
-      { headers: csrfHeaders() },
+  approvals() {
+    return this.request<{ items: Array<Record<string, unknown>> }>(
+      "/approvals",
     );
-    return response.data as {
-      provider: string;
-      status: "healthy";
-      checkedAt: string;
-      latencyMs: number;
-    };
+  }
+  approval(id: string) {
+    return this.request<Record<string, unknown>>(
+      `/approvals/${encodeURIComponent(id)}`,
+    );
+  }
+  decideApproval(
+    id: string,
+    decision: "approve" | "deny",
+    reason: string,
+    idempotencyKey = crypto.randomUUID(),
+  ) {
+    return this.request(`/approvals/${encodeURIComponent(id)}/${decision}`, {
+      method: "POST",
+      body: { reason },
+      idempotencyKey,
+    });
+  }
+  audit() {
+    return this.request<{ items: Array<Record<string, unknown>> }>("/audit");
+  }
+  policy() {
+    return this.request<Record<string, unknown>>("/policy");
+  }
+  updatePolicy(input: unknown, idempotencyKey = crypto.randomUUID()) {
+    return this.request("/policy", {
+      method: "PUT",
+      body: input,
+      idempotencyKey,
+    });
+  }
+  apiKeys() {
+    return this.request<{ items: Array<Record<string, unknown>> }>("/api-keys");
+  }
+  createApiKey(input: unknown, idempotencyKey = crypto.randomUUID()) {
+    return this.request("/api-keys", {
+      method: "POST",
+      body: input,
+      idempotencyKey,
+    });
+  }
+
+  async streamRun(
+    runId: string,
+    after: number,
+    listener: (event: Record<string, unknown>) => void,
+    signal?: AbortSignal,
+  ) {
+    return this.stream(
+      `/runs/${encodeURIComponent(runId)}/stream`,
+      after,
+      listener,
+      signal,
+    );
+  }
+
+  async streamDemoRun(
+    runId: string,
+    viewToken: string,
+    after: number,
+    listener: (event: Record<string, unknown>) => void,
+    signal?: AbortSignal,
+  ) {
+    return this.stream(
+      `/demo/runs/${encodeURIComponent(runId)}/stream`,
+      after,
+      listener,
+      signal,
+      { "X-Demo-Run-Token": viewToken },
+    );
+  }
+
+  private async stream(
+    path: string,
+    after: number,
+    listener: (event: Record<string, unknown>) => void,
+    signal?: AbortSignal,
+    headers?: Record<string, string>,
+  ) {
+    const response = await fetch(`${this.url(path)}?after=${after}`, {
+      credentials: "include",
+      headers: { Accept: "text/event-stream", ...headers },
+      signal,
+    });
+    if (!response.ok || !response.body) throw await this.error(response);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      buffer += decoder.decode(result.value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const line = frame
+          .split("\n")
+          .find((item) => item.startsWith("data: "));
+        if (line)
+          listener(JSON.parse(line.slice(6)) as Record<string, unknown>);
+      }
+    }
+  }
+
+  private async request<T = Record<string, unknown>>(
+    path: string,
+    options: RequestOptions = {},
+  ): Promise<T> {
+    const headers = new Headers({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    });
+    if (options.idempotencyKey)
+      headers.set("Idempotency-Key", options.idempotencyKey);
+    for (const [name, value] of Object.entries(options.headers ?? {}))
+      headers.set(name, value);
+    if (options.method && !["GET", "HEAD"].includes(options.method)) {
+      const csrf = readCookie("aether_csrf");
+      if (csrf) headers.set("X-CSRF-Token", csrf);
+    }
+    const response = await fetch(this.url(path), {
+      method: options.method ?? "GET",
+      credentials: "include",
+      headers,
+      body:
+        options.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+    if (
+      response.status === 401 &&
+      options.refresh !== false &&
+      !options.allowUnauthenticated
+    ) {
+      await this.refresh();
+      return this.request<T>(path, { ...options, refresh: false });
+    }
+    if (response.status === 401 && options.allowUnauthenticated)
+      return null as T;
+    if (!response.ok) throw await this.error(response);
+    return response.json() as Promise<T>;
+  }
+
+  private async refresh() {
+    this.refreshPromise ??= fetch(this.url("/auth/refresh"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": readCookie("aether_csrf") ?? "",
+      },
+      body: "{}",
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Session expired.");
+      })
+      .finally(() => {
+        this.refreshPromise = undefined;
+      });
+    return this.refreshPromise;
+  }
+  private url(path: string) {
+    return `${this.baseUrl.replace(/\/$/, "")}${path}`;
+  }
+  private async error(response: Response) {
+    const raw = await response.json().catch(() => undefined);
+    const parsed = apiErrorSchema.safeParse(raw);
+    return parsed.success
+      ? new AetherApiError(
+          response.status,
+          parsed.data.code,
+          parsed.data.message,
+          parsed.data.correlationId,
+          parsed.data.details,
+        )
+      : new AetherApiError(
+          response.status,
+          "INVALID_RESPONSE",
+          "The server returned an invalid error response.",
+          response.headers.get("x-request-id") ?? "unknown",
+        );
   }
 }
 
-function csrfHeaders(): Record<string, string> {
-  if (typeof document === "undefined") return {};
-  const token = document.cookie
-    .split("; ")
-    .find((item) => item.startsWith("aether_csrf="))
-    ?.slice("aether_csrf=".length);
-  return token ? { "X-CSRF-Token": decodeURIComponent(token) } : {};
-}
-
-export const aetherClient = new AetherClient(
-  process.env.NEXT_PUBLIC_AETHER_API_URL ?? "/v1",
-);
-export const queryKeys = {
-  session: ["session"] as const,
-  dashboard: (organizationId: string, protocolId: string) =>
-    ["dashboard", organizationId, protocolId] as const,
+type RequestOptions = {
+  method?: "POST" | "PUT" | "DELETE";
+  body?: unknown;
+  idempotencyKey?: string;
+  refresh?: boolean;
+  allowUnauthenticated?: boolean;
+  headers?: Record<string, string>;
 };
-
-export function isAuthenticationError(error: unknown) {
-  return axios.isAxiosError(error) && error.response?.status === 401;
+function readCookie(name: string) {
+  if (typeof document === "undefined") return undefined;
+  const prefix = `${name}=`;
+  return document.cookie
+    .split("; ")
+    .find((item) => item.startsWith(prefix))
+    ?.slice(prefix.length);
 }
-
-interface RetryableRequest extends InternalAxiosRequestConfig {
-  aetherRetried?: boolean;
+export function getAetherErrorMessage(error: unknown, fallback: string) {
+  return error instanceof AetherApiError
+    ? error.message
+    : error instanceof Error && error.message.length <= 240
+      ? error.message
+      : fallback;
 }
-export interface RealtimeEvent {
-  id: string;
-  type: string;
-  sequence: number;
-  timestamp: string;
-  organizationId: string;
-  protocolId: string;
-  resourceId: string;
-}
-export interface RealtimeAdapter {
-  subscribe(listener: (event: RealtimeEvent) => void): () => void;
-}
+export const aetherClient = new AetherClient("/v1");

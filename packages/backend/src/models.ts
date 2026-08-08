@@ -1,32 +1,33 @@
-import { Schema, type Model, type Connection } from "mongoose";
+import { Schema, type Connection, type Model } from "mongoose";
 
-const tenantFields = {
-  organizationId: { type: String, required: true, index: true },
-  protocolId: { type: String, required: true, index: true },
+const mutable = { timestamps: true, strict: true, minimize: false } as const;
+const appendOnly = {
+  timestamps: { createdAt: true, updatedAt: false },
+  strict: true,
+  minimize: false,
+} as const;
+const ws = {
+  get workspaceId() {
+    return { type: String, required: true };
+  },
 };
-
-function tenantSchema(
-  fields: Record<string, unknown>,
-  options: Record<string, unknown> = {},
-) {
-  const schema = new Schema(
-    { ...tenantFields, ...fields },
-    { timestamps: true, strict: true, ...options },
-  );
-  schema.index({ organizationId: 1, protocolId: 1, updatedAt: -1 });
-  return schema;
-}
+const immutable = (fields: Record<string, unknown>) =>
+  new Schema({ ...ws, ...fields }, appendOnly);
 
 export const modelDefinitions = [
   {
-    name: "Organization",
-    collection: "organizations",
+    name: "Workspace",
+    collection: "workspaces",
     schema: new Schema(
       {
-        organizationId: { type: String, required: true, unique: true },
-        name: String,
+        workspaceId: { type: String, required: true, unique: true },
+        name: { type: String, required: true },
+        slug: { type: String, required: true, unique: true },
+        status: { type: String, default: "ACTIVE" },
+        defaultChainId: { type: Number, default: 11155111 },
+        policyId: String,
       },
-      { timestamps: true },
+      mutable,
     ),
   },
   {
@@ -40,8 +41,24 @@ export const modelDefinitions = [
         failedLoginCount: { type: Number, default: 0 },
         lockedUntil: Date,
       },
-      { timestamps: true },
+      mutable,
     ),
+  },
+  {
+    name: "Membership",
+    collection: "workspace_memberships",
+    schema: new Schema(
+      {
+        workspaceId: { type: String, required: true },
+        userId: { type: String, required: true },
+        role: {
+          type: String,
+          required: true,
+          enum: ["OWNER", "OPERATOR", "VIEWER", "AGENT"],
+        },
+      },
+      mutable,
+    ).index({ workspaceId: 1, userId: 1 }, { unique: true }),
   },
   {
     name: "RefreshSession",
@@ -60,7 +77,7 @@ export const modelDefinitions = [
         ipHash: String,
         lastUsedAt: Date,
       },
-      { timestamps: true },
+      mutable,
     ).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   },
   {
@@ -70,16 +87,12 @@ export const modelDefinitions = [
       {
         challengeId: { type: String, required: true, unique: true },
         userId: { type: String, required: true, index: true },
-        purpose: {
-          type: String,
-          required: true,
-          enum: ["password_reset"],
-        },
+        purpose: { type: String, enum: ["password_reset"], required: true },
         tokenHash: { type: String, required: true, select: false },
         expiresAt: { type: Date, required: true },
         consumedAt: Date,
       },
-      { timestamps: true },
+      mutable,
     ).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   },
   {
@@ -88,10 +101,10 @@ export const modelDefinitions = [
     schema: new Schema(
       {
         key: { type: String, required: true, unique: true },
-        count: { type: Number, required: true, default: 0 },
+        count: { type: Number, default: 0 },
         expiresAt: { type: Date, required: true },
       },
-      { timestamps: true },
+      mutable,
     ).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   },
   {
@@ -101,327 +114,491 @@ export const modelDefinitions = [
       {
         eventId: { type: String, required: true, unique: true },
         userId: String,
-        eventType: { type: String, required: true },
-        result: { type: String, required: true },
+        eventType: String,
+        result: String,
         emailHash: String,
         ipHash: String,
         userAgentHash: String,
         evidence: Schema.Types.Mixed,
       },
-      { timestamps: { createdAt: true, updatedAt: false } },
+      appendOnly,
     ),
   },
   {
-    name: "Membership",
-    collection: "memberships",
+    name: "Mission",
+    collection: "missions",
     schema: new Schema(
       {
-        organizationId: { type: String, required: true },
-        userId: { type: String, required: true },
-        role: { type: String, required: true },
-      },
-      { timestamps: true },
-    ).index({ organizationId: 1, userId: 1 }, { unique: true }),
-  },
-  {
-    name: "Protocol",
-    collection: "protocols",
-    schema: tenantSchema(
-      {
+        ...ws,
+        missionId: { type: String, required: true },
         name: String,
-        sourceProtocolId: String,
-        environment: String,
-        governance: String,
-        status: String,
-        health: Number,
+        description: String,
+        activeVersionId: String,
+        createdBy: String,
+        archivedAt: Date,
       },
-      { minimize: false },
-    ).index({ organizationId: 1, protocolId: 1 }, { unique: true }),
+      mutable,
+    )
+      .index({ workspaceId: 1, missionId: 1 }, { unique: true })
+      .index({ workspaceId: 1, archivedAt: 1, updatedAt: -1 }),
   },
   {
-    name: "Network",
-    collection: "networks",
-    schema: tenantSchema({
-      networkId: { type: String, required: true },
-      name: String,
-      chainId: Number,
-      rpcMetadata: Schema.Types.Mixed,
-    }).index(
-      { organizationId: 1, protocolId: 1, networkId: 1 },
-      { unique: true },
-    ),
-  },
-  {
-    name: "Contract",
-    collection: "contracts",
-    schema: tenantSchema({
-      contractId: { type: String, required: true },
-      networkId: { type: String, required: true },
-      chainId: { type: Number, required: true },
-      name: String,
-      address: String,
-      proxyType: String,
-      implementationAddress: String,
-      abiProvenance: String,
-      owner: String,
-    }).index(
-      { organizationId: 1, protocolId: 1, contractId: 1 },
-      { unique: true },
-    ),
-  },
-  {
-    name: "ProviderConnection",
-    collection: "provider_connections",
-    schema: tenantSchema({
-      provider: { type: String, required: true },
-      status: String,
-      mode: String,
-      installationId: String,
-      repository: String,
-      defaultBranch: String,
-      desiredStatePath: String,
-      encryptedCredentials: { type: String, select: false },
-      metadata: Schema.Types.Mixed,
-    }).index(
-      { organizationId: 1, protocolId: 1, provider: 1 },
-      { unique: true },
-    ),
-  },
-  {
-    name: "GitHubAuthorizationAttempt",
-    collection: "github_authorization_attempts",
-    schema: tenantSchema({
-      nonceHash: { type: String, required: true, unique: true },
-      actorId: { type: String, required: true },
-      expiresAt: { type: Date, required: true },
-      consumedAt: Date,
-    }).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
-  },
-  {
-    name: "DesiredStateVersion",
-    collection: "desired_state_versions",
-    schema: tenantSchema({
-      versionId: { type: String, required: true },
-      manifestVersion: String,
-      manifest: Schema.Types.Mixed,
-      manifestHash: String,
-      active: Boolean,
+    name: "MissionVersion",
+    collection: "mission_versions",
+    schema: immutable({
+      missionVersionId: { type: String, required: true },
+      missionId: { type: String, required: true },
+      versionNumber: Number,
+      schemaVersion: Number,
+      definition: Schema.Types.Mixed,
+      hash: String,
       createdBy: String,
-    }).index(
-      { organizationId: 1, protocolId: 1, versionId: 1 },
-      { unique: true },
-    ),
+    })
+      .index({ missionId: 1, versionNumber: 1 }, { unique: true })
+      .index({ missionId: 1, hash: 1 }, { unique: true }),
+  },
+  {
+    name: "MissionRun",
+    collection: "mission_runs",
+    schema: new Schema(
+      {
+        ...ws,
+        runId: { type: String, required: true },
+        missionId: String,
+        missionVersionId: String,
+        requestId: String,
+        externalId: String,
+        input: Schema.Types.Mixed,
+        inputHash: String,
+        state: String,
+        stateReason: String,
+        currentStepId: String,
+        startedAt: Date,
+        completedAt: Date,
+        terminalAt: Date,
+        recoveryStartedAt: Date,
+        finalReceiptId: String,
+        createdByActor: String,
+        version: { type: Number, default: 0 },
+        nextActionAt: Date,
+        leaseOwner: String,
+        leaseExpiresAt: Date,
+        leaseHeartbeatAt: Date,
+        fencingToken: { type: Number, default: 0 },
+      },
+      mutable,
+    )
+      .index({ workspaceId: 1, runId: 1 }, { unique: true })
+      .index({ state: 1, nextActionAt: 1 })
+      .index({ leaseExpiresAt: 1 }),
+  },
+  {
+    name: "MissionStepRun",
+    collection: "mission_step_runs",
+    schema: new Schema(
+      {
+        ...ws,
+        stepRunId: { type: String, required: true },
+        runId: String,
+        stepId: String,
+        attemptGeneration: { type: Number, default: 0 },
+        state: String,
+        resolvedAction: Schema.Types.Mixed,
+        resolvedActionHash: String,
+        planId: String,
+        simulationRecordId: String,
+        approvalId: String,
+        executionAttemptIds: [String],
+        observationIds: [String],
+        startedAt: Date,
+        terminalAt: Date,
+        version: { type: Number, default: 0 },
+      },
+      mutable,
+    ).index({ runId: 1, stepId: 1 }, { unique: true }),
+  },
+  {
+    name: "OperationPlan",
+    collection: "operation_plans",
+    schema: immutable({
+      planId: { type: String, required: true },
+      runId: String,
+      stepRunId: String,
+      kind: String,
+      operationKey: String,
+      requestBody: Schema.Types.Mixed,
+      requestBodyHash: String,
+      expectedPostconditions: Schema.Types.Mixed,
+      riskSummary: String,
+      policyEvaluation: Schema.Types.Mixed,
+      planHash: String,
+    })
+      .index({ workspaceId: 1, operationKey: 1 }, { unique: true })
+      .index({ planHash: 1 }, { unique: true }),
+  },
+  {
+    name: "SimulationRecord",
+    collection: "simulation_records",
+    schema: immutable({
+      simulationRecordId: { type: String, required: true },
+      planId: String,
+      provider: String,
+      requestHash: String,
+      requestBody: Schema.Types.Mixed,
+      response: Schema.Types.Mixed,
+      success: Boolean,
+      wouldRevert: Boolean,
+      gasEstimate: String,
+      expiresAt: Date,
+    }).index({ simulationRecordId: 1 }, { unique: true }),
+  },
+  {
+    name: "ExecutionAttempt",
+    collection: "execution_attempts",
+    schema: new Schema(
+      {
+        ...ws,
+        executionAttemptId: { type: String, required: true },
+        planId: String,
+        runId: String,
+        stepRunId: String,
+        generation: Number,
+        operationKey: String,
+        keeperHubIdempotencyKey: String,
+        requestHash: String,
+        status: String,
+        keeperHubExecutionId: String,
+        transactionHash: String,
+        providerStatus: String,
+        providerError: Schema.Types.Mixed,
+        observationStartBlock: String,
+        dispatchStartedAt: Date,
+        acknowledgedAt: Date,
+        unknownAt: Date,
+        terminalAt: Date,
+        resubmissionLocked: { type: Boolean, default: false },
+        fencingToken: Number,
+      },
+      mutable,
+    )
+      .index({ workspaceId: 1, executionAttemptId: 1 }, { unique: true })
+      .index(
+        { workspaceId: 1, operationKey: 1, generation: 1 },
+        { unique: true },
+      )
+      .index({ keeperHubIdempotencyKey: 1 }, { unique: true }),
   },
   {
     name: "Observation",
     collection: "observations",
-    schema: tenantSchema({
+    schema: immutable({
       observationId: { type: String, required: true },
-      networkId: String,
-      blockNumber: Number,
+      runId: String,
+      stepRunId: String,
+      chainId: Number,
+      blockNumber: String,
       blockHash: String,
-      values: Schema.Types.Mixed,
-      providerCorrelationId: String,
-    }).index(
-      { organizationId: 1, protocolId: 1, observationId: 1 },
-      { unique: true },
-    ),
-  },
-  {
-    name: "DriftFinding",
-    collection: "drift_findings",
-    schema: tenantSchema({
-      findingId: { type: String, required: true },
-      status: String,
-      severity: String,
-      observed: Schema.Types.Mixed,
-      desired: Schema.Types.Mixed,
+      providerId: String,
+      kind: String,
+      query: Schema.Types.Mixed,
       evidence: Schema.Types.Mixed,
-    }).index(
-      { organizationId: 1, protocolId: 1, findingId: 1 },
-      { unique: true },
-    ),
-  },
-  {
-    name: "Operation",
-    collection: "operations",
-    schema: tenantSchema({
-      operationId: { type: String, required: true },
-      findingId: String,
-      title: String,
-      status: String,
-      activePlanVersionId: String,
-      desiredStateVersionId: String,
-      createdBy: String,
-    }).index(
-      { organizationId: 1, protocolId: 1, operationId: 1 },
-      { unique: true },
-    ),
-  },
-  {
-    name: "OperationPlanVersion",
-    collection: "operation_plan_versions",
-    schema: tenantSchema({
-      planVersionId: { type: String, required: true },
-      operationId: String,
-      planHash: String,
-      planCreatedBy: String,
-      request: Schema.Types.Mixed,
-      policy: Schema.Types.Mixed,
-      evidenceSnapshot: Schema.Types.Mixed,
-      immutable: { type: Boolean, default: true },
-    }).index(
-      { organizationId: 1, protocolId: 1, planHash: 1 },
-      { unique: true },
-    ),
-  },
-  {
-    name: "OperationApproval",
-    collection: "operation_approvals",
-    schema: tenantSchema({
-      approvalId: { type: String, required: true },
-      operationId: String,
-      planHash: String,
-      simulationId: String,
-      actorId: String,
-      decision: String,
-      expiresAt: Date,
-    }).index(
-      { organizationId: 1, protocolId: 1, approvalId: 1 },
-      { unique: true },
-    ),
-  },
-  {
-    name: "Execution",
-    collection: "executions",
-    schema: tenantSchema({
-      executionId: { type: String, required: true },
-      operationId: String,
-      status: String,
-      idempotencyKey: String,
-      planHash: String,
-      requestHash: String,
-      observationBlockNumber: Number,
-      request: Schema.Types.Mixed,
-      policy: Schema.Types.Mixed,
-      simulation: Schema.Types.Mixed,
-      approvals: [Schema.Types.Mixed],
-      providerCorrelationId: String,
-      directExecutionId: String,
-      transactionHash: String,
-      transactionLink: String,
-      gasUsedWei: String,
-      providerRequestId: String,
-      submittedAt: Date,
-      completedAt: Date,
-      retryLocked: Boolean,
-      providerStepLogs: [Schema.Types.Mixed],
+      evidenceHash: String,
+      confirmationCount: Number,
+      canonicalityStatus: String,
     })
-      .index(
-        { organizationId: 1, protocolId: 1, executionId: 1 },
-        { unique: true },
-      )
-      .index(
-        { organizationId: 1, protocolId: 1, idempotencyKey: 1 },
-        { unique: true, sparse: true },
-      )
-      .index({ providerCorrelationId: 1 }, { sparse: true }),
+      .index({ observationId: 1 }, { unique: true })
+      .index({ runId: 1, stepRunId: 1, createdAt: 1 }),
+  },
+  {
+    name: "ReconciliationCase",
+    collection: "reconciliation_cases",
+    schema: new Schema(
+      {
+        ...ws,
+        reconciliationCaseId: { type: String, required: true },
+        executionAttemptId: { type: String, required: true },
+        reason: String,
+        strategy: String,
+        state: String,
+        resolution: String,
+        evidenceIds: [String],
+        decisionRationale: String,
+        startedAt: Date,
+        resolvedAt: Date,
+      },
+      mutable,
+    ).index({ executionAttemptId: 1 }, { unique: true }),
+  },
+  {
+    name: "RecoveryPlan",
+    collection: "recovery_plans",
+    schema: immutable({
+      recoveryPlanId: { type: String, required: true },
+      runId: String,
+      trigger: String,
+      targetSafeState: String,
+      actions: Schema.Types.Mixed,
+      preconditions: Schema.Types.Mixed,
+      expectedPostconditions: Schema.Types.Mixed,
+      estimatedRecoverySpendWei: String,
+      authorityEvaluation: Schema.Types.Mixed,
+      planHash: String,
+      status: String,
+    })
+      .index({ recoveryPlanId: 1 }, { unique: true })
+      .index({ runId: 1, planHash: 1 }, { unique: true }),
+  },
+  {
+    name: "ApprovalRecord",
+    collection: "approval_records",
+    schema: new Schema(
+      {
+        ...ws,
+        approvalId: { type: String, required: true },
+        runId: String,
+        planHash: String,
+        scope: String,
+        requiredRole: String,
+        status: String,
+        requestedAt: Date,
+        expiresAt: Date,
+        decidedAt: Date,
+        decidedBy: String,
+        decisionReason: String,
+      },
+      mutable,
+    )
+      .index({ approvalId: 1 }, { unique: true })
+      .index({ workspaceId: 1, status: 1, expiresAt: 1 }),
   },
   {
     name: "Investigation",
     collection: "investigations",
-    schema: tenantSchema({
-      investigationId: { type: String, required: true },
-      findingId: { type: String, required: true },
-      facts: [String],
-      inferences: [String],
-      confidence: Number,
-      affectedInvariants: [String],
-      recommendedAction: String,
-      suggestion: Schema.Types.Mixed,
-      advisoryOnly: { type: Boolean, required: true },
-      providerCorrelationId: String,
-    }).index(
-      { organizationId: 1, protocolId: 1, investigationId: 1 },
-      { unique: true },
-    ),
+    schema: new Schema(
+      {
+        ...ws,
+        investigationId: { type: String, required: true },
+        runId: String,
+        trigger: String,
+        model: String,
+        promptVersion: String,
+        evidenceIds: [String],
+        evidenceHash: String,
+        output: Schema.Types.Mixed,
+        status: String,
+        failureCode: String,
+        providerStatus: Number,
+        latencyMs: Number,
+        tokenMetadata: Schema.Types.Mixed,
+      },
+      mutable,
+    )
+      .index({ investigationId: 1 }, { unique: true })
+      .index(
+        { workspaceId: 1, evidenceHash: 1 },
+        { unique: true, sparse: true },
+      ),
+  },
+  {
+    name: "AuditEvent",
+    collection: "audit_events",
+    schema: immutable({
+      eventId: { type: String, required: true },
+      runId: String,
+      actorType: String,
+      actorId: String,
+      eventType: String,
+      subjectType: String,
+      subjectId: String,
+      metadata: Schema.Types.Mixed,
+      correlationId: String,
+      previousEventHash: String,
+      eventHash: String,
+    })
+      .index({ eventId: 1 }, { unique: true })
+      .index({ workspaceId: 1, createdAt: -1, _id: -1 }),
+  },
+  {
+    name: "TimelineEvent",
+    collection: "timeline_events",
+    schema: immutable({
+      eventId: { type: String, required: true },
+      runId: { type: String, required: true },
+      sequence: Number,
+      type: String,
+      state: String,
+      message: String,
+      data: Schema.Types.Mixed,
+      correlationId: String,
+    })
+      .index({ runId: 1, sequence: 1 }, { unique: true })
+      .index({ eventId: 1 }, { unique: true }),
+  },
+  {
+    name: "MissionReceipt",
+    collection: "mission_receipts",
+    schema: immutable({
+      receiptId: { type: String, required: true },
+      runId: String,
+      missionId: String,
+      missionVersionId: String,
+      missionVersionHash: String,
+      objective: String,
+      terminalState: String,
+      objectiveCompleted: Boolean,
+      compensationOccurred: Boolean,
+      executions: Schema.Types.Mixed,
+      invariantResults: Schema.Types.Mixed,
+      auditChainHeadHash: String,
+      receiptHash: String,
+    })
+      .index({ runId: 1 }, { unique: true })
+      .index({ receiptHash: 1 }, { unique: true }),
+  },
+  {
+    name: "IdempotencyRecord",
+    collection: "idempotency_records",
+    schema: new Schema(
+      {
+        ...ws,
+        key: String,
+        routeScope: String,
+        requestHash: String,
+        status: String,
+        response: Schema.Types.Mixed,
+      },
+      mutable,
+    ).index({ workspaceId: 1, key: 1, routeScope: 1 }, { unique: true }),
+  },
+  {
+    name: "Integration",
+    collection: "integrations",
+    schema: new Schema(
+      {
+        ...ws,
+        provider: String,
+        encryptedCredentials: { type: String, select: false },
+        credentialVersion: Number,
+        status: String,
+        metadata: Schema.Types.Mixed,
+        lastValidatedAt: Date,
+      },
+      mutable,
+    ).index({ workspaceId: 1, provider: 1 }, { unique: true }),
+  },
+  {
+    name: "ApiKey",
+    collection: "api_keys",
+    schema: new Schema(
+      {
+        ...ws,
+        apiKeyId: { type: String, required: true },
+        name: String,
+        prefix: { type: String, required: true },
+        keyHash: { type: String, required: true, select: false },
+        scopes: [String],
+        revokedAt: Date,
+        lastUsedAt: Date,
+      },
+      mutable,
+    )
+      .index({ apiKeyId: 1 }, { unique: true })
+      .index({ prefix: 1 }, { unique: true }),
+  },
+  {
+    name: "WorkspacePolicy",
+    collection: "workspace_policies",
+    schema: new Schema(
+      {
+        ...ws,
+        policyId: String,
+        emergencyPause: { type: Boolean, default: false },
+        allowedChainIds: [Number],
+        maximumWritesPerMission: Number,
+        maximumValueWei: String,
+        maximumRecoverySpendWei: String,
+      },
+      mutable,
+    ).index({ workspaceId: 1 }, { unique: true }),
+  },
+  {
+    name: "WebhookEndpoint",
+    collection: "webhook_endpoints",
+    schema: new Schema(
+      {
+        ...ws,
+        webhookId: { type: String, required: true },
+        url: String,
+        encryptedSecret: { type: String, select: false },
+        events: [String],
+        disabledAt: Date,
+      },
+      mutable,
+    ).index({ webhookId: 1 }, { unique: true }),
   },
   {
     name: "WebhookDelivery",
     collection: "webhook_deliveries",
     schema: new Schema(
       {
-        provider: { type: String, required: true },
+        ...ws,
         deliveryId: { type: String, required: true },
-        event: String,
-        receivedAt: Date,
-        processedAt: Date,
+        webhookId: String,
+        eventId: String,
+        payload: Schema.Types.Mixed,
+        status: String,
+        attemptCount: Number,
+        nextAttemptAt: Date,
+        responseStatus: Number,
+        error: String,
+        deliveredAt: Date,
+        leaseOwner: String,
+        leaseExpiresAt: Date,
+        fencingToken: Number,
       },
-      { timestamps: true },
-    ).index({ provider: 1, deliveryId: 1 }, { unique: true }),
+      mutable,
+    )
+      .index({ deliveryId: 1 }, { unique: true })
+      .index({ webhookId: 1, eventId: 1 }, { unique: true })
+      .index({ status: 1, nextAttemptAt: 1 }),
   },
   {
-    name: "ExecutionStep",
-    collection: "execution_steps",
-    schema: tenantSchema({
-      executionId: String,
-      stepId: String,
-      status: String,
-      evidence: Schema.Types.Mixed,
-    }).index(
-      { organizationId: 1, protocolId: 1, executionId: 1, stepId: 1 },
-      { unique: true },
+    name: "MigrationMarker",
+    collection: "aether_migrations",
+    schema: new Schema(
+      {
+        migrationId: { type: String, required: true, unique: true },
+        phase: String,
+        completedAt: Date,
+        manifestHash: String,
+      },
+      mutable,
     ),
   },
   {
-    name: "AuditEvent",
-    collection: "audit_events",
-    schema: tenantSchema(
+    name: "DemoRateLimit",
+    collection: "demo_rate_limits",
+    schema: new Schema(
       {
-        eventId: { type: String, required: true },
-        actorId: String,
-        eventType: String,
-        requestId: String,
-        correlationId: String,
-        resourceId: String,
-        result: String,
-        evidence: Schema.Types.Mixed,
+        key: { type: String, required: true, unique: true },
+        count: { type: Number, required: true },
+        expiresAt: { type: Date, required: true },
       },
-      { timestamps: { createdAt: true, updatedAt: false } },
-    ).index({ organizationId: 1, protocolId: 1, eventId: 1 }, { unique: true }),
+      mutable,
+    ).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   },
   {
-    name: "OutboxEvent",
-    collection: "outbox_events",
-    schema: tenantSchema(
+    name: "DemoToken",
+    collection: "demo_tokens",
+    schema: new Schema(
       {
-        eventId: { type: String, required: true },
-        sequence: { type: Number, required: true },
-        type: String,
-        resourceId: String,
-        payload: Schema.Types.Mixed,
-        queueName: String,
-        publishedAt: Date,
-        attempts: { type: Number, default: 0 },
+        tokenHash: { type: String, required: true, unique: true },
+        ipHash: { type: String, required: true },
+        expiresAt: { type: Date, required: true },
+        usedAt: Date,
       },
-      { timestamps: { createdAt: true, updatedAt: false } },
-    )
-      .index({ eventId: 1 }, { unique: true })
-      .index({ sequence: 1 }, { unique: true })
-      .index({ publishedAt: 1, createdAt: 1 }),
-  },
-  {
-    name: "IdempotencyRecord",
-    collection: "idempotency_records",
-    schema: tenantSchema({
-      key: { type: String, required: true },
-      scope: String,
-      status: String,
-      requestHash: String,
-      response: Schema.Types.Mixed,
-      providerCorrelationId: String,
-      lockedReason: String,
-    }).index({ organizationId: 1, protocolId: 1, key: 1 }, { unique: true }),
+      mutable,
+    ).index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   },
 ] as const;
 

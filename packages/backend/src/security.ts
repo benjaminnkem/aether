@@ -60,9 +60,9 @@ export class CredentialCipher {
   encrypt(
     plaintext: string,
     scope: {
-      organizationId: string;
-      protocolId: string;
+      workspaceId: string;
       provider: string;
+      version: number;
     },
   ): string {
     const nonce = randomBytes(12);
@@ -84,9 +84,9 @@ export class CredentialCipher {
   decrypt(
     envelope: string,
     scope: {
-      organizationId: string;
-      protocolId: string;
+      workspaceId: string;
       provider: string;
+      version: number;
     },
   ): string {
     const [version, nonce, tag, ciphertext, ...extra] = envelope.split(".");
@@ -114,9 +114,9 @@ export class CredentialCipher {
 }
 
 function credentialScope(scope: {
-  organizationId: string;
-  protocolId: string;
+  workspaceId: string;
   provider: string;
+  version: number;
 }): string {
-  return `${scope.organizationId}:${scope.protocolId}:${scope.provider}`;
+  return `${scope.workspaceId}:${scope.provider}:v${scope.version}`;
 }

@@ -1,16 +1,15 @@
 import request from "supertest";
-import { generateKeyPairSync } from "node:crypto";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { config as loadEnvironment } from "dotenv";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { INestApplication } from "@nestjs/common";
+import { contentHash } from "@aether/backend";
+import { MissionStore } from "../src/runtime/mission-store";
 
 loadEnvironment({ path: resolve(process.cwd(), "../..", ".env"), quiet: true });
-if (process.env.AETHER_RUN_INTEGRATION === "1" && !process.env.MONGODB_URI) {
-  throw new Error(
-    "MONGODB_URI is required for API integration tests; start the MongoDB replica set and configure .env.",
-  );
-}
+if (process.env.AETHER_RUN_INTEGRATION === "1" && !process.env.MONGODB_URI)
+  throw new Error("MONGODB_URI is required for integration tests.");
 process.env.NODE_ENV = "test";
 process.env.AETHER_ACCESS_TOKEN_SECRET =
   "integration-access-secret-that-is-at-least-32-characters";
@@ -18,151 +17,200 @@ process.env.AETHER_REFRESH_TOKEN_SECRET =
   "integration-refresh-secret-that-is-at-least-32-characters";
 process.env.AETHER_COOKIE_SECRET =
   "integration-cookie-secret-that-is-at-least-32-characters";
-process.env.NEXT_PUBLIC_AETHER_APP_URL = "http://localhost:3000";
-process.env.SMTP_HOST = "127.0.0.1";
-process.env.SMTP_PORT = "1025";
-process.env.SMTP_FROM = "aether-integration@example.invalid";
-process.env.AETHER_CHAIN_ID = "11155111";
-process.env.AETHER_MAINNET_DISABLED = "true";
-process.env.AETHER_RPC_URL = "http://127.0.0.1:8545";
-process.env.GITHUB_APP_ID = "12345";
-process.env.GITHUB_APP_SLUG = "aether-integration";
-process.env.GITHUB_WEBHOOK_SECRET =
-  "integration-github-secret-that-is-at-least-32-characters";
 process.env.AETHER_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString(
   "base64",
 );
-const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-process.env.GITHUB_PRIVATE_KEY_BASE64 = Buffer.from(
-  privateKey.export({ type: "pkcs8", format: "pem" }),
-).toString("base64");
+process.env.AETHER_ALLOWED_CHAIN_IDS = "11155111";
+process.env.SEPOLIA_RPC_PRIMARY_URL = "http://127.0.0.1:18545";
+process.env.SEPOLIA_RPC_SECONDARY_URL = "http://127.0.0.1:28545";
+process.env.SMTP_HOST = "127.0.0.1";
+process.env.SMTP_PORT = "1025";
+process.env.SMTP_FROM = "aether-integration@example.invalid";
 
-describe("Aether API integration", () => {
-  let app: INestApplication;
-  let agent: ReturnType<typeof request.agent>;
-  const email = `integration-${Date.now()}@example.invalid`;
-
-  beforeAll(async () => {
-    const { createApplication } = await import("../src/main.js");
-    app = await createApplication();
-    await app.init();
-    agent = request.agent(app.getHttpServer());
-  });
-
-  afterAll(async () => {
-    await app?.close();
-  });
-
-  it("signs in immediately, persists onboarding, refreshes, and loads the tenant dashboard", async () => {
-    const signup = await agent
-      .post("/v1/auth/signup")
-      .send({ email, password: "correct-horse-battery-staple" })
-      .expect(201);
-    expect(signup.body.authenticated).toBe(true);
-    expect(signup.body.accessToken).toEqual(expect.any(String));
-    expect(signup.body.accessTokenExpiresInSeconds).toBe(900);
-    const setCookies = signup.headers["set-cookie"];
-    const cookieValues = Array.isArray(setCookies)
-      ? setCookies
-      : setCookies
-        ? [setCookies]
-        : [];
-    const csrfCookieValue = cookieValues.find((cookie) =>
-      cookie.startsWith("aether_csrf="),
-    );
-    expect(csrfCookieValue).toBeDefined();
-    const csrf = csrfCookieValue?.split(";")[0]?.split("=")[1];
-    expect(csrf).toBeDefined();
-    const preOnboardingSession = await agent
-      .get("/v1/auth/session")
-      .expect(200);
-    expect(preOnboardingSession.body).toMatchObject({
-      authenticated: true,
-      user: { email },
-      destination: "onboarding",
+describe.runIf(process.env.AETHER_RUN_INTEGRATION === "1")(
+  "Aether API integration",
+  () => {
+    let app: INestApplication;
+    let agent: ReturnType<typeof request.agent>;
+    let store: MissionStore;
+    let csrf = "";
+    const email = `integration-${Date.now()}@example.invalid`;
+    beforeAll(async () => {
+      const { createApplication } = await import("../src/main.js");
+      app = await createApplication();
+      await app.init();
+      store = app.get(MissionStore);
+      const localSignupKeys = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].map(
+        (subject) =>
+          createHash("sha256").update(`signup:${subject}`).digest("base64url"),
+      );
+      await store.connection
+        .collection("auth_rate_limits")
+        .deleteMany({ key: { $in: localSignupKeys } });
+      agent = request.agent(app.getHttpServer());
     });
-    expect(preOnboardingSession.body.accessToken).toBeUndefined();
-    const onboarding = await agent
-      .post("/v1/auth/onboarding")
-      .set("X-CSRF-Token", decodeURIComponent(csrf ?? ""))
-      .send({
-        organizationName: "Integration Organization",
-        protocolName: "Integration Protocol",
-        governanceAuthority: "Integration multisig",
-      })
-      .expect(201);
-    await agent
-      .post("/v1/auth/refresh")
-      .set("X-CSRF-Token", decodeURIComponent(csrf))
-      .expect(201);
-    const activeSession = await agent.get("/v1/auth/session").expect(200);
-    expect(activeSession.body).toMatchObject({
-      destination: "dashboard",
-      context: {
-        organizationId: onboarding.body.organizationId,
-        protocolId: onboarding.body.protocolId,
-        role: "owner",
-      },
+    afterAll(async () => {
+      await app?.close();
     });
-    const dashboard = await agent.get("/v1/dashboard").expect(200);
-    expect(dashboard.body.organization.id).toBe(onboarding.body.organizationId);
-    expect(dashboard.body.protocols[0].id).toBe(onboarding.body.protocolId);
-  }, 20_000);
 
-  it("rejects provider secrets submitted from the browser", async () => {
-    const response = await agent
-      .put("/v1/protocol-setup/keeperhub")
-      .set("X-CSRF-Token", "invalid-on-purpose")
-      .send({ apiToken: "must-not-enter-browser" });
-    expect([400, 403]).toContain(response.status);
-  });
-
-  it("binds a one-time GitHub installation callback and redirects to refreshed setup UI", async () => {
-    const installUrl = await agent.get("/v1/github/install-url").expect(200);
-    const state = new URL(installUrl.body.url).searchParams.get("state");
-    expect(state).toEqual(expect.any(String));
-    const githubFetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            id: 9876,
-            repository_selection: "all",
-            account: { login: "integration-owner", type: "User" },
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            token: "installation-token-for-integration-test",
-            expires_at: new Date(Date.now() + 60_000).toISOString(),
-          }),
-          { status: 201, headers: { "content-type": "application/json" } },
+    it("creates a secure session and resolves workspace membership from MongoDB", async () => {
+      const signup = await agent
+        .post("/v1/auth/signup")
+        .send({ email, password: "correct-horse-battery-staple" })
+        .expect(201);
+      expect(signup.body.authenticated).toBe(true);
+      expect(signup.body.accessToken).toBeUndefined();
+      const cookies = Array.isArray(signup.headers["set-cookie"])
+        ? signup.headers["set-cookie"]
+        : [signup.headers["set-cookie"]];
+      csrf = decodeURIComponent(
+        String(
+          cookies
+            .find((cookie) => cookie?.startsWith("aether_csrf="))
+            ?.split(";")[0]
+            ?.split("=")[1],
         ),
       );
+      const onboarding = await agent
+        .post("/v1/auth/onboarding")
+        .set("X-CSRF-Token", csrf)
+        .send({ workspaceName: "Integration workspace" })
+        .expect(201);
+      expect(onboarding.body.workspaceId).toMatch(/^ws_/);
+      const refreshed = await agent
+        .post("/v1/auth/refresh")
+        .set("X-CSRF-Token", csrf)
+        .send({})
+        .expect(201);
+      const refreshedCookies = Array.isArray(refreshed.headers["set-cookie"])
+        ? refreshed.headers["set-cookie"]
+        : [refreshed.headers["set-cookie"]];
+      csrf = decodeURIComponent(
+        String(
+          refreshedCookies
+            .find((cookie) => cookie?.startsWith("aether_csrf="))
+            ?.split(";")[0]
+            ?.split("=")[1],
+        ),
+      );
+      const session = await agent.get("/v1/auth/session").expect(200);
+      expect(session.body.context).toMatchObject({
+        workspaceId: onboarding.body.workspaceId,
+        role: "OWNER",
+      });
+    }, 20_000);
 
-    const callback = await agent
-      .get("/v1/github/callback")
-      .query({ installation_id: 9876, setup_action: "install", state })
-      .expect(303);
+    it("requires CSRF and idempotency for mission mutations", async () => {
+      await agent.post("/v1/missions").send({}).expect(403);
+      await agent
+        .post("/v1/missions")
+        .set("X-CSRF-Token", csrf)
+        .send({})
+        .expect(400);
+    });
 
-    expect(callback.headers.location).toBe(
-      "http://localhost:3000/app/protocol-setup?tab=github&github=connected",
-    );
-    expect(githubFetch).toHaveBeenCalledTimes(2);
-    const dashboard = await agent.get("/v1/dashboard").expect(200);
-    expect(
-      dashboard.body.records.connections.find(
-        (connection: { id: string }) => connection.id === "github",
-      ),
-    ).toMatchObject({ status: "healthy" });
+    it("does not expose encrypted KeeperHub credentials", async () => {
+      const configured = await agent
+        .put("/v1/integrations/keeperhub")
+        .set("X-CSRF-Token", csrf)
+        .set("Idempotency-Key", "integration-keeperhub-config")
+        .send({
+          apiKey: "kh_integration_not_real",
+          baseUrl: "https://app.keeperhub.com/api",
+        })
+        .expect(200);
+      expect(configured.body).toEqual({
+        provider: "keeperhub",
+        status: "CONFIGURED",
+      });
+      const read = await agent.get("/v1/integrations/keeperhub").expect(200);
+      expect(JSON.stringify(read.body)).not.toContain(
+        "kh_integration_not_real",
+      );
+      expect(read.body.encryptedCredentials).toBeUndefined();
+    });
 
-    await agent
-      .get("/v1/github/callback")
-      .query({ installation_id: 9876, setup_action: "install", state })
-      .expect(401);
-    githubFetch.mockRestore();
-  });
-});
+    it("fences a stale API instance after a competing lease takeover", async () => {
+      const runId = `run_fencing_${Date.now()}`;
+      const workspace = await store.connection
+        .collection("workspaces")
+        .findOne({ name: "Integration workspace" });
+      const workspaceId = String(workspace?.workspaceId);
+      await store.connection.collection("mission_runs").insertOne({
+        workspaceId,
+        runId,
+        missionId: "mis_fencing",
+        missionVersionId: "mv_fencing",
+        state: "PREFLIGHT",
+        stateReason: "Fencing test",
+        fencingToken: 0,
+        version: 0,
+        nextActionAt: new Date("2099-01-01T00:00:00.000Z"),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      const competing = new MissionStore(store.connection);
+      const firstClaim = await store.claimRun(runId, workspaceId);
+      expect(firstClaim?.leaseOwner).toBe(store.runnerId);
+      await expect(store.claimRun(runId, workspaceId)).resolves.toBeUndefined();
+      await expect(
+        competing.claimRun(runId, workspaceId),
+      ).resolves.toBeUndefined();
+      await store.connection
+        .collection("mission_runs")
+        .updateOne(
+          { workspaceId, runId },
+          { $set: { leaseExpiresAt: new Date(0) } },
+        );
+      const secondClaim = await competing.claimRun(runId, workspaceId);
+      expect(secondClaim?.leaseOwner).toBe(competing.runnerId);
+      expect(Number(secondClaim?.fencingToken)).toBeGreaterThan(
+        Number(firstClaim?.fencingToken),
+      );
+      await expect(
+        store.transitionRun(
+          workspaceId,
+          runId,
+          Number(firstClaim?.fencingToken),
+          "EXECUTING",
+          "A stale owner must not write.",
+        ),
+      ).rejects.toThrow("Run lease is stale");
+    });
+
+    it("keeps public demo runs isolated behind a per-run view token", async () => {
+      const runId = `run_demo_access_${Date.now()}`;
+      const viewToken = "demo-view-token-that-is-long-enough-for-access";
+      await store.connection.collection("mission_runs").insertOne({
+        workspaceId: "ws_public_demo",
+        runId,
+        missionId: "mis_demo_access",
+        missionVersionId: "mv_demo_access",
+        state: "PAUSED",
+        stateReason: "Demo access test",
+        demoScenario: "HAPPY_PATH",
+        demoViewTokenHash: contentHash(viewToken),
+        demoViewTokenExpiresAt: new Date(Date.now() + 60_000),
+        fencingToken: 0,
+        version: 0,
+        nextActionAt: new Date("2099-01-01T00:00:00.000Z"),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      await agent.get(`/v1/demo/runs/${runId}`).expect(404);
+      await agent
+        .get(`/v1/demo/runs/${runId}`)
+        .set("X-Demo-Run-Token", "incorrect-token")
+        .expect(404);
+      const visible = await agent
+        .get(`/v1/demo/runs/${runId}`)
+        .set("X-Demo-Run-Token", viewToken)
+        .expect(200);
+      expect(visible.body).toMatchObject({
+        runId,
+        state: "PAUSED",
+        demoScenario: "HAPPY_PATH",
+      });
+    });
+  },
+);

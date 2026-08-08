@@ -22,15 +22,15 @@ const campaign = Bebas_Neue({
 
 export const metadata: Metadata = {
   title: {
-    default: "Aether — Protocol state control",
+    default: "Aether — Onchain mission control",
     template: "%s · Aether",
   },
   description:
-    "Observe protocol drift, plan safe corrections, execute through KeeperHub, and independently verify onchain state.",
+    "Durable Sepolia mission execution, independent verification, reconciliation, and recovery.",
   metadataBase: new URL("https://aether.local"),
   openGraph: {
     title: "Aether",
-    description: "Keep protocols in their intended onchain state.",
+    description: "Know what landed. Recover what did not.",
     type: "website",
   },
 };

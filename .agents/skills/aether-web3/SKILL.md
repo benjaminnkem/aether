@@ -10,9 +10,8 @@ Read the PRD, architecture, current KeeperHub docs/action schemas, and contract 
 ## Rules
 
 - Use Foundry and established OpenZeppelin patterns.
-- Demo contracts are unaudited and never hold real value.
+- Do not write Demo contract, this project needs to be up and running for preoduction testnet.
 - Verify chain ID, code, ABI/proxy evidence, units, roles, and oracle freshness.
-- Aether blockchain provider observes and verifies; writes go through the execution provider.
 - Simulate the exact semantic request before KeeperHub execution.
 - Use stable idempotency keys and reconcile unknown outcomes before retry.
 - Treat Safe sender-context differences explicitly.
