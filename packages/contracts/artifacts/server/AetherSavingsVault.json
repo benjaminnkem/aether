@@ -1,0 +1,176 @@
+{
+  "contractName": "AetherSavingsVault",
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        { "name": "executor", "type": "address", "internalType": "address" }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "deposit",
+      "inputs": [
+        {
+          "name": "operationKey",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        { "name": "token", "type": "address", "internalType": "address" },
+        { "name": "beneficiary", "type": "address", "internalType": "address" },
+        { "name": "amount", "type": "uint256", "internalType": "uint256" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "depositAmount",
+      "inputs": [
+        { "name": "operationKey", "type": "bytes32", "internalType": "bytes32" }
+      ],
+      "outputs": [
+        { "name": "amount", "type": "uint256", "internalType": "uint256" }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "depositBeneficiary",
+      "inputs": [
+        { "name": "operationKey", "type": "bytes32", "internalType": "bytes32" }
+      ],
+      "outputs": [
+        { "name": "beneficiary", "type": "address", "internalType": "address" }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "depositToken",
+      "inputs": [
+        { "name": "operationKey", "type": "bytes32", "internalType": "bytes32" }
+      ],
+      "outputs": [
+        { "name": "token", "type": "address", "internalType": "address" }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "keeperHubExecutor",
+      "inputs": [],
+      "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "savingsBalance",
+      "inputs": [
+        { "name": "beneficiary", "type": "address", "internalType": "address" },
+        { "name": "token", "type": "address", "internalType": "address" }
+      ],
+      "outputs": [
+        { "name": "amount", "type": "uint256", "internalType": "uint256" }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "withdraw",
+      "inputs": [
+        { "name": "token", "type": "address", "internalType": "address" },
+        { "name": "amount", "type": "uint256", "internalType": "uint256" },
+        { "name": "recipient", "type": "address", "internalType": "address" }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "SavingsDeposited",
+      "inputs": [
+        {
+          "name": "operationKey",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "beneficiary",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SavingsWithdrawn",
+      "inputs": [
+        {
+          "name": "beneficiary",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    { "type": "error", "name": "ExecutorOnly", "inputs": [] },
+    { "type": "error", "name": "InsufficientSavings", "inputs": [] },
+    { "type": "error", "name": "InvalidAddress", "inputs": [] },
+    { "type": "error", "name": "InvalidAmount", "inputs": [] },
+    {
+      "type": "error",
+      "name": "OperationAlreadyUsed",
+      "inputs": [
+        { "name": "operationKey", "type": "bytes32", "internalType": "bytes32" }
+      ]
+    },
+    { "type": "error", "name": "TransferFailed", "inputs": [] },
+    { "type": "error", "name": "UnsupportedTokenBehavior", "inputs": [] }
+  ],
+  "methodIdentifiers": {
+    "deposit(bytes32,address,address,uint256)": "e5eb9584",
+    "depositAmount(bytes32)": "01fecab6",
+    "depositBeneficiary(bytes32)": "f83d6f56",
+    "depositToken(bytes32)": "509cfe03",
+    "keeperHubExecutor()": "fe478786",
+    "savingsBalance(address,address)": "065351cb",
+    "withdraw(address,uint256,address)": "69328dec"
+  },
+  "deployments": {}
+}

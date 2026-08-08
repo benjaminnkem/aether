@@ -4,6 +4,7 @@ import {
   type OnApplicationShutdown,
 } from "@nestjs/common";
 import { createHmac } from "node:crypto";
+import { z } from "zod";
 import {
   missionStateSchema,
   stepStateSchema,
@@ -311,6 +312,11 @@ export class RunCoordinator
           version: runtime.version,
           steps: runtime.steps,
         });
+        await this.store.clearTransientRetries(
+          workspaceId,
+          runId,
+          fencingToken,
+        );
         if (outcome.delayMs !== undefined) {
           await this.store.releaseLease(
             runId,
@@ -327,9 +333,46 @@ export class RunCoordinator
         new Date(Date.now() + 1000),
       );
     } catch (error) {
-      await this.failClosed(workspaceId, runId, fencingToken, error).catch(
-        () => undefined,
-      );
+      const retryable = retryableRunError(error);
+      if (retryable) {
+        const maximumAttempts = numberEnv(
+          "AETHER_RPC_TRANSIENT_MAX_RETRIES",
+          12,
+        );
+        const scheduled = await this.store
+          .recordTransientRetry(
+            workspaceId,
+            runId,
+            fencingToken,
+            retryable.reason,
+            maximumAttempts,
+          )
+          .catch(() => undefined);
+        if (scheduled && !scheduled.exhausted) {
+          await this.store
+            .releaseLease(
+              runId,
+              fencingToken,
+              new Date(
+                Date.now() +
+                  retryDelayMs(scheduled.attempt, retryable.retryAfterMs),
+              ),
+            )
+            .catch(() => undefined);
+          return;
+        }
+      }
+      const terminalError = retryable
+        ? new Error(
+            `RPC verification remained unavailable after the configured retry limit: ${retryable.reason}`,
+          )
+        : error;
+      await this.failClosed(
+        workspaceId,
+        runId,
+        fencingToken,
+        terminalError,
+      ).catch(() => undefined);
       await this.store
         .releaseLease(runId, fencingToken, new Date(Date.now() + 5000))
         .catch(() => undefined);
@@ -598,7 +641,19 @@ export class RunCoordinator
           context.workspaceId,
           definition.action,
         )) as unknown as Doc;
-      } catch {
+      } catch (error) {
+        await this.store.persistPlanAndSimulation({
+          workspaceId: context.workspaceId,
+          runId: context.runId,
+          stepRunId: String(stepRun.stepRunId),
+          stepId,
+          generation: Number(stepRun.attemptGeneration ?? 0),
+          kind: "FORWARD",
+          action: definition.action,
+          proof: definition.proof,
+          missionVersionHash: String(context.version.hash),
+          simulation: simulationFailureEvidence(error),
+        });
         await this.store.transitionStep(
           context.workspaceId,
           context.runId,
@@ -985,6 +1040,8 @@ export class RunCoordinator
         {
           status: "FAILED",
           providerStatus: result.status,
+          transactionHash: result.transactionHash ?? undefined,
+          providerTransactionLink: result.transactionLink ?? undefined,
           providerError: result.error,
           terminalAt: new Date(),
         },
@@ -1023,6 +1080,7 @@ export class RunCoordinator
         status: "ACKNOWLEDGED",
         providerStatus: result.status,
         transactionHash: result.transactionHash,
+        providerTransactionLink: result.transactionLink ?? undefined,
         terminalAt: result.completedAt
           ? new Date(result.completedAt)
           : undefined,
@@ -1154,15 +1212,16 @@ export class RunCoordinator
         );
         if (["pending", "running"].includes(status.result.status))
           return { delayMs: status.pollAfterMs };
-        if (
-          status.result.status === "completed" &&
-          status.result.transactionHash
-        ) {
+        if (status.result.transactionHash) {
           await this.store.updateAttempt(
             context.workspaceId,
             context.runId,
             String(attempt.executionAttemptId),
-            { transactionHash: status.result.transactionHash },
+            {
+              transactionHash: status.result.transactionHash,
+              providerTransactionLink:
+                status.result.transactionLink ?? undefined,
+            },
             "reconciliation.transaction_found",
           );
           return { delayMs: 1000 };
@@ -1697,7 +1756,13 @@ export class RunCoordinator
           context.workspaceId,
           context.runId,
           String(attempt.executionAttemptId),
-          { status: "FAILED", terminalAt: new Date() },
+          {
+            status: "FAILED",
+            providerStatus: poll.result.status,
+            transactionHash: poll.result.transactionHash ?? undefined,
+            providerTransactionLink: poll.result.transactionLink ?? undefined,
+            terminalAt: new Date(),
+          },
           "recovery.failed",
         );
         await this.store.transitionStep(
@@ -1725,6 +1790,21 @@ export class RunCoordinator
         );
         return {};
       }
+      await this.store.updateAttempt(
+        context.workspaceId,
+        context.runId,
+        String(attempt.executionAttemptId),
+        {
+          status: "ACKNOWLEDGED",
+          providerStatus: poll.result.status,
+          transactionHash: poll.result.transactionHash,
+          providerTransactionLink: poll.result.transactionLink ?? undefined,
+          terminalAt: poll.result.completedAt
+            ? new Date(poll.result.completedAt)
+            : undefined,
+        },
+        "recovery.landed_provider_report",
+      );
       const receipt = await this.rpc.agreedReceipt(
         poll.result.transactionHash,
         minimumConfirmations(),
@@ -1754,6 +1834,7 @@ export class RunCoordinator
         {
           status: "CONFIRMED",
           transactionHash: poll.result.transactionHash,
+          providerTransactionLink: poll.result.transactionLink ?? undefined,
           terminalAt: new Date(),
         },
         "recovery.verified",
@@ -1962,6 +2043,66 @@ export class RunCoordinator
         `Execution stopped safely: ${message.slice(0, 300)}`,
       );
   }
+}
+
+export function retryableRunError(error: unknown) {
+  if (!(error instanceof ProviderRequestError)) return undefined;
+  const retryableStatus =
+    error.status === 408 ||
+    error.status === 425 ||
+    error.status === 429 ||
+    (error.status !== undefined && error.status >= 500);
+  const retryableCode = [
+    "RPC_TEMPORARY_FAILURE",
+    "RPC_INVALID_RESPONSE",
+    "RPC_DISAGREEMENT",
+  ].includes(String(error.code));
+  if (!retryableStatus && !retryableCode) return undefined;
+  return {
+    reason: error.message,
+    retryAfterMs: error.retryAfterMs,
+  };
+}
+
+export function retryDelayMs(attempt: number, providerDelay?: number) {
+  if (providerDelay !== undefined)
+    return Math.min(60_000, Math.max(1_000, providerDelay));
+  return Math.min(60_000, 5_000 * 2 ** Math.min(4, Math.max(0, attempt - 1)));
+}
+
+function simulationFailureEvidence(error: unknown): Doc {
+  if (error instanceof ProviderRequestError) {
+    return {
+      success: false,
+      wouldRevert: false,
+      status: "unavailable",
+      error: error.message.slice(0, 1_000),
+      providerStatus: error.status ?? null,
+      retryAfterMs: error.retryAfterMs ?? null,
+      failureCode: error.code ?? "KEEPERHUB_REQUEST_FAILED",
+    };
+  }
+  if (error instanceof z.ZodError) {
+    return {
+      success: false,
+      wouldRevert: false,
+      status: "invalid_response",
+      error:
+        "KeeperHub returned a response that failed local schema validation.",
+      failureCode: "KEEPERHUB_INVALID_RESPONSE",
+      validationIssues: error.issues.slice(0, 20).map((issue) => ({
+        path: issue.path.map(String).join("."),
+        code: issue.code,
+      })),
+    };
+  }
+  return {
+    success: false,
+    wouldRevert: false,
+    status: "unavailable",
+    error: "KeeperHub simulation did not produce usable evidence.",
+    failureCode: "KEEPERHUB_SIMULATION_UNAVAILABLE",
+  };
 }
 
 function minimumConfirmations() {

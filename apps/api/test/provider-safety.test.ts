@@ -40,7 +40,7 @@ describe("provider safety", () => {
             to: action.contractAddress,
             value: "0",
             gasEstimate: "50000",
-            simulatedReturnValue: null,
+            simulatedReturnValue: true,
             wouldRevert: false,
           }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -52,7 +52,7 @@ describe("provider safety", () => {
     ).resolves.toMatchObject({
       success: true,
       status: "simulated",
-      simulatedReturnValue: null,
+      simulatedReturnValue: true,
       wouldRevert: false,
     });
   });
@@ -229,7 +229,29 @@ describe("provider safety", () => {
     );
     await expect(
       new DualRpcObserver().agreedReceipt(`0x${"1".repeat(64)}`, 3),
-    ).rejects.toThrow("disagree");
+    ).rejects.toMatchObject({
+      code: "RPC_DISAGREEMENT",
+      retryAfterMs: 5000,
+    });
+  });
+
+  it("classifies an RPC 503 as a temporary read failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("temporarily unavailable", {
+          status: 503,
+          headers: { "retry-after": "7" },
+        }),
+      ),
+    );
+    await expect(
+      new JsonRpcObserver("primary", "https://primary.invalid").chainId(),
+    ).rejects.toMatchObject({
+      status: 503,
+      code: "RPC_TEMPORARY_FAILURE",
+      retryAfterMs: 7000,
+    });
   });
 
   it("bounds log requests to provider-safe ten-block ranges", async () => {

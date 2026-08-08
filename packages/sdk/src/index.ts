@@ -19,8 +19,21 @@ export class AetherApiError extends Error {
 
 export class AetherClient {
   private refreshPromise?: Promise<void>;
+  private readonly baseUrl: string;
+  private readonly authorization?: string;
 
-  constructor(private readonly baseUrl = "/v1") {}
+  constructor(options: string | AetherClientOptions = "/v1") {
+    if (typeof options === "string") {
+      this.baseUrl = options;
+      return;
+    }
+    this.baseUrl = options.baseUrl;
+    this.authorization = options.apiKey
+      ? `Bearer ${options.apiKey}`
+      : options.accessToken
+        ? `Bearer ${options.accessToken}`
+        : undefined;
+  }
 
   session() {
     return this.request<Record<string, unknown>>("/auth/session", {
@@ -228,7 +241,13 @@ export class AetherClient {
   ) {
     const response = await fetch(`${this.url(path)}?after=${after}`, {
       credentials: "include",
-      headers: { Accept: "text/event-stream", ...headers },
+      headers: {
+        Accept: "text/event-stream",
+        ...(this.authorization
+          ? { Authorization: this.authorization }
+          : undefined),
+        ...headers,
+      },
       signal,
     });
     if (!response.ok || !response.body) throw await this.error(response);
@@ -245,8 +264,10 @@ export class AetherClient {
         const line = frame
           .split("\n")
           .find((item) => item.startsWith("data: "));
-        if (line)
-          listener(JSON.parse(line.slice(6)) as Record<string, unknown>);
+        if (line) {
+          const payload = JSON.parse(line.slice(6)) as Record<string, unknown>;
+          if (isRunTimelineEvent(payload)) listener(payload);
+        }
       }
     }
   }
@@ -259,6 +280,7 @@ export class AetherClient {
       Accept: "application/json",
       "Content-Type": "application/json",
     });
+    if (this.authorization) headers.set("Authorization", this.authorization);
     if (options.idempotencyKey)
       headers.set("Idempotency-Key", options.idempotencyKey);
     for (const [name, value] of Object.entries(options.headers ?? {}))
@@ -277,7 +299,8 @@ export class AetherClient {
     if (
       response.status === 401 &&
       options.refresh !== false &&
-      !options.allowUnauthenticated
+      !options.allowUnauthenticated &&
+      !this.authorization
     ) {
       await this.refresh();
       return this.request<T>(path, { ...options, refresh: false });
@@ -328,6 +351,30 @@ export class AetherClient {
         );
   }
 }
+
+export function isRunTimelineEvent(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & {
+  eventId: string;
+  sequence: number;
+  message: string;
+  createdAt: string;
+} {
+  return (
+    typeof value.eventId === "string" &&
+    typeof value.sequence === "number" &&
+    typeof value.message === "string" &&
+    typeof value.createdAt === "string"
+  );
+}
+
+export type AetherClientOptions = {
+  baseUrl: string;
+  /** Server-side Aether agent key. Never expose this value in a browser bundle. */
+  apiKey?: string;
+  /** Server-side access token for clients that manage Aether user sessions. */
+  accessToken?: string;
+};
 
 type RequestOptions = {
   method?: "POST" | "PUT" | "DELETE";

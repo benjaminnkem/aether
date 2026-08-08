@@ -53,7 +53,10 @@ export const simulationResultSchema = z
     to: addressSchema,
     value: z.string(),
     gasEstimate: z.string().regex(/^\d+$/).optional(),
-    simulatedReturnValue: z.string().max(10_000).nullable().optional(),
+    simulatedReturnValue: z
+      .union([z.string().max(10_000), z.boolean()])
+      .nullable()
+      .optional(),
     wouldRevert: z.boolean(),
     revertReason: z.string().max(1000).optional(),
     error: z.string().max(1000).optional(),
@@ -71,7 +74,13 @@ export const keeperStatusSchema = z
     executionId: z.string().min(1),
     status: z.enum(["pending", "running", "completed", "failed"]),
     transactionHash: hashSchema.nullish(),
-    transactionLink: z.string().url().nullish(),
+    transactionLink: z
+      .string()
+      .url()
+      .refine((value) => new URL(value).protocol === "https:", {
+        message: "KeeperHub transaction links must use HTTPS.",
+      })
+      .nullish(),
     gasUsedWei: z.string().regex(/^\d+$/).nullish(),
     error: z.unknown().nullish(),
     completedAt: z.string().datetime().nullish(),

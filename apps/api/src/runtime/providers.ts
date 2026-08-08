@@ -290,6 +290,10 @@ export class JsonRpcObserver implements ChainObserver {
     if ((await this.chainId()) !== 11155111)
       throw new ProviderRequestError(
         `${this.providerId} RPC is not Ethereum Sepolia.`,
+        undefined,
+        undefined,
+        false,
+        "RPC_CHAIN_MISMATCH",
       );
     const raw = await this.rpc("eth_getTransactionReceipt", [transactionHash]);
     if (raw === null) return undefined;
@@ -400,17 +404,50 @@ export class JsonRpcObserver implements ChainObserver {
         }),
         signal: AbortSignal.timeout(numberEnv("RPC_TIMEOUT_MS", 10000)),
       });
-      if (!response.ok) throw new Error(`RPC returned ${response.status}.`);
+      if (!response.ok)
+        throw new ProviderRequestError(
+          `${this.providerId} RPC returned ${response.status}.`,
+          response.status,
+          response.status === 429 || response.status >= 500
+            ? boundedSeconds(response.headers.get("retry-after"), 5) * 1000
+            : undefined,
+          false,
+          response.status === 408 ||
+            response.status === 425 ||
+            response.status === 429 ||
+            response.status >= 500
+            ? "RPC_TEMPORARY_FAILURE"
+            : "RPC_REQUEST_REJECTED",
+        );
       const envelope = rpcEnvelope.parse(await response.json());
       if (envelope.error || envelope.result === undefined)
-        throw new Error(`RPC ${method} returned an error.`);
+        throw new ProviderRequestError(
+          `${this.providerId} RPC ${method} returned an error.`,
+          undefined,
+          undefined,
+          false,
+          "RPC_RESPONSE_ERROR",
+        );
       this.healthState.success(started);
       return envelope.result;
     } catch (error) {
       this.healthState.failure(
         error instanceof Error ? error.message : "RPC request failed.",
       );
-      throw error;
+      if (error instanceof ProviderRequestError) throw error;
+      throw new ProviderRequestError(
+        error instanceof z.ZodError
+          ? `${this.providerId} RPC returned a malformed response.`
+          : error instanceof Error
+            ? `${this.providerId} RPC request failed: ${error.message}`
+            : `${this.providerId} RPC request failed.`,
+        undefined,
+        5000,
+        false,
+        error instanceof z.ZodError
+          ? "RPC_INVALID_RESPONSE"
+          : "RPC_TEMPORARY_FAILURE",
+      );
     }
   }
 }
@@ -449,6 +486,10 @@ export class DualRpcObserver {
     )
       throw new ProviderRequestError(
         "RPC providers disagree about the transaction receipt.",
+        undefined,
+        5000,
+        false,
+        "RPC_DISAGREEMENT",
       );
     return left.confirmations <= right.confirmations ? left : right;
   }

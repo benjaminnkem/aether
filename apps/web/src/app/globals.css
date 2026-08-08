@@ -176,6 +176,10 @@ pre {
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
+.mission-meta,
+.run-meta {
+  margin-top: 32px;
+}
 footer {
   padding: 48px 40px;
   background: var(--cloud);
@@ -372,6 +376,45 @@ footer p {
   display: block;
   color: var(--mute);
 }
+.section-heading-row {
+  margin-top: 0;
+}
+.section-heading-row h2,
+.section-heading-row p {
+  margin: 0;
+}
+.section-heading-row p,
+.section-heading-row > span,
+.transaction-row p {
+  color: var(--mute);
+}
+.transaction-list {
+  border-top: 1px solid var(--line);
+}
+.transaction-row {
+  padding: 24px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 32px;
+  border-bottom: 1px solid var(--line);
+}
+.transaction-row p {
+  margin: 6px 0 0;
+}
+.transaction-hash {
+  color: var(--ink) !important;
+  overflow-wrap: anywhere;
+}
+.transaction-actions {
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+}
+.inline-evidence-link {
+  font-weight: 600;
+  text-decoration: underline;
+}
 pre {
   padding: 20px;
   background: var(--cloud);
@@ -503,6 +546,12 @@ pre {
   .auth-page {
     grid-template-columns: 1fr;
   }
+  .transaction-row {
+    grid-template-columns: 1fr;
+  }
+  .transaction-actions {
+    justify-items: start;
+  }
   .auth-page > section {
     padding: 56px 24px;
   }
@@ -532,6 +581,10 @@ pre {
   }
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+  .transaction-actions,
+  .transaction-actions .pill {
+    width: 100%;
   }
   .process div {
     min-height: 110px;

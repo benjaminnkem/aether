@@ -185,6 +185,8 @@ export const modelDefinitions = [
         leaseExpiresAt: Date,
         leaseHeartbeatAt: Date,
         fencingToken: { type: Number, default: 0 },
+        transientFailureCount: Number,
+        lastTransientFailureAt: Date,
       },
       mutable,
     )
@@ -269,6 +271,7 @@ export const modelDefinitions = [
         status: String,
         keeperHubExecutionId: String,
         transactionHash: String,
+        providerTransactionLink: String,
         providerStatus: String,
         providerError: Schema.Types.Mixed,
         observationStartBlock: String,

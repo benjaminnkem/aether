@@ -5,3 +5,4 @@ export interface ServerContractArtifact {
   deployments: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 export const aetherDemoVaultArtifact: ServerContractArtifact;
+export const aetherSavingsVaultArtifact: ServerContractArtifact;

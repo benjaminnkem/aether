@@ -5,7 +5,7 @@ import { format } from "prettier";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const output = path.join(root, "artifacts", "server");
-const contractNames = ["AetherDemoVault"];
+const contractNames = ["AetherDemoVault", "AetherSavingsVault"];
 
 fs.mkdirSync(output, { recursive: true });
 
@@ -45,7 +45,11 @@ for (const contractName of contractNames) {
 
 const moduleSource = `"use strict";
 const AetherDemoVault = require("./AetherDemoVault.json");
-module.exports = { aetherDemoVaultArtifact: AetherDemoVault };
+const AetherSavingsVault = require("./AetherSavingsVault.json");
+module.exports = {
+  aetherDemoVaultArtifact: AetherDemoVault,
+  aetherSavingsVaultArtifact: AetherSavingsVault,
+};
 `;
 fs.writeFileSync(path.join(output, "index.js"), moduleSource);
 fs.writeFileSync(
@@ -57,5 +61,6 @@ fs.writeFileSync(
   deployments: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 export const aetherDemoVaultArtifact: ServerContractArtifact;
+export const aetherSavingsVaultArtifact: ServerContractArtifact;
 `,
 );

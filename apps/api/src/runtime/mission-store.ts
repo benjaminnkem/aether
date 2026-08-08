@@ -17,6 +17,7 @@ import {
   type TenantContext,
 } from "@aether/backend";
 import {
+  activeLiveChain,
   createMissionSchema,
   createRunSchema,
   missionDefinitionSchema,
@@ -480,7 +481,8 @@ export class MissionStore {
       steps: steps.map(clean),
       plans: plans.map(clean),
       simulations: simulations.map(clean),
-      attempts: attempts.map(clean),
+      attempts: attempts.map(cleanAttempt),
+      transactionEvidence: transactionEvidence(attempts, plans, steps, receipt),
       observations: observations.map(clean),
       reconciliation: reconciliation.map(clean),
       recovery: cleanOptional(recovery),
@@ -574,6 +576,89 @@ export class MissionStore {
       {
         $set: { nextActionAt: nextActionAt ?? new Date() },
         $unset: { leaseOwner: "", leaseExpiresAt: "", leaseHeartbeatAt: "" },
+      },
+    );
+  }
+  async recordTransientRetry(
+    workspaceId: string,
+    runId: string,
+    fencingToken: number,
+    reason: string,
+    maximumAttempts: number,
+  ) {
+    const current = await this.connection.collection("mission_runs").findOne({
+      workspaceId,
+      runId,
+      leaseOwner: this.instanceId,
+      fencingToken,
+    });
+    if (!current) throw new ConflictException("Run lease is stale.");
+    const attempt = Number(current.transientFailureCount ?? 0) + 1;
+    if (attempt > maximumAttempts) return { exhausted: true as const, attempt };
+    const message = `RPC is temporarily unavailable. Verification will retry automatically (${attempt}/${maximumAttempts}).`;
+    await this.transaction(async (session) => {
+      const result = await this.connection.collection("mission_runs").updateOne(
+        {
+          workspaceId,
+          runId,
+          leaseOwner: this.instanceId,
+          fencingToken,
+          version: current.version,
+        },
+        {
+          $set: {
+            transientFailureCount: attempt,
+            lastTransientFailureAt: new Date(),
+            updatedAt: new Date(),
+          },
+          $inc: { version: 1 },
+        },
+        { session },
+      );
+      if (!result.matchedCount)
+        throw new ConflictException("Run state changed concurrently.");
+      await this.timeline(
+        workspaceId,
+        runId,
+        "rpc.retry_scheduled",
+        String(current.state),
+        message,
+        { reason: reason.slice(0, 300), attempt, maximumAttempts },
+        runId,
+        session,
+      );
+      await this.systemAudit(
+        workspaceId,
+        runId,
+        "rpc.retry_scheduled",
+        "MISSION_RUN",
+        runId,
+        { reason: reason.slice(0, 300), attempt, maximumAttempts },
+        runId,
+        session,
+      );
+    });
+    return { exhausted: false as const, attempt };
+  }
+  async clearTransientRetries(
+    workspaceId: string,
+    runId: string,
+    fencingToken: number,
+  ) {
+    await this.connection.collection("mission_runs").updateOne(
+      {
+        workspaceId,
+        runId,
+        leaseOwner: this.instanceId,
+        fencingToken,
+        transientFailureCount: { $exists: true },
+      },
+      {
+        $unset: {
+          transientFailureCount: "",
+          lastTransientFailureAt: "",
+        },
+        $set: { updatedAt: new Date() },
       },
     );
   }
@@ -1170,6 +1255,7 @@ export class MissionStore {
         executionAttemptId: attempt.executionAttemptId,
         keeperHubExecutionId: attempt.keeperHubExecutionId,
         transactionHash: attempt.transactionHash,
+        providerTransactionLink: attempt.providerTransactionLink,
         status: attempt.status,
       })),
       invariantResults,
@@ -1608,6 +1694,100 @@ function clean(value: Document) {
 }
 function cleanOptional(value: Document | null) {
   return value ? clean(value) : undefined;
+}
+function cleanAttempt(value: Document) {
+  const result = clean(value);
+  const link = safeExternalUrl(result.providerTransactionLink);
+  if (link) result.providerTransactionLink = link;
+  else delete result.providerTransactionLink;
+  return result;
+}
+
+export function transactionEvidence(
+  attempts: Document[],
+  plans: Document[],
+  steps: Document[],
+  receipt: Document | null,
+) {
+  const plansById = new Map(plans.map((plan) => [plan.planId, plan]));
+  const stepsById = new Map(steps.map((step) => [step.stepRunId, step]));
+  const evidence = new Map<string, Document>();
+  const explorer = activeLiveChain.explorerUrl;
+
+  for (const attempt of attempts) {
+    if (typeof attempt.transactionHash !== "string") continue;
+    const hash = attempt.transactionHash.toLowerCase();
+    const plan = plansById.get(attempt.planId);
+    const step = stepsById.get(attempt.stepRunId);
+    evidence.set(hash, {
+      chainId: activeLiveChain.chainId,
+      network: activeLiveChain.displayName,
+      transactionHash: attempt.transactionHash,
+      explorerUrl: explorer
+        ? `${explorer}/tx/${attempt.transactionHash}`
+        : null,
+      providerTransactionLink: safeExternalUrl(attempt.providerTransactionLink),
+      executionAttemptId: attempt.executionAttemptId,
+      keeperHubExecutionId: attempt.keeperHubExecutionId,
+      stepRunId: attempt.stepRunId,
+      stepId: step?.stepId,
+      kind: plan?.kind,
+      status: attempt.status,
+      providerStatus: attempt.providerStatus,
+      createdAt: attempt.createdAt,
+      dispatchStartedAt: attempt.dispatchStartedAt,
+      acknowledgedAt: attempt.acknowledgedAt,
+      terminalAt: attempt.terminalAt,
+    });
+  }
+
+  const receiptExecutions = Array.isArray(receipt?.executions)
+    ? receipt.executions
+    : [];
+  for (const rawExecution of receiptExecutions) {
+    if (
+      typeof rawExecution !== "object" ||
+      rawExecution === null ||
+      !("transactionHash" in rawExecution) ||
+      typeof rawExecution.transactionHash !== "string"
+    )
+      continue;
+    const hash = rawExecution.transactionHash.toLowerCase();
+    if (evidence.has(hash)) continue;
+    evidence.set(hash, {
+      chainId: activeLiveChain.chainId,
+      network: activeLiveChain.displayName,
+      transactionHash: rawExecution.transactionHash,
+      explorerUrl: explorer
+        ? `${explorer}/tx/${rawExecution.transactionHash}`
+        : null,
+      executionAttemptId:
+        "executionAttemptId" in rawExecution
+          ? rawExecution.executionAttemptId
+          : undefined,
+      keeperHubExecutionId:
+        "keeperHubExecutionId" in rawExecution
+          ? rawExecution.keeperHubExecutionId
+          : undefined,
+      providerTransactionLink:
+        "providerTransactionLink" in rawExecution
+          ? safeExternalUrl(rawExecution.providerTransactionLink)
+          : undefined,
+      status: "status" in rawExecution ? rawExecution.status : undefined,
+      receiptOnly: true,
+    });
+  }
+
+  return [...evidence.values()];
+}
+function safeExternalUrl(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 function humanEvent(event: string) {
   return event

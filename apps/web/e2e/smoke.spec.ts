@@ -52,6 +52,87 @@ test("all primary routes render on desktop and mobile", async ({ page }) => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   }
 });
+test("mission control shows mission dates and complete transaction evidence", async ({
+  page,
+}) => {
+  await authenticate(page);
+  const transactionHash = `0x${"4".repeat(64)}`;
+  await page.route("**/v1/missions", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            missionId: "mission_dates",
+            name: "Savings mission",
+            description: "Deposit and verify.",
+            createdAt: "2026-08-08T10:00:00.000Z",
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto("/app/missions");
+  await expect(page.getByText(/Created .*2026/)).toBeVisible();
+
+  await page.route("**/v1/runs/run_evidence**", (route) => {
+    if (route.request().url().includes("/stream")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: "",
+      });
+    }
+    return route.fulfill({
+      json: {
+        runId: "run_evidence",
+        state: "RECOVERED",
+        stateReason: "Safe state independently verified.",
+        objective: "Deposit and verify.",
+        createdAt: "2026-08-08T10:01:00.000Z",
+        startedAt: "2026-08-08T10:01:01.000Z",
+        updatedAt: "2026-08-08T10:05:00.000Z",
+        terminalAt: "2026-08-08T10:05:00.000Z",
+        steps: [
+          {
+            stepRunId: "step_run_1",
+            stepId: "revoke",
+            state: "VERIFIED",
+            executionAttemptIds: ["attempt_1"],
+            observationIds: ["observation_1"],
+          },
+        ],
+        reconciliation: [],
+        transactionEvidence: [
+          {
+            transactionHash,
+            explorerUrl: `https://sepolia.etherscan.io/tx/${transactionHash}`,
+            providerTransactionLink: `https://provider.example/tx/${transactionHash}`,
+            keeperHubExecutionId: "keeper_execution_1",
+            stepId: "revoke",
+            kind: "COMPENSATION",
+            status: "CONFIRMED",
+            createdAt: "2026-08-08T10:03:00.000Z",
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("/app/runs/run_evidence");
+  await expect(page.getByText("keeper_execution_1")).toBeVisible();
+  await expect(page.getByText("Execution attempts")).toBeVisible();
+  await expect(page.getByText("1").first()).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: /View transaction .* on Sepolia Etherscan/,
+    }),
+  ).toHaveAttribute(
+    "href",
+    `https://sepolia.etherscan.io/tx/${transactionHash}`,
+  );
+  await expect(
+    page.getByRole("link", { name: "Open KeeperHub-provided link ↗" }),
+  ).toHaveAttribute("href", `https://provider.example/tx/${transactionHash}`);
+});
 test("demo replay is explicitly labeled and never invents evidence", async ({
   page,
 }) => {
@@ -129,4 +210,6 @@ test("live demo opens its isolated flight recorder with the view token", async (
   await expect(
     page.getByRole("heading", { name: "run_demo_browser" }),
   ).toBeVisible();
+  await expect(page.getByText("undefined", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Invalid Date", { exact: true })).toHaveCount(0);
 });

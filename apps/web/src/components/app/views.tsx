@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { AetherClient, getAetherErrorMessage } from "@aether/sdk";
+import { browserSafeChains, ETHEREUM_SEPOLIA_CHAIN_ID } from "@aether/shared";
 import { ConsoleShell, Empty, PageHeader, Status } from "./console-shell";
 
 const api = new AetherClient(process.env.NEXT_PUBLIC_AETHER_API_URL ?? "/v1");
+const sepoliaExplorer = browserSafeChains.find(
+  (chain) => chain.chainId === ETHEREUM_SEPOLIA_CHAIN_ID,
+)?.explorerUrl;
 
 export function OverviewView() {
   const missions = useQuery({
@@ -87,6 +91,7 @@ export function MissionsView() {
               <div>
                 <strong>{String(mission.name)}</strong>
                 <p>{String(mission.description ?? "No description")}</p>
+                <p>Created {formatDate(mission.createdAt)}</p>
               </div>
               <span>Open →</span>
             </Link>
@@ -188,6 +193,10 @@ export function MissionView({ missionId }: { missionId: string }) {
           </button>
         }
       />
+      <section className="fact-grid mission-meta" aria-label="Mission dates">
+        <Fact label="Created" value={formatDate(mission.createdAt)} />
+        <Fact label="Last updated" value={formatDate(mission.updatedAt)} />
+      </section>
       <section className="section">
         <h2>Frozen versions</h2>
         {versions.map((version) => (
@@ -195,6 +204,7 @@ export function MissionView({ missionId }: { missionId: string }) {
             <div>
               <strong>Version {String(version.versionNumber)}</strong>
               <p className="mono">{String(version.hash)}</p>
+              <p>Created {formatDate(version.createdAt)}</p>
             </div>
             <Status value="IMMUTABLE" />
           </div>
@@ -212,6 +222,13 @@ export function MissionView({ missionId }: { missionId: string }) {
               <div>
                 <strong>{String(run.runId)}</strong>
                 <p>{String(run.stateReason)}</p>
+                <p>
+                  Created {formatDate(run.createdAt)} · Last updated{" "}
+                  {formatDate(run.updatedAt)}
+                </p>
+                {run.terminalAt ? (
+                  <p>Finished {formatDate(run.terminalAt)}</p>
+                ) : null}
               </div>
               <Status value={run.state} />
             </Link>
@@ -255,7 +272,8 @@ export function RunView({
     if (demo && !demoToken) return;
     const controller = new AbortController();
     const listener = (event: Record<string, unknown>) => {
-      if (typeof event.sequence === "number") setCursor(event.sequence);
+      if (!isTimelineEvent(event)) return;
+      setCursor(event.sequence);
       setEvents((current) => [
         ...current.filter((item) => item.eventId !== event.eventId),
         event,
@@ -318,6 +336,7 @@ export function RunView({
     );
   const steps = asArray(run.steps);
   const reconciliation = asArray(run.reconciliation);
+  const transactions = transactionRows(run);
   return (
     <ConsoleShell>
       <PageHeader
@@ -327,6 +346,21 @@ export function RunView({
         action={<Status value={run.state} />}
       />
       <div className="flight-grid">
+        <section className="fact-grid run-meta span-2" aria-label="Run dates">
+          <Fact label="Created" value={formatDate(run.createdAt)} />
+          <Fact label="Started" value={formatDate(run.startedAt)} />
+          <Fact label="Last updated" value={formatDate(run.updatedAt)} />
+          <Fact
+            label="Finished"
+            value={run.terminalAt ? formatDate(run.terminalAt) : "In progress"}
+          />
+          {run.recoveryStartedAt ? (
+            <Fact
+              label="Recovery started"
+              value={formatDate(run.recoveryStartedAt)}
+            />
+          ) : null}
+        </section>
         <section className="section span-2">
           <h2>Mission objective</h2>
           <p>
@@ -349,15 +383,105 @@ export function RunView({
                 <Fact label="Simulation" value={step.simulationRecordId} />
                 <Fact
                   label="Execution attempts"
-                  value={asArray(step.executionAttemptIds).length}
+                  value={listLength(step.executionAttemptIds)}
                 />
                 <Fact
                   label="Independent observations"
-                  value={asArray(step.observationIds).length}
+                  value={listLength(step.observationIds)}
+                />
+                <Fact label="Started" value={formatDate(step.startedAt)} />
+                <Fact
+                  label="Finished"
+                  value={
+                    step.terminalAt
+                      ? formatDate(step.terminalAt)
+                      : "In progress"
+                  }
                 />
               </dl>
             </article>
           ))}
+        </section>
+        <section className="section span-2 transaction-section">
+          <div className="row section-heading-row">
+            <div>
+              <h2>Sepolia transactions</h2>
+              <p>
+                Every transaction hash recorded for forward and recovery writes
+                in this run.
+              </p>
+            </div>
+            <span>{transactions.length} recorded</span>
+          </div>
+          {transactions.length ? (
+            <div className="transaction-list">
+              {transactions.map((transaction) => (
+                <article
+                  className="transaction-row"
+                  key={String(transaction.transactionHash)}
+                >
+                  <div>
+                    <strong>
+                      {transaction.kind === "COMPENSATION"
+                        ? "Recovery transaction"
+                        : "Mission transaction"}
+                    </strong>
+                    <p>
+                      {String(transaction.stepId ?? "Recorded write")} ·{" "}
+                      {String(transaction.status ?? "RECORDED").replaceAll(
+                        "_",
+                        " ",
+                      )}
+                    </p>
+                    <p>
+                      KeeperHub execution:{" "}
+                      <span className="mono">
+                        {String(
+                          transaction.keeperHubExecutionId ??
+                            "Not acknowledged",
+                        )}
+                      </span>
+                    </p>
+                    <p className="mono transaction-hash">
+                      {String(transaction.transactionHash)}
+                    </p>
+                    <p>
+                      Recorded {formatDate(transaction.createdAt)}
+                      {transaction.terminalAt
+                        ? ` · Final provider update ${formatDate(transaction.terminalAt)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="transaction-actions">
+                    <a
+                      className="pill pill-secondary"
+                      href={String(transaction.explorerUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`View transaction ${String(transaction.transactionHash)} on Sepolia Etherscan`}
+                    >
+                      View on Etherscan ↗
+                    </a>
+                    {typeof transaction.providerTransactionLink === "string" ? (
+                      <a
+                        className="inline-evidence-link"
+                        href={transaction.providerTransactionLink}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open KeeperHub-provided link ↗
+                      </a>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p>
+              No transaction hash has been recorded. A simulation failure does
+              not produce an onchain transaction.
+            </p>
+          )}
         </section>
         {reconciliation.length > 0 && (
           <section className="section alert span-2">
@@ -603,6 +727,9 @@ function asArray(value: unknown): Array<Record<string, unknown>> {
       )
     : [];
 }
+function listLength(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
 function short(value: unknown) {
   const text = String(value ?? "");
   return text.length > 16 ? `${text.slice(0, 8)}…${text.slice(-6)}` : text;
@@ -611,6 +738,44 @@ function plainState(value: unknown) {
   return String(value ?? "Pending")
     .replaceAll("_", " ")
     .toLowerCase();
+}
+function formatDate(value: unknown) {
+  const date = new Date(String(value ?? ""));
+  return Number.isNaN(date.valueOf()) ? "Not recorded" : date.toLocaleString();
+}
+function transactionRows(
+  run: Record<string, unknown>,
+): Array<Record<string, unknown>> {
+  const normalized = asArray(run.transactionEvidence).filter(
+    (item) => typeof item.transactionHash === "string",
+  );
+  if (normalized.length) return normalized;
+  return asArray(run.attempts)
+    .filter((attempt) => typeof attempt.transactionHash === "string")
+    .map(
+      (attempt): Record<string, unknown> => ({
+        ...attempt,
+        explorerUrl: sepoliaExplorer
+          ? `${sepoliaExplorer}/tx/${String(attempt.transactionHash)}`
+          : "#",
+      }),
+    );
+}
+function isTimelineEvent(value: Record<string, unknown>): value is Record<
+  string,
+  unknown
+> & {
+  eventId: string;
+  sequence: number;
+  message: string;
+  createdAt: string;
+} {
+  return (
+    typeof value.eventId === "string" &&
+    typeof value.sequence === "number" &&
+    typeof value.message === "string" &&
+    typeof value.createdAt === "string"
+  );
 }
 const missionTemplate = JSON.stringify(
   {

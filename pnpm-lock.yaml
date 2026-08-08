@@ -134,6 +134,73 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@24.13.3)(jsdom@28.1.0(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@24.13.3)(typescript@5.9.2))(vite@8.2.0(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))
 
+  apps/savings-app:
+    dependencies:
+      "@aether/sdk":
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      "@aether/shared":
+        specifier: workspace:*
+        version: link:../../packages/shared
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.4.2
+      next:
+        specifier: 16.2.12
+        version: 16.2.12(@playwright/test@1.62.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      viem:
+        specifier: ^2.38.5
+        version: 2.55.11(typescript@5.9.2)(zod@4.4.3)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      "@axe-core/playwright":
+        specifier: ^4.12.1
+        version: 4.12.1(playwright-core@1.62.1)
+      "@playwright/test":
+        specifier: 1.62.1
+        version: 1.62.1
+      "@repo/eslint-config":
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      "@repo/typescript-config":
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
+      "@testing-library/jest-dom":
+        specifier: 6.9.1
+        version: 6.9.1
+      "@testing-library/react":
+        specifier: 16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      "@types/node":
+        specifier: ^22.15.3
+        version: 22.15.3
+      "@types/react":
+        specifier: 19.2.14
+        version: 19.2.14
+      "@types/react-dom":
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      eslint:
+        specifier: ^9.39.1
+        version: 9.39.1(jiti@2.7.0)
+      jsdom:
+        specifier: 28.1.0
+        version: 28.1.0(@noble/hashes@1.8.0)
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@22.15.3)(jsdom@28.1.0(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@22.15.3)(typescript@5.9.2))(vite@8.2.0(@types/node@22.15.3)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))
+
   apps/web:
     dependencies:
       "@aether/sdk":
