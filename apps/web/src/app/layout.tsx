@@ -43,6 +43,7 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${mono.variable} ${campaign.variable}`}
       data-scroll-behavior="smooth"
+      suppressHydrationWarning
     >
       <body>
         <a className="skip-link" href="#main-content">
