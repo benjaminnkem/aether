@@ -15,7 +15,8 @@ test.describe("@visual production surfaces", () => {
         );
       await page.goto(path);
       await page.addStyleTag({
-        content: "nextjs-portal{display:none!important}",
+        content:
+          "nextjs-portal{display:none!important}.hero-particles{display:none!important}",
       });
       await expect(page).toHaveScreenshot(`${name}.png`, {
         fullPage: true,

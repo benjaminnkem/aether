@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { validateRuntimeTimeoutEnvironment } from "../src/chains";
 import { loadRootEnvironment } from "../src/environment";
 
 const temporaryDirectories: string[] = [];
@@ -36,6 +37,28 @@ describe("loadRootEnvironment", () => {
     loadRootEnvironment({ environment, startDirectories: [root] });
 
     expect(environment.AETHER_TEST_PRECEDENCE).toBe("injected");
+  });
+});
+
+describe("runtime timeout environment", () => {
+  it("accepts bounded provider timeouts", () => {
+    expect(() =>
+      validateRuntimeTimeoutEnvironment({
+        RPC_TIMEOUT_MS: "10000",
+        KEEPERHUB_REQUEST_TIMEOUT_MS: "15000",
+        GROQ_TIMEOUT_MS: "15000",
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects timer values that cannot be safely scheduled", () => {
+    expect(() =>
+      validateRuntimeTimeoutEnvironment({
+        RPC_TIMEOUT_MS: "10000000000000000",
+      }),
+    ).toThrow(
+      "RPC_TIMEOUT_MS must be an integer between 1000 and 120000 milliseconds.",
+    );
   });
 });
 

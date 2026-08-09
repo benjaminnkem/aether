@@ -16,32 +16,60 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   return (
     <div className="console-shell">
-      <header className="console-header">
+      <aside className="console-header">
         <Link
-          className="brand"
+          className="brand console-brand"
           href="/app/overview"
           aria-label="Aether overview"
         >
-          AETHER
+          <span className="console-brand-mark" aria-hidden="true">
+            A
+          </span>
+          <span>AETHER</span>
         </Link>
         <nav aria-label="Primary navigation">
-          {navigation.map(([label, href]) => (
+          {navigation.map(([label, href], index) => (
             <Link
               key={href}
               href={href}
               aria-current={pathname.startsWith(href) ? "page" : undefined}
             >
-              {label}
+              <span aria-hidden="true">
+                {["I", "II", "III", "IV", "V"][index]}
+              </span>
+              <strong>{label}</strong>
             </Link>
           ))}
         </nav>
-        <Link className="pill pill-secondary" href="/demo">
-          Demo
-        </Link>
-      </header>
-      <main id="main-content" className="console-main">
-        {children}
-      </main>
+        <div className="console-sidebar-foot">
+          <div className="console-network">
+            <i aria-hidden="true" />
+            <span>
+              <strong>Sepolia</strong>Write network
+            </span>
+          </div>
+          <Link className="console-demo-link" href="/demo">
+            Open demo <span aria-hidden="true">↗</span>
+          </Link>
+        </div>
+      </aside>
+      <div className="console-stage">
+        <header className="console-topbar">
+          <div>
+            <span className="console-live-dot" aria-hidden="true" />
+            <span>Mission engine online</span>
+          </div>
+          <div>
+            <span>Northstar workspace</span>
+            <span className="console-avatar" aria-hidden="true">
+              NS
+            </span>
+          </div>
+        </header>
+        <main id="main-content" className="console-main">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
@@ -73,9 +101,11 @@ export function Status({ value }: { value: unknown }) {
   const text = String(value ?? "UNKNOWN").replaceAll("_", " ");
   const tone = /COMPLETED|RECOVERED|VERIFIED|PASS|APPROVED/.test(text)
     ? "ok"
-    : /UNKNOWN|LOCKED|RECONCILING|ATTENTION|FAILED|DENIED/.test(text)
+    : /FAILED|DENIED/.test(text)
       ? "bad"
-      : "neutral";
+      : /UNKNOWN|LOCKED|RECONCILING|ATTENTION|RECOVERING/.test(text)
+        ? "warn"
+        : "neutral";
   return <span className={`status status-${tone}`}>{text}</span>;
 }
 

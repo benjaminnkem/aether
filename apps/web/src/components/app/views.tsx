@@ -22,41 +22,106 @@ export function OverviewView() {
     queryFn: () => api.approvals(),
   });
   const audit = useQuery({ queryKey: ["audit"], queryFn: () => api.audit() });
+  const missionItems = missions.data?.items ?? [];
+  const approvalItems = approvals.data?.items ?? [];
+  const auditItems = audit.data?.items ?? [];
   return (
     <ConsoleShell>
       <PageHeader
-        eyebrow="Current workspace"
+        eyebrow="Sunday · 09 August"
         title="Mission control"
-        description="Track intended writes, chain evidence, unknown outcomes, and recovery from one place."
+        description="A live operational view of intent, execution, chain reality, and recovery across every agent mission."
         action={
           <Link className="pill pill-primary" href="/app/missions/new">
-            New mission
+            Create mission <span aria-hidden="true">＋</span>
           </Link>
         }
       />
-      <section className="metric-grid">
-        <Metric label="Missions" value={missions.data?.items.length} />
-        <Metric
-          label="Awaiting approval"
-          value={
-            approvals.data?.items.filter((item) => item.status === "PENDING")
-              .length
-          }
-        />
-        <Metric label="Recorded events" value={audit.data?.items.length} />
-      </section>
-      <section className="section">
-        <h2>Operating boundary</h2>
-        <div className="fact-grid">
-          <Fact label="Write network" value="Ethereum Sepolia only" />
-          <Fact label="Execution" value="KeeperHub Direct Execution" />
-          <Fact label="Verification" value="Two independent RPC providers" />
-          <Fact
-            label="Uncertain result"
-            value="Retry locked until reconciled"
-          />
+      <section className="overview-command" aria-label="Operational summary">
+        <div className="overview-command-copy">
+          <span className="overview-kicker">
+            <i aria-hidden="true" /> ALL SYSTEMS OPERATIONAL
+          </span>
+          <h2>Every active mission is inside its authorized envelope.</h2>
+          <p>
+            There are no unresolved unknown writes or recovery actions waiting
+            for an operator.
+          </p>
+        </div>
+        <div className="overview-orbit" aria-hidden="true">
+          <span>A</span>
+          <i />
+          <i />
+          <i />
         </div>
       </section>
+      <section className="metric-grid" aria-label="Workspace metrics">
+        <Metric
+          label="Total missions"
+          value={missionItems.length}
+          detail="Frozen definitions"
+        />
+        <Metric
+          label="Pending authority"
+          value={
+            approvalItems.filter((item) => item.status === "PENDING").length
+          }
+          detail="Exact plans awaiting review"
+        />
+        <Metric
+          label="Evidence events"
+          value={auditItems.length}
+          detail="Append-only audit records"
+        />
+      </section>
+      <div className="overview-grid">
+        <section className="section overview-activity">
+          <div className="row section-heading-row">
+            <div>
+              <p className="eyebrow">Live record</p>
+              <h2>Recent activity</h2>
+            </div>
+            <Link href="/app/audit">View audit →</Link>
+          </div>
+          <div className="overview-feed">
+            {auditItems.length ? (
+              auditItems.slice(0, 5).map((item, index) => (
+                <div key={String(item.eventId)}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <i aria-hidden="true" />
+                  <div>
+                    <strong>
+                      {String(item.eventType).replaceAll("_", " ")}
+                    </strong>
+                    <p>
+                      {String(item.subjectType)} · {short(item.subjectId)}
+                    </p>
+                  </div>
+                  <small>{formatDate(item.createdAt)}</small>
+                </div>
+              ))
+            ) : (
+              <Empty
+                title="The record is quiet"
+                body="New mission transitions and chain evidence will appear here in real time."
+              />
+            )}
+          </div>
+        </section>
+        <section className="section overview-boundary">
+          <p className="eyebrow">Execution boundary</p>
+          <h2>Guardrails that cannot be bypassed</h2>
+          <div className="boundary-list">
+            <Fact label="Write network" value="Ethereum Sepolia only" />
+            <Fact label="Execution" value="KeeperHub Direct Execution" />
+            <Fact label="Verification" value="Two independent RPC providers" />
+            <Fact label="Uncertain result" value="Replay remains locked" />
+          </div>
+          <Link className="pill pill-secondary" href="/app/settings/policy">
+            Review policy
+          </Link>
+        </section>
+      </div>
     </ConsoleShell>
   );
 }
@@ -65,6 +130,7 @@ export function MissionsView() {
   const query = useQuery({
     queryKey: ["missions"],
     queryFn: () => api.listMissions(),
+    refetchInterval: 5000,
   });
   return (
     <ConsoleShell>
@@ -159,6 +225,7 @@ export function MissionView({ missionId }: { missionId: string }) {
   const query = useQuery({
     queryKey: ["mission", missionId],
     queryFn: () => api.mission(missionId),
+    refetchInterval: 5000,
   });
   if (!query.data)
     return (
@@ -700,11 +767,20 @@ export function SettingsView({
   );
 }
 
-function Metric({ label, value }: { label: string; value?: number }) {
+function Metric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value?: number;
+  detail?: string;
+}) {
   return (
     <div className="metric">
       <span>{label}</span>
       <strong>{value ?? "—"}</strong>
+      {detail ? <small>{detail}</small> : null}
     </div>
   );
 }

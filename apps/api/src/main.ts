@@ -11,7 +11,10 @@ import {
   type Response,
 } from "express";
 import helmet from "helmet";
-import { validateRuntimeChainEnvironment } from "@aether/backend";
+import {
+  validateRuntimeChainEnvironment,
+  validateRuntimeTimeoutEnvironment,
+} from "@aether/backend";
 import { AppModule } from "./app.module";
 import type { AuthenticatedRequest } from "./auth/auth";
 import { ApiExceptionFilter } from "./http/zod-exception.filter";
@@ -19,6 +22,7 @@ import { StructuredLogger } from "./observability/logger";
 
 export async function createApplication() {
   validateRuntimeChainEnvironment();
+  validateRuntimeTimeoutEnvironment();
   const app = await NestFactory.create(AppModule, {
     bodyParser: false,
     bufferLogs: true,

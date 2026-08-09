@@ -142,6 +142,11 @@ export class KeeperHubHttpClient implements KeeperHubClient {
     acceptedErrorStatuses: readonly number[] = [],
   ) {
     const started = Date.now();
+    const timeoutMs = durationEnv(
+      "KEEPERHUB_REQUEST_TIMEOUT_MS",
+      15_000,
+      300_000,
+    );
     let response: Response;
     try {
       response = await fetch(url, {
@@ -152,9 +157,7 @@ export class KeeperHubHttpClient implements KeeperHubClient {
           "x-request-id": crypto.randomUUID(),
           ...init.headers,
         },
-        signal: AbortSignal.timeout(
-          numberEnv("KEEPERHUB_REQUEST_TIMEOUT_MS", 15000),
-        ),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       this.healthState.failure("KeeperHub request did not return a response.");
@@ -414,6 +417,7 @@ export class JsonRpcObserver implements ChainObserver {
   }
   private async rpc(method: string, params: unknown[]) {
     const started = Date.now();
+    const timeoutMs = durationEnv("RPC_TIMEOUT_MS", 10_000, 120_000);
     try {
       const response = await fetch(this.url, {
         method: "POST",
@@ -424,7 +428,7 @@ export class JsonRpcObserver implements ChainObserver {
           method,
           params,
         }),
-        signal: AbortSignal.timeout(numberEnv("RPC_TIMEOUT_MS", 10000)),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!response.ok)
         throw new ProviderRequestError(
@@ -549,7 +553,7 @@ export class GroqIncidentSummarizer implements IncidentSummarizer {
     const started = Date.now();
     const client = new Groq({
       apiKey: key,
-      timeout: numberEnv("GROQ_TIMEOUT_MS", 15000),
+      timeout: durationEnv("GROQ_TIMEOUT_MS", 15_000, 120_000),
       maxRetries: 0,
       fetch: globalThis.fetch as unknown as GroqFetch,
     });
@@ -652,6 +656,14 @@ function numberEnv(name: string, fallback: number) {
   const parsed = Number(process.env[name] ?? fallback);
   if (!Number.isInteger(parsed) || parsed <= 0)
     throw new Error(`${name} must be a positive integer.`);
+  return parsed;
+}
+function durationEnv(name: string, fallback: number, maximum: number) {
+  const parsed = Number(process.env[name] ?? fallback);
+  if (!Number.isSafeInteger(parsed) || parsed < 1_000 || parsed > maximum)
+    throw new Error(
+      `${name} must be an integer between 1000 and ${maximum} milliseconds.`,
+    );
   return parsed;
 }
 function toEther(wei: string) {
