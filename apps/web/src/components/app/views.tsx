@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { AetherClient, getAetherErrorMessage } from "@aether/sdk";
 import { browserSafeChains, ETHEREUM_SEPOLIA_CHAIN_ID } from "@aether/shared";
-import { ConsoleShell, Empty, PageHeader, Status } from "./console-shell";
+import {
+  ConsoleShell,
+  CopyValue,
+  Empty,
+  LoadingBlock,
+  PageHeader,
+  Status,
+} from "./console-shell";
 
 const api = new AetherClient(process.env.NEXT_PUBLIC_AETHER_API_URL ?? "/v1");
 const sepoliaExplorer = browserSafeChains.find(
@@ -25,28 +33,69 @@ export function OverviewView() {
   const missionItems = missions.data?.items ?? [];
   const approvalItems = approvals.data?.items ?? [];
   const auditItems = audit.data?.items ?? [];
+  const pendingApprovals = approvalItems.filter(
+    (item) => item.status === "PENDING",
+  ).length;
+  const loading = missions.isLoading || approvals.isLoading || audit.isLoading;
+  const posture = useMemo(() => {
+    if (pendingApprovals > 0) {
+      return {
+        tone: "warn" as const,
+        kicker: "Authority required",
+        title: `${pendingApprovals} exact plan${pendingApprovals === 1 ? "" : "s"} waiting for a human decision.`,
+        body: "Simulation already bound the plan hash. Approve or deny from the approvals queue before KeeperHub can submit.",
+        href: "/app/approvals",
+        cta: "Review approvals",
+      };
+    }
+    if (!missionItems.length) {
+      return {
+        tone: "neutral" as const,
+        kicker: "Workspace ready",
+        title: "No missions are defined yet.",
+        body: "Freeze a multi-step objective with proofs and recovery rules, then start a run from the mission page.",
+        href: "/app/missions/new",
+        cta: "Create mission",
+      };
+    }
+    return {
+      tone: "ok" as const,
+      kicker: "All systems operational",
+      title: "Missions are inside their authorized envelope.",
+      body: "No pending approvals are blocking progress. Unknown outcomes remain retry-locked until independently reconciled.",
+      href: "/app/missions",
+      cta: "Browse missions",
+    };
+  }, [missionItems.length, pendingApprovals]);
+
   return (
     <ConsoleShell>
       <PageHeader
-        eyebrow="Sunday · 09 August"
-        title="Mission control"
-        description="A live operational view of intent, execution, chain reality, and recovery across every agent mission."
+        eyebrow="Mission control"
+        title="Operations"
+        description="Intent, execution, chain reality, and recovery across every agent mission in this workspace."
         action={
           <Link className="pill pill-primary" href="/app/missions/new">
             Create mission <span aria-hidden="true">＋</span>
           </Link>
         }
       />
-      <section className="overview-command" aria-label="Operational summary">
+      <section
+        className={`overview-command overview-command--${posture.tone}`}
+        aria-label="Operational summary"
+      >
         <div className="overview-command-copy">
           <span className="overview-kicker">
-            <i aria-hidden="true" /> ALL SYSTEMS OPERATIONAL
+            <i aria-hidden="true" /> {posture.kicker}
           </span>
-          <h2>Every active mission is inside its authorized envelope.</h2>
-          <p>
-            There are no unresolved unknown writes or recovery actions waiting
-            for an operator.
-          </p>
+          <h2>{posture.title}</h2>
+          <p>{posture.body}</p>
+          <Link
+            className="pill pill-secondary overview-command-cta"
+            href={posture.href}
+          >
+            {posture.cta}
+          </Link>
         </div>
         <div className="overview-orbit" aria-hidden="true">
           <span>A</span>
@@ -55,73 +104,111 @@ export function OverviewView() {
           <i />
         </div>
       </section>
-      <section className="metric-grid" aria-label="Workspace metrics">
-        <Metric
-          label="Total missions"
-          value={missionItems.length}
-          detail="Frozen definitions"
-        />
-        <Metric
-          label="Pending authority"
-          value={
-            approvalItems.filter((item) => item.status === "PENDING").length
-          }
-          detail="Exact plans awaiting review"
-        />
-        <Metric
-          label="Evidence events"
-          value={auditItems.length}
-          detail="Append-only audit records"
-        />
-      </section>
-      <div className="overview-grid">
-        <section className="section overview-activity">
-          <div className="row section-heading-row">
-            <div>
-              <p className="eyebrow">Live record</p>
-              <h2>Recent activity</h2>
-            </div>
-            <Link href="/app/audit">View audit →</Link>
-          </div>
-          <div className="overview-feed">
-            {auditItems.length ? (
-              auditItems.slice(0, 5).map((item, index) => (
-                <div key={String(item.eventId)}>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <i aria-hidden="true" />
-                  <div>
-                    <strong>
-                      {String(item.eventType).replaceAll("_", " ")}
-                    </strong>
-                    <p>
-                      {String(item.subjectType)} · {short(item.subjectId)}
-                    </p>
-                  </div>
-                  <small>{formatDate(item.createdAt)}</small>
+      {loading ? (
+        <LoadingBlock label="Loading workspace summary" rows={4} />
+      ) : (
+        <>
+          <section className="metric-grid" aria-label="Workspace metrics">
+            <Link className="metric metric-link" href="/app/missions">
+              <span>Total missions</span>
+              <strong>{missionItems.length}</strong>
+              <small>Frozen definitions</small>
+            </Link>
+            <Link className="metric metric-link" href="/app/approvals">
+              <span>Pending authority</span>
+              <strong>{pendingApprovals}</strong>
+              <small>Exact plans awaiting review</small>
+            </Link>
+            <Link className="metric metric-link" href="/app/audit">
+              <span>Evidence events</span>
+              <strong>{auditItems.length}</strong>
+              <small>Append-only audit records</small>
+            </Link>
+          </section>
+          <div className="overview-grid">
+            <section className="section overview-activity">
+              <div className="row section-heading-row">
+                <div>
+                  <p className="eyebrow">Live record</p>
+                  <h2>Recent activity</h2>
                 </div>
-              ))
-            ) : (
-              <Empty
-                title="The record is quiet"
-                body="New mission transitions and chain evidence will appear here in real time."
-              />
-            )}
+                <Link href="/app/audit">View audit →</Link>
+              </div>
+              <div className="overview-feed">
+                {auditItems.length ? (
+                  auditItems.slice(0, 6).map((item, index) => (
+                    <div key={String(item.eventId)}>
+                      <span>{String(index + 1).padStart(2, "0")}</span>
+                      <i aria-hidden="true" />
+                      <div>
+                        <strong>{humanizeEvent(item.eventType)}</strong>
+                        <p>
+                          {String(item.subjectType).replaceAll("_", " ")} ·{" "}
+                          {short(item.subjectId)}
+                        </p>
+                      </div>
+                      <small>{formatDate(item.createdAt)}</small>
+                    </div>
+                  ))
+                ) : (
+                  <Empty
+                    title="The record is quiet"
+                    body="Mission transitions, approvals, and chain evidence will appear here."
+                    action={
+                      <Link
+                        className="pill pill-secondary"
+                        href="/app/missions/new"
+                      >
+                        Create first mission
+                      </Link>
+                    }
+                  />
+                )}
+              </div>
+            </section>
+            <section className="section overview-missions">
+              <div className="row section-heading-row">
+                <div>
+                  <p className="eyebrow">Definitions</p>
+                  <h2>Missions</h2>
+                </div>
+                <Link href="/app/missions">View all →</Link>
+              </div>
+              {missionItems.length ? (
+                <div className="overview-mission-list">
+                  {missionItems.slice(0, 4).map((mission) => (
+                    <Link
+                      className="list-row"
+                      key={String(mission.missionId)}
+                      href={`/app/missions/${String(mission.missionId)}`}
+                    >
+                      <div>
+                        <strong>{String(mission.name)}</strong>
+                        <p>{String(mission.description ?? "No description")}</p>
+                      </div>
+                      <span>Open →</span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <Empty
+                  title="No missions yet"
+                  body="Create a mission to freeze steps, proofs, and recovery rules."
+                />
+              )}
+              <div className="boundary-list overview-boundary-inline">
+                <Fact label="Write network" value="Ethereum Sepolia only" />
+                <Fact label="Execution" value="KeeperHub Direct Execution" />
+                <Fact
+                  label="Verification"
+                  value="Two independent RPC providers"
+                />
+                <Fact label="Uncertain result" value="Replay remains locked" />
+              </div>
+            </section>
           </div>
-        </section>
-        <section className="section overview-boundary">
-          <p className="eyebrow">Execution boundary</p>
-          <h2>Guardrails that cannot be bypassed</h2>
-          <div className="boundary-list">
-            <Fact label="Write network" value="Ethereum Sepolia only" />
-            <Fact label="Execution" value="KeeperHub Direct Execution" />
-            <Fact label="Verification" value="Two independent RPC providers" />
-            <Fact label="Uncertain result" value="Replay remains locked" />
-          </div>
-          <Link className="pill pill-secondary" href="/app/settings/policy">
-            Review policy
-          </Link>
-        </section>
-      </div>
+        </>
+      )}
     </ConsoleShell>
   );
 }
@@ -144,7 +231,9 @@ export function MissionsView() {
           </Link>
         }
       />
-      {query.isError ? (
+      {query.isLoading ? (
+        <LoadingBlock label="Loading missions" rows={5} />
+      ) : query.isError ? (
         <ErrorState error={query.error} />
       ) : query.data?.items.length ? (
         <div className="list">
@@ -159,7 +248,10 @@ export function MissionsView() {
                 <p>{String(mission.description ?? "No description")}</p>
                 <p>Created {formatDate(mission.createdAt)}</p>
               </div>
-              <span>Open →</span>
+              <span className="list-row-meta">
+                <Status value={mission.state ?? "READY"} />
+                <span>Open →</span>
+              </span>
             </Link>
           ))}
         </div>
@@ -167,6 +259,11 @@ export function MissionsView() {
         <Empty
           title="No missions yet"
           body="Create a mission to freeze its steps, proofs, retry classes, and recovery rules."
+          action={
+            <Link className="pill pill-primary" href="/app/missions/new">
+              Create mission
+            </Link>
+          }
         />
       )}
     </ConsoleShell>
@@ -175,46 +272,82 @@ export function MissionsView() {
 
 export function NewMissionView() {
   const [message, setMessage] = useState("");
+  const [pending, setPending] = useState(false);
   return (
     <ConsoleShell>
       <PageHeader
         eyebrow="New definition"
         title="Create a mission"
         description="Submit a strict mission document. Amounts must be unsigned integer strings and every write needs a retry class."
+        breadcrumbs={[
+          { label: "Missions", href: "/app/missions" },
+          { label: "New" },
+        ]}
       />
+      <div className="editor-guide section">
+        <p className="eyebrow">Before you freeze</p>
+        <ul>
+          <li>Every write step needs a retry class and proof specification.</li>
+          <li>
+            Recovery actions must be declared up front — never improvised.
+          </li>
+          <li>
+            Sepolia is the only launch network; mainnet targets are rejected.
+          </li>
+        </ul>
+      </div>
       <form
         className="editor"
         onSubmit={async (event) => {
           event.preventDefault();
-          setMessage("Saving…");
+          setPending(true);
+          setMessage("Validating and saving…");
           const form = new FormData(event.currentTarget);
           try {
-            const result = await api.createMission(
-              JSON.parse(String(form.get("definition"))),
-            );
+            const raw = String(form.get("definition") ?? "");
+            const parsed = JSON.parse(raw) as unknown;
+            const result = await api.createMission(parsed);
+            toast.success("Mission created.");
             window.location.href = `/app/missions/${String((result as Record<string, unknown>).missionId)}`;
           } catch (error) {
-            console.log(error);
-            setMessage(
-              getAetherErrorMessage(error, "Mission could not be created."),
-            );
+            const body =
+              error instanceof SyntaxError
+                ? "Mission JSON is invalid. Fix the syntax and try again."
+                : getAetherErrorMessage(error, "Mission could not be created.");
+            setMessage(body);
+            toast.error(body);
+            setPending(false);
           }
         }}
       >
         <label>
-          Name and definition JSON
+          Mission document (JSON)
           <textarea
             name="definition"
             required
             spellCheck={false}
             defaultValue={missionTemplate}
+            aria-describedby="mission-json-help"
           />
         </label>
+        <p id="mission-json-help" className="field-help">
+          The API validates this against the shared mission schema before
+          anything is persisted.
+        </p>
         <div className="form-footer">
           <span aria-live="polite">{message}</span>
-          <button className="pill pill-primary" type="submit">
-            Create mission
-          </button>
+          <div className="form-footer-actions">
+            <Link className="pill pill-secondary" href="/app/missions">
+              Cancel
+            </Link>
+            <button
+              className="pill pill-primary"
+              type="submit"
+              disabled={pending}
+            >
+              {pending ? "Creating…" : "Create mission"}
+            </button>
+          </div>
         </div>
       </form>
     </ConsoleShell>
@@ -227,13 +360,36 @@ export function MissionView({ missionId }: { missionId: string }) {
     queryFn: () => api.mission(missionId),
     refetchInterval: 5000,
   });
-  if (!query.data)
+  const [starting, setStarting] = useState(false);
+  if (query.isLoading)
     return (
       <ConsoleShell>
         <PageHeader
           eyebrow="Mission"
           title="Loading mission"
           description="Reading the frozen definition and recent runs."
+          breadcrumbs={[
+            { label: "Missions", href: "/app/missions" },
+            { label: short(missionId) },
+          ]}
+        />
+        <LoadingBlock label="Loading mission" rows={4} />
+      </ConsoleShell>
+    );
+  if (query.isError || !query.data)
+    return (
+      <ConsoleShell>
+        <PageHeader
+          eyebrow="Mission"
+          title="Mission unavailable"
+          description={getAetherErrorMessage(
+            query.error,
+            "This mission could not be loaded.",
+          )}
+          breadcrumbs={[
+            { label: "Missions", href: "/app/missions" },
+            { label: short(missionId) },
+          ]}
         />
       </ConsoleShell>
     );
@@ -248,34 +404,60 @@ export function MissionView({ missionId }: { missionId: string }) {
         description={String(
           mission.description ?? "Versioned onchain mission.",
         )}
+        breadcrumbs={[
+          { label: "Missions", href: "/app/missions" },
+          { label: String(mission.name) },
+        ]}
         action={
           <button
             className="pill pill-primary"
+            disabled={starting}
             onClick={async () => {
-              const result = await api.createRun(missionId, { input: {} });
-              window.location.href = `/app/runs/${String(result.runId)}`;
+              setStarting(true);
+              try {
+                const result = await api.createRun(missionId, { input: {} });
+                toast.success("Run started.");
+                window.location.href = `/app/runs/${String(result.runId)}`;
+              } catch (error) {
+                toast.error(
+                  getAetherErrorMessage(error, "Run could not be started."),
+                );
+                setStarting(false);
+              }
             }}
           >
-            Run mission
+            {starting ? "Starting…" : "Run mission"}
           </button>
         }
       />
       <section className="fact-grid mission-meta" aria-label="Mission dates">
         <Fact label="Created" value={formatDate(mission.createdAt)} />
         <Fact label="Last updated" value={formatDate(mission.updatedAt)} />
+        <Fact label="Versions" value={versions.length} />
+        <Fact label="Recorded runs" value={runs.length} />
       </section>
       <section className="section">
         <h2>Frozen versions</h2>
-        {versions.map((version) => (
-          <div className="list-row" key={String(version.missionVersionId)}>
-            <div>
-              <strong>Version {String(version.versionNumber)}</strong>
-              <p className="mono">{String(version.hash)}</p>
-              <p>Created {formatDate(version.createdAt)}</p>
+        {versions.length ? (
+          versions.map((version) => (
+            <div className="list-row" key={String(version.missionVersionId)}>
+              <div>
+                <strong>Version {String(version.versionNumber)}</strong>
+                <CopyValue
+                  value={String(version.hash ?? "")}
+                  label="Copy hash"
+                />
+                <p>Created {formatDate(version.createdAt)}</p>
+              </div>
+              <Status value="IMMUTABLE" />
             </div>
-            <Status value="IMMUTABLE" />
-          </div>
-        ))}
+          ))
+        ) : (
+          <Empty
+            title="No frozen versions"
+            body="A mission version is created when the definition is first saved."
+          />
+        )}
       </section>
       <section className="section">
         <h2>Recent runs</h2>
@@ -287,10 +469,10 @@ export function MissionView({ missionId }: { missionId: string }) {
               href={`/app/runs/${String(run.runId)}`}
             >
               <div>
-                <strong>{String(run.runId)}</strong>
-                <p>{String(run.stateReason)}</p>
+                <strong className="mono">{short(run.runId)}</strong>
+                <p>{String(run.stateReason ?? "No state reason recorded.")}</p>
                 <p>
-                  Created {formatDate(run.createdAt)} · Last updated{" "}
+                  Created {formatDate(run.createdAt)} · Updated{" "}
                   {formatDate(run.updatedAt)}
                 </p>
                 {run.terminalAt ? (
@@ -302,8 +484,8 @@ export function MissionView({ missionId }: { missionId: string }) {
           ))
         ) : (
           <Empty
-            title="No runs"
-            body="Start the mission to create a persisted flight record."
+            title="No runs yet"
+            body="Start the mission to create a persisted flight record with checkpoints and evidence."
           />
         )}
       </section>
@@ -406,16 +588,42 @@ export function RunView({
   const plans = asArray(run.plans);
   const reconciliation = asArray(run.reconciliation);
   const transactions = transactionRows(run);
+  const missionId =
+    typeof run.missionId === "string" ? run.missionId : undefined;
   return (
     <ConsoleShell>
       <PageHeader
-        eyebrow="Flight recorder"
-        title={String(run.runId)}
-        description={String(run.stateReason)}
-        action={<Status value={run.state} />}
+        eyebrow={demo ? "Demo flight recorder" : "Flight recorder"}
+        title={plainState(run.state).replace(/^\w/, (c) => c.toUpperCase())}
+        description={String(
+          run.stateReason ?? "Persisted run with independent verification.",
+        )}
+        breadcrumbs={
+          demo
+            ? [{ label: "Demo", href: "/demo" }, { label: short(run.runId) }]
+            : [
+                { label: "Missions", href: "/app/missions" },
+                ...(missionId
+                  ? [
+                      {
+                        label: "Mission",
+                        href: `/app/missions/${missionId}`,
+                      },
+                    ]
+                  : []),
+                { label: short(run.runId) },
+              ]
+        }
+        action={
+          <div className="page-header-stack">
+            <Status value={run.state} />
+            <CopyValue value={String(run.runId ?? "")} label="Copy run id" />
+          </div>
+        }
       />
       <div className="flight-grid">
         <section className="fact-grid run-meta span-2" aria-label="Run dates">
+          <Fact label="Run ID" value={short(run.runId)} />
           <Fact label="Created" value={formatDate(run.createdAt)} />
           <Fact label="Started" value={formatDate(run.startedAt)} />
           <Fact label="Last updated" value={formatDate(run.updatedAt)} />
@@ -439,37 +647,63 @@ export function RunView({
           </p>
         </section>
         <section className="section span-2">
-          <h2>Steps</h2>
-          {steps.map((step) => (
-            <article className="step" key={String(step.stepRunId)}>
-              <div>
-                <small>{String(step.stepId)}</small>
-                <strong>{plainState(step.state)}</strong>
-              </div>
-              <Status value={step.state} />
-              <dl>
-                <Fact label="Plan" value={step.planId} />
-                <Fact label="Simulation" value={step.simulationRecordId} />
-                <Fact
-                  label="Execution attempts"
-                  value={listLength(step.executionAttemptIds)}
-                />
-                <Fact
-                  label="Independent observations"
-                  value={listLength(step.observationIds)}
-                />
-                <Fact label="Started" value={formatDate(step.startedAt)} />
-                <Fact
-                  label="Finished"
-                  value={
-                    step.terminalAt
-                      ? formatDate(step.terminalAt)
-                      : "In progress"
-                  }
-                />
-              </dl>
-            </article>
-          ))}
+          <div className="row section-heading-row">
+            <h2>Steps</h2>
+            <span>
+              {
+                steps.filter((step) =>
+                  ["VERIFIED", "COMPENSATED", "SKIPPED"].includes(
+                    String(step.state),
+                  ),
+                ).length
+              }
+              /{steps.length} settled
+            </span>
+          </div>
+          {steps.length ? (
+            <div className="step-rail" aria-label="Step progress">
+              {steps.map((step) => (
+                <article className="step" key={String(step.stepRunId)}>
+                  <div className="step-head">
+                    <div>
+                      <small>{String(step.stepId)}</small>
+                      <strong>{plainState(step.state)}</strong>
+                    </div>
+                    <Status value={step.state} />
+                  </div>
+                  <dl>
+                    <Fact label="Plan" value={short(step.planId)} />
+                    <Fact
+                      label="Simulation"
+                      value={short(step.simulationRecordId)}
+                    />
+                    <Fact
+                      label="Execution attempts"
+                      value={listLength(step.executionAttemptIds)}
+                    />
+                    <Fact
+                      label="Independent observations"
+                      value={listLength(step.observationIds)}
+                    />
+                    <Fact label="Started" value={formatDate(step.startedAt)} />
+                    <Fact
+                      label="Finished"
+                      value={
+                        step.terminalAt
+                          ? formatDate(step.terminalAt)
+                          : "In progress"
+                      }
+                    />
+                  </dl>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <Empty
+              title="No steps recorded yet"
+              body="Step checkpoints appear as the run advances through the frozen mission version."
+            />
+          )}
         </section>
         <section className="section span-2 transaction-section">
           <div className="row section-heading-row">
@@ -621,9 +855,38 @@ export function RunView({
 }
 
 export function ApprovalsView({ approvalId }: { approvalId?: string }) {
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["approvals", approvalId],
     queryFn: () => (approvalId ? api.approval(approvalId) : api.approvals()),
+  });
+  const decide = useMutation({
+    mutationFn: ({
+      id,
+      decision,
+    }: {
+      id: string;
+      decision: "approve" | "deny";
+    }) =>
+      api.decideApproval(
+        id,
+        decision,
+        decision === "approve"
+          ? "Approved in operator console."
+          : "Denied in operator console.",
+      ),
+    onSuccess: async (_data, variables) => {
+      toast.success(
+        variables.decision === "approve"
+          ? "Exact plan approved."
+          : "Exact plan denied.",
+      );
+      await queryClient.invalidateQueries({ queryKey: ["approvals"] });
+    },
+    onError: (error) =>
+      toast.error(
+        getAetherErrorMessage(error, "Approval decision could not be saved."),
+      ),
   });
   const items = approvalId
     ? query.data
@@ -635,47 +898,83 @@ export function ApprovalsView({ approvalId }: { approvalId?: string }) {
       <PageHeader
         eyebrow="Authority"
         title="Approvals"
-        description="Each decision is bound to one immutable plan hash and expiry."
+        description="Each decision is bound to one immutable plan hash and expiry. AI cannot approve."
       />
-      {items.map((item) => (
-        <article className="section" key={String(item.approvalId)}>
-          <div className="row">
-            <div>
-              <h2>{String(item.scope)} plan</h2>
-              <p className="mono">{String(item.planHash)}</p>
-            </div>
-            <Status value={item.status} />
-          </div>
-          {item.status === "PENDING" && (
-            <div className="actions">
-              <button
-                className="pill pill-secondary"
-                onClick={() =>
-                  void api.decideApproval(
-                    String(item.approvalId),
-                    "deny",
-                    "Denied in operator console.",
-                  )
-                }
-              >
-                Deny
-              </button>
-              <button
-                className="pill pill-primary"
-                onClick={() =>
-                  void api.decideApproval(
-                    String(item.approvalId),
-                    "approve",
-                    "Approved in operator console.",
-                  )
-                }
-              >
-                Approve exact plan
-              </button>
-            </div>
-          )}
-        </article>
-      ))}
+      {query.isLoading ? (
+        <LoadingBlock label="Loading approvals" rows={3} />
+      ) : query.isError ? (
+        <ErrorState error={query.error} />
+      ) : items.length ? (
+        <div className="approval-list">
+          {items.map((item) => (
+            <article
+              className="section approval-card"
+              key={String(item.approvalId)}
+            >
+              <div className="row">
+                <div>
+                  <p className="eyebrow">{String(item.scope ?? "PLAN")}</p>
+                  <h2>
+                    {String(item.scope ?? "Plan").replaceAll("_", " ")} decision
+                  </h2>
+                  <CopyValue
+                    value={String(item.planHash ?? "")}
+                    label="Copy plan hash"
+                  />
+                  <p className="approval-meta">
+                    Expires {formatDate(item.expiresAt)} · Created{" "}
+                    {formatDate(item.createdAt)}
+                  </p>
+                </div>
+                <Status value={item.status} />
+              </div>
+              {item.status === "PENDING" ? (
+                <div className="actions">
+                  <button
+                    className="pill pill-secondary"
+                    disabled={decide.isPending}
+                    onClick={() =>
+                      decide.mutate({
+                        id: String(item.approvalId),
+                        decision: "deny",
+                      })
+                    }
+                  >
+                    Deny
+                  </button>
+                  <button
+                    className="pill pill-primary"
+                    disabled={decide.isPending}
+                    onClick={() =>
+                      decide.mutate({
+                        id: String(item.approvalId),
+                        decision: "approve",
+                      })
+                    }
+                  >
+                    {decide.isPending ? "Saving…" : "Approve exact plan"}
+                  </button>
+                </div>
+              ) : (
+                <p className="approval-resolved">
+                  Decision already recorded. The bound plan hash cannot be
+                  reused for a different request.
+                </p>
+              )}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <Empty
+          title="No approvals waiting"
+          body="When a mission needs human authority, the exact simulated plan appears here with its hash and expiry."
+          action={
+            <Link className="pill pill-secondary" href="/app/missions">
+              Browse missions
+            </Link>
+          }
+        />
+      )}
     </ConsoleShell>
   );
 }
@@ -689,19 +988,35 @@ export function AuditView() {
         title="Audit"
         description="Append-only records for state, authority, execution, verification, and recovery."
       />
-      <div className="list">
-        {query.data?.items.map((item) => (
-          <div className="list-row" key={String(item.eventId)}>
-            <div>
-              <strong>{String(item.eventType)}</strong>
-              <p>
-                {String(item.subjectType)} · {String(item.subjectId)}
-              </p>
+      {query.isLoading ? (
+        <LoadingBlock label="Loading audit events" rows={6} />
+      ) : query.isError ? (
+        <ErrorState error={query.error} />
+      ) : query.data?.items?.length ? (
+        <div className="list">
+          {query.data.items.map((item) => (
+            <div className="list-row" key={String(item.eventId)}>
+              <div>
+                <strong>{humanizeEvent(item.eventType)}</strong>
+                <p>
+                  {String(item.subjectType ?? "subject").replaceAll("_", " ")} ·{" "}
+                  {short(item.subjectId)}
+                </p>
+                <p>{formatDate(item.createdAt)}</p>
+              </div>
+              <CopyValue
+                value={String(item.eventHash ?? item.eventId ?? "")}
+                label="Copy evidence id"
+              />
             </div>
-            <span className="mono">{short(item.eventHash)}</span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <Empty
+          title="No audit events yet"
+          body="As missions run, every material transition is appended here for operators and reviewers."
+        />
+      )}
     </ConsoleShell>
   );
 }
@@ -721,6 +1036,11 @@ export function SettingsView({
     queryFn: () => api.policy(),
     enabled: section === "policy",
   });
+  const tabs = [
+    ["integrations", "Integrations", "/app/settings/integrations"],
+    ["api-keys", "API keys", "/app/settings/api-keys"],
+    ["policy", "Policy", "/app/settings/policy"],
+  ] as const;
   return (
     <ConsoleShell>
       <PageHeader
@@ -740,62 +1060,82 @@ export function SettingsView({
               : "Sepolia allowlist, write limits, recovery budget, and emergency pause."
         }
       />
+      <nav className="settings-tabs" aria-label="Settings sections">
+        {tabs.map(([id, label, href]) => (
+          <Link
+            key={id}
+            href={href}
+            className={section === id ? "is-active" : undefined}
+            aria-current={section === id ? "page" : undefined}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
       {section === "integrations" && (
-        <div className="fact-grid">
-          <Fact label="KeeperHub" value="Direct Execution" />
-          <Fact label="RPC providers" value="Primary and secondary required" />
-          <Fact label="Groq" value="Optional incident summary only" />
+        <div className="settings-panel">
+          <div className="fact-grid">
+            <Fact label="KeeperHub" value="Direct Execution" />
+            <Fact
+              label="RPC providers"
+              value="Primary and secondary required"
+            />
+            <Fact label="Groq" value="Optional incident summary only" />
+            <Fact label="Secrets" value="Never exposed to the browser" />
+          </div>
+          <p className="settings-note">
+            Configure credentials through environment variables and provider
+            doctors. The console only reports posture, never raw secrets.
+          </p>
         </div>
       )}
-      {section === "api-keys" && (
-        <div className="list">
-          {keys.data?.items.map((item) => (
-            <div className="list-row" key={String(item.apiKeyId)}>
-              <div>
-                <strong>{String(item.name)}</strong>
-                <p>{String(item.prefix)}…</p>
+      {section === "api-keys" &&
+        (keys.isLoading ? (
+          <LoadingBlock label="Loading API keys" />
+        ) : keys.data?.items?.length ? (
+          <div className="list">
+            {keys.data.items.map((item) => (
+              <div className="list-row" key={String(item.apiKeyId)}>
+                <div>
+                  <strong>{String(item.name)}</strong>
+                  <p className="mono">{String(item.prefix)}…</p>
+                </div>
+                <Status value={item.revokedAt ? "REVOKED" : "ACTIVE"} />
               </div>
-              <Status value={item.revokedAt ? "REVOKED" : "ACTIVE"} />
-            </div>
-          ))}
-        </div>
-      )}
-      {section === "policy" && (
-        <Evidence title="Current policy" value={policy.data ?? {}} />
-      )}
+            ))}
+          </div>
+        ) : (
+          <Empty
+            title="No API keys"
+            body="Create scoped keys for external agents such as savings or lending clients. Plaintext is shown once."
+          />
+        ))}
+      {section === "policy" &&
+        (policy.isLoading ? (
+          <LoadingBlock label="Loading policy" />
+        ) : (
+          <Evidence title="Current policy" value={policy.data ?? {}} />
+        ))}
     </ConsoleShell>
   );
 }
 
-function Metric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value?: number;
-  detail?: string;
-}) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value ?? "—"}</strong>
-      {detail ? <small>{detail}</small> : null}
-    </div>
-  );
-}
 function Fact({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="fact">
       <dt>{label}</dt>
-      <dd>{value === undefined ? "Not recorded" : String(value)}</dd>
+      <dd>
+        {value === undefined || value === "" ? "Not recorded" : String(value)}
+      </dd>
     </div>
   );
 }
 function Evidence({ title, value }: { title: string; value: unknown }) {
   return (
-    <section className="section">
-      <h2>{title}</h2>
+    <section className="section evidence-block">
+      <div className="row section-heading-row">
+        <h2>{title}</h2>
+      </div>
       <pre>{JSON.stringify(value, null, 2)}</pre>
     </section>
   );
@@ -808,8 +1148,23 @@ function ErrorState({ error }: { error: unknown }) {
         error,
         "Check the API connection and your session.",
       )}
+      action={
+        <button
+          type="button"
+          className="pill pill-secondary"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </button>
+      }
     />
   );
+}
+function humanizeEvent(value: unknown) {
+  return String(value ?? "event")
+    .replaceAll(".", " · ")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 function asArray(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value)
