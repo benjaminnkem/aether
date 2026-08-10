@@ -55,6 +55,33 @@ button {
   color: inherit;
 }
 
+/* Explicit contrast for boxy CTAs — wins over a/button { color: inherit }. */
+a.box-btn-primary,
+button.box-btn-primary,
+.box-btn-primary {
+  color: #ffffff !important;
+}
+
+a.box-btn-primary svg,
+button.box-btn-primary svg,
+.box-btn-primary svg {
+  color: #ffffff !important;
+  stroke: currentColor;
+}
+
+a.box-btn-secondary,
+button.box-btn-secondary,
+.box-btn-secondary {
+  color: #111111 !important;
+}
+
+a.box-btn-secondary svg,
+button.box-btn-secondary svg,
+.box-btn-secondary svg {
+  color: #111111 !important;
+  stroke: currentColor;
+}
+
 img,
 svg {
   display: block;
@@ -902,7 +929,7 @@ code {
 .console-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
   background: var(--cloud);
 }
 
@@ -911,129 +938,6 @@ code {
   top: 0;
   z-index: 20;
   height: 100vh;
-  padding: 26px 18px 20px;
-  display: flex;
-  flex-direction: column;
-  background: var(--ink);
-  color: white;
-}
-
-.console-brand {
-  min-height: 44px;
-  padding: 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.console-brand-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: white;
-  color: var(--ink);
-  letter-spacing: 0;
-  font-size: 13px;
-}
-
-.console-header nav {
-  margin-top: 66px;
-  display: grid;
-  gap: 4px;
-}
-
-.console-header nav a {
-  min-height: 48px;
-  padding: 0 12px;
-  display: grid;
-  grid-template-columns: 28px 1fr;
-  align-items: center;
-  border-radius: 24px;
-  color: var(--stone);
-  transition:
-    background 180ms ease,
-    color 180ms ease;
-}
-
-.console-header nav a > span {
-  font-family: var(--font-mono), monospace;
-  font-size: 9px;
-}
-
-.console-header nav a strong {
-  font-weight: 550;
-}
-
-.console-nav-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.console-nav-copy small {
-  color: var(--stone);
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.console-header nav a[aria-current="page"] .console-nav-copy small {
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.console-header nav a:hover,
-.console-header nav a[aria-current="page"] {
-  background: #242425;
-  color: white;
-}
-
-.console-sidebar-foot {
-  margin-top: auto;
-  display: grid;
-  gap: 14px;
-}
-
-.console-network {
-  padding: 14px 12px;
-  display: grid;
-  grid-template-columns: 10px 1fr;
-  align-items: center;
-  gap: 11px;
-  border-top: 1px solid var(--charcoal);
-  border-bottom: 1px solid var(--charcoal);
-  color: var(--stone);
-  font-size: 10px;
-}
-
-.console-network i,
-.console-live-dot,
-.overview-kicker i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--success-bright, #1eaa52);
-}
-
-.console-network span,
-.console-network strong {
-  display: block;
-}
-
-.console-network strong {
-  color: white;
-  font-size: 12px;
-  font-weight: 550;
-}
-
-.console-demo-link {
-  min-height: 44px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: white;
-  font-size: 13px;
 }
 
 .console-stage {
@@ -1041,71 +945,17 @@ code {
 }
 
 .console-topbar {
-  height: 64px;
-  padding: 0 32px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line-soft);
-  background: rgba(245, 245, 245, 0.96);
-  backdrop-filter: blur(12px);
-  color: var(--mute);
-  font-size: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-.console-topbar > div {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.console-topbar-live strong,
-.console-user-copy strong {
-  display: block;
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.console-topbar-live small,
-.console-user-copy small {
-  display: block;
-  color: var(--mute);
-  font-size: 11px;
-}
-
-.console-topbar-user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.console-avatar {
-  width: 32px;
-  height: 32px;
+.console-live-dot,
+.overview-kicker i {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--ink);
-  color: white;
-  font-size: 10px;
-  font-weight: 650;
-}
-
-.console-signout {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.console-signout:hover {
-  background: var(--cloud);
+  background: var(--success-bright, #1eaa52);
 }
 
 .console-breadcrumbs {
@@ -1166,7 +1016,9 @@ code {
   justify-content: space-between;
   align-items: flex-end;
   gap: 32px;
-  padding-bottom: 38px;
+  margin-bottom: 0;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--ink);
 }
 
 .page-header h1,
@@ -2207,40 +2059,54 @@ pre {
   }
   .console-header {
     position: sticky;
-    width: 100%;
+    top: 0;
+    z-index: 30;
     height: auto;
-    min-height: 68px;
-    padding: 10px 20px;
-    flex-direction: row;
+    min-height: 64px;
+    max-height: none;
+    overflow: visible;
+  }
+  .console-header > div:first-child {
+    border-bottom: 0;
+    padding: 12px 14px;
+    display: flex;
     align-items: center;
-    overflow: auto;
+    gap: 12px;
   }
-  .console-brand {
-    padding: 0;
-  }
-  .console-brand > span:last-child {
+  .console-brand-wordmark {
     display: none;
   }
   .console-header nav {
-    margin: 0;
-    display: flex;
-    gap: 2px;
+    flex: 1;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0;
+    overflow-x: auto;
+    padding: 0 8px 10px;
+  }
+  .console-header nav > div {
+    display: contents;
+  }
+  .console-header nav > div > p {
+    display: none;
   }
   .console-header nav a {
-    grid-template-columns: 1fr;
-    padding: 0 16px;
+    min-height: 44px;
+    min-width: max-content;
+    padding: 0 12px;
+    border: 0;
   }
-  .console-header nav a > span {
+  .console-header nav a strong {
+    font-size: 12px;
+  }
+  .console-header nav a small {
     display: none;
   }
-  .console-sidebar-foot {
-    margin: 0 0 0 auto;
-  }
-  .console-network {
+  .console-header nav a span:first-child {
     display: none;
   }
-  .console-demo-link {
-    white-space: nowrap;
+  .console-header > div:last-child {
+    display: none;
   }
   .console-topbar {
     display: none;
