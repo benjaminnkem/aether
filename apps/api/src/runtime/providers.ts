@@ -144,7 +144,7 @@ export class KeeperHubHttpClient implements KeeperHubClient {
     const started = Date.now();
     const timeoutMs = durationEnv(
       "KEEPERHUB_REQUEST_TIMEOUT_MS",
-      15_000,
+      60_000,
       300_000,
     );
     let response: Response;

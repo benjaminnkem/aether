@@ -45,7 +45,7 @@ describe("runtime timeout environment", () => {
     expect(() =>
       validateRuntimeTimeoutEnvironment({
         RPC_TIMEOUT_MS: "10000",
-        KEEPERHUB_REQUEST_TIMEOUT_MS: "15000",
+        KEEPERHUB_REQUEST_TIMEOUT_MS: "60000",
         GROQ_TIMEOUT_MS: "15000",
       }),
     ).not.toThrow();

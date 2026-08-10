@@ -48,7 +48,7 @@ describe.runIf(process.env.AETHER_RUN_INTEGRATION === "1")(
         .collection("auth_rate_limits")
         .deleteMany({ key: { $in: localSignupKeys } });
       agent = request.agent(app.getHttpServer());
-    });
+    }, 30_000);
     afterAll(async () => {
       await app?.close();
     });
@@ -177,6 +177,84 @@ describe.runIf(process.env.AETHER_RUN_INTEGRATION === "1")(
         ),
       ).rejects.toThrow("Run lease is stale");
     });
+
+    it("atomically moves an ambiguous submission and its run into reconciliation", async () => {
+      const suffix = Date.now().toString();
+      const runId = `run_unknown_${suffix}`;
+      const stepRunId = `sr_unknown_${suffix}`;
+      const executionAttemptId = `att_unknown_${suffix}`;
+      const workspace = await store.connection
+        .collection("workspaces")
+        .findOne({ name: "Integration workspace" });
+      const workspaceId = String(workspace?.workspaceId);
+      const now = new Date();
+      await store.connection.collection("mission_runs").insertOne({
+        workspaceId,
+        runId,
+        missionId: `mis_unknown_${suffix}`,
+        missionVersionId: `mv_unknown_${suffix}`,
+        state: "EXECUTING",
+        stateReason: "Submitting a write.",
+        fencingToken: 0,
+        version: 0,
+        nextActionAt: new Date("2099-01-01T00:00:00.000Z"),
+        createdAt: now,
+        updatedAt: now,
+      });
+      await store.connection.collection("mission_step_runs").insertOne({
+        workspaceId,
+        runId,
+        stepRunId,
+        stepId: "authorize-repayment",
+        state: "SUBMITTING",
+        version: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await store.connection.collection("execution_attempts").insertOne({
+        workspaceId,
+        runId,
+        stepRunId,
+        executionAttemptId,
+        operationKey: `operation_unknown_${suffix}`,
+        generation: 0,
+        keeperHubIdempotencyKey: `keeper_unknown_${suffix}`,
+        status: "SUBMITTING",
+        resubmissionLocked: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+      const claim = await store.claimRun(runId, workspaceId);
+      await store.markOutcomeUnknown(
+        workspaceId,
+        runId,
+        stepRunId,
+        executionAttemptId,
+        Number(claim?.fencingToken),
+        "Provider response timed out.",
+      );
+      const [run, step, attempt, reconciliation] = await Promise.all([
+        store.connection
+          .collection("mission_runs")
+          .findOne({ workspaceId, runId }),
+        store.connection
+          .collection("mission_step_runs")
+          .findOne({ workspaceId, runId, stepRunId }),
+        store.connection
+          .collection("execution_attempts")
+          .findOne({ workspaceId, executionAttemptId }),
+        store.connection
+          .collection("reconciliation_cases")
+          .findOne({ workspaceId, executionAttemptId }),
+      ]);
+      expect(run?.state).toBe("RECONCILING");
+      expect(step?.state).toBe("OUTCOME_UNKNOWN");
+      expect(attempt).toMatchObject({
+        status: "RECONCILING",
+        resubmissionLocked: true,
+      });
+      expect(reconciliation).toMatchObject({ state: "OPEN" });
+    }, 20_000);
 
     it("keeps public demo runs isolated behind a per-run view token", async () => {
       const runId = `run_demo_access_${Date.now()}`;

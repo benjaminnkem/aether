@@ -29,7 +29,7 @@ export function validateRuntimeTimeoutEnvironment(
   validateDuration(
     environment,
     "KEEPERHUB_REQUEST_TIMEOUT_MS",
-    15_000,
+    60_000,
     1_000,
     300_000,
   );

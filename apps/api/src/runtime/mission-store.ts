@@ -1013,13 +1013,34 @@ export class MissionStore {
       );
     });
   }
-  async createReconciliation(
+  async markOutcomeUnknown(
     workspaceId: string,
     runId: string,
+    stepRunId: string,
     executionAttemptId: string,
+    fencingToken: number,
     reason: string,
   ) {
     const reconciliationCaseId = `rec_${randomUUID()}`;
+    const [run, step] = await Promise.all([
+      this.connection.collection("mission_runs").findOne({
+        workspaceId,
+        runId,
+        leaseOwner: this.instanceId,
+        fencingToken,
+      }),
+      this.connection
+        .collection("mission_step_runs")
+        .findOne({ workspaceId, runId, stepRunId }),
+    ]);
+    if (!run) throw new ConflictException("Run lease is stale.");
+    if (!step) throw new NotFoundException("Step run not found.");
+    const runState = missionStateSchema.parse(run.state);
+    const stepState = stepStateSchema.parse(step.state);
+    if (runState !== "RECONCILING")
+      assertMissionTransition(runState, "RECONCILING");
+    if (stepState !== "OUTCOME_UNKNOWN" && stepState !== "RECONCILING")
+      assertStepTransition(stepState, "OUTCOME_UNKNOWN");
     await this.transaction(async (session) => {
       await this.connection.collection("execution_attempts").updateOne(
         { workspaceId, executionAttemptId },
@@ -1050,6 +1071,46 @@ export class MissionStore {
         },
         { upsert: true, session },
       );
+      if (stepState !== "OUTCOME_UNKNOWN" && stepState !== "RECONCILING") {
+        const stepResult = await this.connection
+          .collection("mission_step_runs")
+          .updateOne(
+            { workspaceId, runId, stepRunId, version: step.version },
+            {
+              $set: { state: "OUTCOME_UNKNOWN", updatedAt: new Date() },
+              $inc: { version: 1 },
+            },
+            { session },
+          );
+        if (!stepResult.matchedCount)
+          throw new ConflictException("Step state changed concurrently.");
+      }
+      if (runState !== "RECONCILING") {
+        const runResult = await this.connection
+          .collection("mission_runs")
+          .updateOne(
+            {
+              workspaceId,
+              runId,
+              leaseOwner: this.instanceId,
+              fencingToken,
+              version: run.version,
+            },
+            {
+              $set: {
+                state: "RECONCILING",
+                stateReason:
+                  "Submission outcome is unknown. Checking provider and chain evidence.",
+                updatedAt: new Date(),
+                nextActionAt: new Date(),
+              },
+              $inc: { version: 1 },
+            },
+            { session },
+          );
+        if (!runResult.matchedCount)
+          throw new ConflictException("Run state changed concurrently.");
+      }
       await this.timeline(
         workspaceId,
         runId,
@@ -1060,7 +1121,54 @@ export class MissionStore {
         runId,
         session,
       );
+      if (stepState !== "OUTCOME_UNKNOWN" && stepState !== "RECONCILING")
+        await this.timeline(
+          workspaceId,
+          runId,
+          "step.state_changed",
+          "OUTCOME_UNKNOWN",
+          "Outcome unknown. Retry locked.",
+          { stepId: step.stepId, from: stepState },
+          runId,
+          session,
+        );
+      if (runState !== "RECONCILING")
+        await this.timeline(
+          workspaceId,
+          runId,
+          "run.state_changed",
+          "RECONCILING",
+          "Submission outcome is unknown. Checking provider and chain evidence.",
+          { from: runState },
+          runId,
+          session,
+        );
     });
+  }
+
+  async appendStateObservation(
+    workspaceId: string,
+    runId: string,
+    stepRunId: string,
+    query: Document,
+    evidence: unknown,
+  ) {
+    const observationId = `obs_${randomUUID()}`;
+    await this.connection.collection("observations").insertOne({
+      workspaceId,
+      observationId,
+      runId,
+      stepRunId,
+      chainId: 11155111,
+      providerId: "rpc-consensus",
+      kind: "STATE_PROOF",
+      query,
+      evidence,
+      evidenceHash: contentHash(evidence),
+      canonicalityStatus: "CANONICAL",
+      createdAt: new Date(),
+    });
+    return observationId;
   }
   async appendObservation(
     workspaceId: string,

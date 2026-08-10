@@ -402,6 +402,25 @@ export class RunCoordinator
     version: Doc;
     steps: Doc[];
   }): Promise<{ delayMs?: number; stop?: boolean }> {
+    const strandedUnknown = context.steps.find((step) =>
+      ["OUTCOME_UNKNOWN", "RECONCILING"].includes(String(step.state)),
+    );
+    if (
+      context.state !== "RECONCILING" &&
+      strandedUnknown &&
+      ["EXECUTING", "VERIFYING", "RECOVERING", "VERIFYING_RECOVERY"].includes(
+        context.state,
+      )
+    ) {
+      await this.store.transitionRun(
+        context.workspaceId,
+        context.runId,
+        context.fencingToken,
+        "RECONCILING",
+        "Resuming reconciliation for a retry-locked execution.",
+      );
+      return {};
+    }
     if (context.state === "PREFLIGHT") {
       const policy = await this.store.connection
         .collection("workspace_policies")
@@ -851,6 +870,43 @@ export class RunCoordinator
         String(stepRun.stepRunId),
       );
       if (!attempt?.transactionHash) {
+        if (attempt?.status === "CONFIRMED") {
+          const proofResult = await this.verifyProof(definition.proof, {});
+          if (proofResult.result === "UNKNOWN") return { delayMs: 5000 };
+          if (proofResult.result === "FAIL") {
+            await this.store.transitionStep(
+              context.workspaceId,
+              context.runId,
+              stepId,
+              "FAILED_KNOWN",
+              "The reconciled state proof no longer satisfies the declared postcondition.",
+            );
+            await this.store.transitionRun(
+              context.workspaceId,
+              context.runId,
+              context.fencingToken,
+              "DEGRADED",
+              "A reconciled step did not retain its required onchain state.",
+            );
+            return {};
+          }
+          const reconciliation = await this.store.connection
+            .collection("reconciliation_cases")
+            .findOne({ executionAttemptId: attempt.executionAttemptId });
+          await this.store.transitionStep(
+            context.workspaceId,
+            context.runId,
+            stepId,
+            "VERIFIED",
+            "Reconciled onchain state independently verified.",
+            {
+              observationIds: Array.isArray(reconciliation?.evidenceIds)
+                ? reconciliation.evidenceIds
+                : [],
+            },
+          );
+          return {};
+        }
         await this.unknown(
           context,
           stepRun,
@@ -1135,41 +1191,14 @@ export class RunCoordinator
     reason: string,
   ) {
     if (!attempt) throw new Error(reason);
-    await this.store.createReconciliation(
+    await this.store.markOutcomeUnknown(
       context.workspaceId,
       context.runId,
+      String(stepRun.stepRunId),
       String(attempt.executionAttemptId),
+      context.fencingToken,
       reason,
     );
-    const currentStepRun = await this.store.connection
-      .collection("mission_step_runs")
-      .findOne({
-        workspaceId: context.workspaceId,
-        runId: context.runId,
-        stepRunId: stepRun.stepRunId,
-      });
-    if (!currentStepRun)
-      throw new Error("The step checkpoint is unavailable for reconciliation.");
-    const state = stepStateSchema.parse(currentStepRun.state);
-    if (state === "SUBMITTING" || state === "COMPENSATING")
-      await this.store.transitionStep(
-        context.workspaceId,
-        context.runId,
-        String(currentStepRun.stepId),
-        "OUTCOME_UNKNOWN",
-        "Outcome unknown. Retry locked.",
-      );
-    const run = await this.store.connection
-      .collection("mission_runs")
-      .findOne({ workspaceId: context.workspaceId, runId: context.runId });
-    if (run && run.state !== "RECONCILING")
-      await this.store.transitionRun(
-        context.workspaceId,
-        context.runId,
-        context.fencingToken,
-        "RECONCILING",
-        "Submission outcome is unknown. Checking provider and chain evidence.",
-      );
   }
 
   private async reconcile(context: {
@@ -1265,6 +1294,75 @@ export class RunCoordinator
     const definition = context.definition.steps.find(
       (item) => item.id === stepRun.stepId,
     );
+    if (definition && definition.proof.kind !== "EVENT") {
+      const proof = await this.verifyProof(definition.proof, {});
+      if (proof.result === "UNKNOWN") return { delayMs: 5000 };
+      if (proof.result === "PASS") {
+        const observationId = await this.store.appendStateObservation(
+          context.workspaceId,
+          context.runId,
+          String(stepRun.stepRunId),
+          definition.proof as unknown as Doc,
+          proof.evidence,
+        );
+        await this.resolveEffectLanded(
+          context,
+          stepRun,
+          attempt,
+          observationId,
+        );
+        return {};
+      }
+      const age = Date.now() - new Date(String(attempt.createdAt)).getTime();
+      if (
+        proof.result === "FAIL" &&
+        definition.retryClass === "SEMANTICALLY_IDEMPOTENT" &&
+        age >= numberEnv("AETHER_RECONCILIATION_WINDOW_MS", 300000)
+      ) {
+        await this.store.connection
+          .collection("reconciliation_cases")
+          .updateOne(
+            { executionAttemptId: attempt.executionAttemptId },
+            {
+              $set: {
+                state: "RESOLVED",
+                resolution: "NOT_LANDED_SAFE_TO_RETRY",
+                decisionRationale:
+                  "Both RPC providers agree that the idempotent postcondition is absent after the reconciliation window.",
+                resolvedAt: new Date(),
+                updatedAt: new Date(),
+              },
+            },
+          );
+        await this.store.updateAttempt(
+          context.workspaceId,
+          context.runId,
+          String(attempt.executionAttemptId),
+          {
+            status: "NOT_LANDED",
+            resubmissionLocked: false,
+            terminalAt: new Date(),
+          },
+          "reconciliation.not_landed",
+        );
+        await this.store.transitionStep(
+          context.workspaceId,
+          context.runId,
+          String(stepRun.stepId),
+          "READY_TO_SUBMIT",
+          "Both providers proved the idempotent effect is absent. A new attempt generation is allowed.",
+          { attemptGeneration: Number(stepRun.attemptGeneration ?? 0) + 1 },
+        );
+        await this.store.transitionRun(
+          context.workspaceId,
+          context.runId,
+          context.fencingToken,
+          "EXECUTING",
+          "The original idempotent effect did not land. Continuing with a new attempt generation.",
+        );
+        return {};
+      }
+    }
     if (
       definition?.proof.kind === "EVENT" &&
       this.rpc.primary &&
@@ -1459,6 +1557,73 @@ export class RunCoordinator
         context.fencingToken,
         "EXECUTING",
         "Original write landed. Continuing without resubmission.",
+      );
+    }
+  }
+
+  private async resolveEffectLanded(
+    context: { workspaceId: string; runId: string; fencingToken: number },
+    stepRun: Doc,
+    attempt: Doc,
+    observationId: string,
+  ) {
+    await this.store.connection.collection("reconciliation_cases").updateOne(
+      { executionAttemptId: attempt.executionAttemptId },
+      {
+        $set: {
+          state: "RESOLVED",
+          resolution: "LANDED",
+          evidenceIds: [observationId],
+          decisionRationale:
+            "Two RPC providers agree that the declared onchain postcondition holds.",
+          resolvedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      },
+    );
+    await this.store.updateAttempt(
+      context.workspaceId,
+      context.runId,
+      String(attempt.executionAttemptId),
+      {
+        status: "CONFIRMED",
+        resubmissionLocked: false,
+        terminalAt: new Date(),
+      },
+      "reconciliation.original_effect_found",
+    );
+    const plan = await this.store.connection
+      .collection("operation_plans")
+      .findOne({ workspaceId: context.workspaceId, planId: attempt.planId });
+    if (plan?.kind === "COMPENSATION") {
+      await this.store.transitionStep(
+        context.workspaceId,
+        context.runId,
+        String(stepRun.stepId),
+        "COMPENSATING",
+        "Original recovery effect found. It will not be resubmitted.",
+      );
+      await this.store.transitionRun(
+        context.workspaceId,
+        context.runId,
+        context.fencingToken,
+        "RECOVERING",
+        "Original recovery effect found. Continuing without resubmission.",
+      );
+    } else {
+      await this.store.transitionStep(
+        context.workspaceId,
+        context.runId,
+        String(stepRun.stepId),
+        "EXECUTED",
+        "Original write effect found. It will not be resubmitted.",
+      );
+      await this.store.transitionRun(
+        context.workspaceId,
+        context.runId,
+        context.fencingToken,
+        "EXECUTING",
+        "Original write effect found. Continuing without resubmission.",
       );
     }
   }
