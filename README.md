@@ -75,6 +75,17 @@ Set the deployed address as `SAVINGS_VAULT_ADDRESS`. The configured KeeperHub ex
 
 ## Development and validation
 
+### Render API deployment
+
+Render must build the API's workspace dependencies before starting Nest. Use these commands for the API web service:
+
+```text
+Build Command: pnpm install --frozen-lockfile && pnpm build:api
+Start Command: pnpm --filter @aether/api start
+```
+
+`build:api` includes `@aether/backend` and `@aether/shared`; without those packages' compiled `dist` files, Node cannot resolve the API's runtime imports on a clean Render deploy.
+
 ```bash
 pnpm format
 pnpm lint
