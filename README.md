@@ -2,7 +2,9 @@
 
 > Mission control for autonomous onchain agents.
 
-Aether makes multi-step onchain missions recoverable. It freezes what an agent intends to do, executes supported writes through KeeperHub, independently observes Sepolia, reconciles uncertain outcomes, and either completes the mission or proves that an authorized safe state was restored.
+Built for the **KeeperHub Onchain Hackathon**, Aether makes multi-step onchain missions recoverable.
+
+Aether freezes what an agent intends to do, executes supported writes through KeeperHub, independently observes Sepolia, reconciles uncertain outcomes, and either completes the mission or proves that an authorized safe state was restored.
 
 **[Open the Aether console](https://aether.oluwadunsin.dev)** · **[Open the agent runtime](https://aether-agents.oluwadunsin.dev)** · **[Watch the demo](https://drive.google.com/file/d/1DnQKuXrmrR6Uw3zodU3uejMQ_EIZtxNM/view?usp=sharing)**
 
