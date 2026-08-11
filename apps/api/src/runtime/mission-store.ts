@@ -544,7 +544,11 @@ export class MissionStore {
       );
     return result ? clean(result) : undefined;
   }
-  async claimRun(runId: string, workspaceId?: string) {
+  async claimRun(
+    runId: string,
+    workspaceId?: string,
+    allowNeedsAttention = false,
+  ) {
     const now = new Date();
     const result = await this.connection
       .collection("mission_runs")
@@ -552,7 +556,11 @@ export class MissionStore {
         {
           runId,
           ...(workspaceId ? { workspaceId } : {}),
-          state: { $nin: [...TERMINAL_MISSION_STATES] },
+          state: {
+            $nin: allowNeedsAttention
+              ? ["COMPLETED", "RECOVERED", "ABORTED_SAFE"]
+              : [...TERMINAL_MISSION_STATES],
+          },
           $or: [
             { leaseExpiresAt: { $exists: false } },
             { leaseExpiresAt: { $lte: now } },

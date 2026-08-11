@@ -158,6 +158,19 @@ export function RunView({
     refetchInterval: 5000,
     enabled: !demo || Boolean(demoToken),
   });
+  const queryClient = useQueryClient();
+  const resumeMutation = useMutation({
+    mutationFn: () => api.controlRun(runId, "resume"),
+    onSuccess: () => {
+      toast.success("Reconciliation resumed.");
+      void queryClient.invalidateQueries({ queryKey: ["run", runId] });
+    },
+    onError: (error) => {
+      toast.error(
+        getAetherErrorMessage(error, "Reconciliation could not be resumed."),
+      );
+    },
+  });
 
   const [run, setRun] = useState<Record<string, unknown>>({});
 
@@ -261,6 +274,21 @@ export function RunView({
         action={
           <div className="page-header-stack">
             <Status value={run.state} />
+            {!demo &&
+            run.state === "NEEDS_ATTENTION" &&
+            run.stateReason ===
+              "Reconciliation has no matching step evidence." ? (
+              <button
+                type="button"
+                className="box-btn box-btn-secondary inline-flex min-h-11 items-center justify-center border border-black bg-white px-5 text-[13px] font-semibold !text-black no-underline transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={resumeMutation.isPending}
+                onClick={() => resumeMutation.mutate()}
+              >
+                {resumeMutation.isPending
+                  ? "Resuming…"
+                  : "Resume reconciliation"}
+              </button>
+            ) : null}
             <CopyValue value={String(run.runId ?? "")} label="Copy run id" />
           </div>
         }

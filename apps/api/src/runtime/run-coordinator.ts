@@ -77,7 +77,11 @@ export class RunCoordinator
     runId: string,
     action: "pause" | "resume" | "cancel",
   ) {
-    const claim = await this.store.claimRun(runId, workspaceId);
+    const claim = await this.store.claimRun(
+      runId,
+      workspaceId,
+      action === "resume",
+    );
     if (!claim)
       throw new Error(
         "Run is currently owned by another process or is unavailable.",
@@ -93,14 +97,51 @@ export class RunCoordinator
         "Run paused by an operator.",
       );
     if (action === "resume") {
-      if (state !== "PAUSED") throw new Error("Only a paused run can resume.");
-      await this.store.transitionRun(
-        workspaceId,
-        runId,
-        token,
-        "PREFLIGHT",
-        "Run resumed. Current reality will be checked again.",
-      );
+      if (state === "PAUSED") {
+        await this.store.transitionRun(
+          workspaceId,
+          runId,
+          token,
+          "PREFLIGHT",
+          "Run resumed. Current reality will be checked again.",
+        );
+      } else if (
+        state === "NEEDS_ATTENTION" &&
+        String(claim.stateReason) ===
+          "Reconciliation has no matching step evidence."
+      ) {
+        const candidateSteps = await this.store.connection
+          .collection("mission_step_runs")
+          .find({
+            workspaceId,
+            runId,
+            state: { $in: ["EXECUTED", "VERIFYING"] },
+          })
+          .toArray();
+        const candidate = candidateSteps.find((step) => step.stepRunId);
+        const attempt = candidate
+          ? await this.latestAttempt(workspaceId, String(candidate.stepRunId))
+          : undefined;
+        if (
+          !attempt?.transactionHash ||
+          !["ACKNOWLEDGED", "CONFIRMED"].includes(String(attempt.status))
+        ) {
+          throw new Error(
+            "This run cannot be reopened because its landed execution evidence is incomplete.",
+          );
+        }
+        await this.store.transitionRun(
+          workspaceId,
+          runId,
+          token,
+          "RECONCILING",
+          "Operator reopened reconciliation for the confirmed original write. No resubmission is permitted.",
+        );
+      } else {
+        throw new Error(
+          "Only a paused run or the specific reconciliation evidence failure can resume.",
+        );
+      }
     }
     if (action === "cancel") {
       const attempts = await this.store.connection
@@ -1208,10 +1249,33 @@ export class RunCoordinator
     definition: MissionDefinition;
     steps: Doc[];
   }) {
-    const stepRun = context.steps.find((item) =>
+    let stepRun = context.steps.find((item) =>
       ["OUTCOME_UNKNOWN", "RECONCILING"].includes(String(item.state)),
     );
     if (!stepRun) {
+      const landedCandidate = context.steps.find((item) =>
+        ["EXECUTED", "VERIFYING"].includes(String(item.state)),
+      );
+      if (landedCandidate) {
+        const attempt = await this.latestAttempt(
+          context.workspaceId,
+          String(landedCandidate.stepRunId),
+        );
+        if (
+          attempt?.transactionHash &&
+          ["ACKNOWLEDGED", "CONFIRMED"].includes(String(attempt.status))
+        ) {
+          stepRun = landedCandidate;
+          await this.store.transitionRun(
+            context.workspaceId,
+            context.runId,
+            context.fencingToken,
+            "EXECUTING",
+            "Resuming verification for the confirmed original write. No resubmission is permitted.",
+          );
+          return {};
+        }
+      }
       await this.store.transitionRun(
         context.workspaceId,
         context.runId,

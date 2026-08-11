@@ -75,7 +75,7 @@ const missionTransitions: Readonly<
   ],
   COMPLETED: [],
   RECOVERED: [],
-  NEEDS_ATTENTION: [],
+  NEEDS_ATTENTION: ["RECONCILING"],
   ABORTED_SAFE: [],
 };
 

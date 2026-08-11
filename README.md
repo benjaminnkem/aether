@@ -1,36 +1,92 @@
 # Aether
 
-Aether is mission control for multi-step onchain work.
+> Mission control for autonomous onchain agents.
 
-It records what a caller intended, submits supported Sepolia writes through KeeperHub, verifies the resulting chain state through two independent RPC providers, locks retries when a submission result is uncertain, and executes only declared recovery actions when a mission stops halfway.
+Aether makes multi-step onchain missions recoverable. It freezes what an agent intends to do, executes supported writes through KeeperHub, independently observes Sepolia, reconciles uncertain outcomes, and either completes the mission or proves that an authorized safe state was restored.
 
-## Why mission-level execution
+**[Open the Aether console](https://aether.oluwadunsin.dev)** · **[Open the agent runtime](https://aether-agents.oluwadunsin.dev)** · **[Watch the demo](https://drive.google.com/file/d/1DnQKuXrmrR6Uw3zodU3uejMQ_EIZtxNM/view?usp=sharing)**
 
-A successful transaction response does not prove that a multi-step objective completed. A provider response may be lost after broadcast, a later step may fail after earlier effects landed, or RPC providers may disagree before finality. Aether keeps an append-only record for each plan, simulation, attempt, observation, approval, reconciliation decision, recovery action, and final receipt.
+## The problem
 
-The execution loop is:
+A successful transaction does not prove that a multi-step objective completed. A provider response can disappear after broadcast, an earlier write can settle while a later step fails, and RPC providers can temporarily disagree. Blockchain state cannot be rolled back.
 
-> Define → Execute → Observe → Reconcile → Recover → Prove
+Aether records the mission’s intent and every material effect, locks unsafe retries when the outcome is unknown, and uses only pre-authorized compensating transactions to restore a safe state.
 
-KeeperHub remains the transaction execution provider. Aether does not manage wallets or rebuild transaction submission. Every supported write is simulated and submitted through KeeperHub Direct Execution. Aether independently evaluates the postcondition before calling a step verified.
+> **Define → Execute → Observe → Reconcile → Recover → Prove**
 
-Groq is optional. It may produce a schema-validated incident summary from bounded, sanitized evidence. It receives no transaction credentials or tools and cannot approve, alter, or submit a write. Recovery and authority decisions remain deterministic when Groq is unavailable.
+KeeperHub remains the transaction execution provider. Aether is the mission-level control plane above it; it does not manage wallets or rebuild transaction submission.
+
+## Verified KeeperHub execution
+
+This is a real Aether run selected from the local MongoDB ledger (`mission_receipts`, `execution_attempts`, and `operation_plans`) and checked against a public Ethereum Sepolia RPC.
+
+| Field                            | Evidence                                                                                                                                                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Network                          | Ethereum Sepolia (`11155111`)                                                                                                                                              |
+| Mission                          | Supply 1 LINK, attempt to borrow 100 USDC, then repay, withdraw, and revoke approvals                                                                                      |
+| Run                              | `run_f906363b-e125-4310-bf24-4f4177ec2b7e`                                                                                                                                 |
+| Terminal result                  | `RECOVERED` — the borrow step failed and Aether restored the authorized safe state                                                                                         |
+| Step / operation plan            | `supply-collateral` / `plan_0f1ed75d-a3f7-44c3-a7e4-751ef88430b0` (`COMPENSATION`)                                                                                         |
+| KeeperHub execution              | `n32timo0387zasdbfrux6`                                                                                                                                                    |
+| Exact transaction                | [`0x8d3cb0c43a283ab442c24df65c023be45da96e031eee7f60538570f2d0deb2e3`](https://sepolia.etherscan.io/tx/0x8d3cb0c43a283ab442c24df65c023be45da96e031eee7f60538570f2d0deb2e3) |
+| Block / receipt                  | `11,468,046` / `0x1` (success)                                                                                                                                             |
+| Operation                        | Compensation `withdraw` from the Aave Pool, returning the LINK collateral to the KeeperHub executor                                                                        |
+| Collateral token                 | LINK — `0xf8Fb3713D459D7C1018BD0A49D19b4C44290EBE5`                                                                                                                        |
+| Contract target in Aether’s plan | [`0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951`](https://sepolia.etherscan.io/address/0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951)                                            |
+| `withdraw` destination           | KeeperHub executor `0x9B3b00B52f74570dc090913A2aFCF34d14D0FbbF`                                                                                                            |
+| Outer transaction recipient      | KeeperHub router `0x5af5194b4b0909eb978e3cf1e25333852277f07d`                                                                                                              |
+| Final receipt hash               | `0xb41f38c5853a1024c44b9ad4472de797c31d0994ad6fa857deba2eb8d7417e21`                                                                                                       |
+
+This is the recovery write that returned the supplied LINK collateral after the borrow step failed. The distinction between the contract target, the `withdraw` destination, and the outer recipient is intentional: KeeperHub routes the transaction, while Aether’s immutable operation plan records the application contract and function being executed. The selected run passed Sepolia chain, fixed-target, known-outcome, no-collateral-position, no-variable-debt, and allowance invariants.
+
+## How Aether works
+
+1. **Define** — Persist an immutable mission version with fixed steps, targets, limits, retry classes, invariants, and recovery rules.
+2. **Execute** — Simulate the exact request, persist the plan and execution intent, then submit through KeeperHub Direct Execution with a unique idempotency key.
+3. **Observe** — Read receipts, logs, contract state, balances, allowances, and confirmations from two independent Sepolia RPC providers.
+4. **Reconcile** — Treat a lost or ambiguous provider response as `UNKNOWN`; lock resubmission until chain evidence proves what happened.
+5. **Recover** — Run only declared, deterministic compensation actions when the original objective cannot continue.
+6. **Prove** — Create a final receipt only when all critical terminal invariants pass and no uncertain attempt remains unresolved.
+
+## What makes it safe
+
+- Ethereum Sepolia (`11155111`) is the only live write network.
+- Every supported write is simulated before it can be broadcast.
+- The mission version, plan hash, simulation, approval, and execution are bound together.
+- The execution attempt and audit evidence are committed before the external call.
+- A provider timeout is not treated as proof that no transaction landed.
+- `UNKNOWN` and `NEEDS_ATTENTION` are visible operational outcomes, not hidden failures.
+- Finalized transactions are never described as rolled back; recovery uses new compensating transactions.
+- `COMPLETED` and `RECOVERED` require independent verification of critical invariants.
+- Groq is advisory only. It may summarize sanitized evidence, but it cannot approve, create unrestricted calldata, receive credentials, or broadcast.
+
+## Demo scenarios
+
+The `/demo` experience uses the production mission engine with fixed server-side actions, addresses, amounts, and rate limits:
+
+- **Happy path** — a Sepolia mission completes and is independently verified.
+- **Partial failure** — earlier effects are confirmed, a later step fails, and Aether compensates to a safe state.
+- **Unknown outcome** — a response is intentionally lost after a real write; Aether locks replay, reconciles the chain, and continues without duplicating the economic action.
+
+When live execution is disabled, the demo may replay only hash-validated receipts from previously verified Sepolia runs. It never fabricates transaction hashes or receipts.
 
 ## Architecture
 
-- `apps/api` — NestJS API, inline run coordinator, Mongo-backed leases and fencing, SSE streams, authentication, approvals, audit, and provider adapters.
-- `apps/web` — Next.js operator console and the fixed `/demo` scenarios.
-- `apps/agents` — separately deployable Savings client at `/agents`; it uses only the public v1 API through a scoped server-side agent key.
-- `packages/shared` — strict request and mission schemas.
-- `packages/backend` — state transitions, persistence models, hashing, encryption, and safety boundaries.
-- `packages/sdk` — typed fetch client and reconnectable run stream parser.
-- `packages/contracts` — fixed-purpose Sepolia demo vault plus Foundry unit and fuzz tests.
+| Package              | Responsibility                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`           | NestJS API, mission coordinator, Mongo-backed leases and fencing, SSE streams, authentication, approvals, audit, and provider adapters |
+| `apps/web`           | Next.js operator console and fixed `/demo` scenarios                                                                                   |
+| `apps/agents`        | Separately deployable autonomous-agent runtime using the public Aether API through a scoped server-side key                            |
+| `packages/shared`    | Strict mission and request schemas                                                                                                     |
+| `packages/backend`   | Domain state transitions, persistence models, hashing, encryption, and safety boundaries                                               |
+| `packages/sdk`       | Typed API client and reconnectable run-stream parser                                                                                   |
+| `packages/contracts` | Fixed-purpose Sepolia demo contracts and Foundry tests                                                                                 |
 
-There is no Redis, BullMQ, worker service, task queue, or outbox queue. A run advances immediately in the API process and persists every transition. A Mongo lease scanner resumes due work after a disconnect or restart. Provider delays are stored as `nextActionAt`; they are not implemented as blocking sleeps.
+Runs advance in the API process and persist every transition. MongoDB leases and `nextActionAt` allow unfinished work to resume after a disconnect or restart; there is no Redis, BullMQ, worker service, or queue dependency in the current runtime.
 
-## Local setup
+## Local development
 
-Requirements: Node.js 20.9 or newer, pnpm 10.15.1, Docker, and Foundry.
+Requirements: Node.js 20.9+, pnpm 10.15.1, Docker, and Foundry.
 
 ```bash
 cp .env.example .env
@@ -40,9 +96,9 @@ pnpm env:doctor
 pnpm dev
 ```
 
-MongoDB runs as a replica set on port `27018`; Mailpit runs on `1025`/`8025`. Configure two distinct Sepolia RPC endpoints before starting the API.
+The local stack runs MongoDB as a replica set on port `27018` and Mailpit on ports `1025` and `8025`. Configure two distinct Sepolia RPC endpoints before starting the API.
 
-Important server-only variables are documented in `.env.example`:
+Server-only credentials belong in `.env` and must never be exposed through `NEXT_PUBLIC_*` variables:
 
 - `MONGODB_URI`
 - `AETHER_ACCESS_TOKEN_SECRET`, `AETHER_REFRESH_TOKEN_SECRET`, `AETHER_COOKIE_SECRET`, `AETHER_CSRF_SECRET`
@@ -52,42 +108,12 @@ Important server-only variables are documented in `.env.example`:
 - `GROQ_API_KEY`, `GROQ_MODEL` (optional incident summaries)
 - `DEMO_LIVE_EXECUTION_ENABLED`, `DEMO_VAULT_ADDRESS`, `KEEPERHUB_EXECUTOR_ADDRESS`
 
-Never expose these through `NEXT_PUBLIC_*` variables.
+The default Groq model is `llama-3.3-70b-versatile`. Groq is not required for deterministic execution or recovery.
 
-### External savings and lending applications
-
-The savings and lending agents use the public Aether API through a restricted server-side API key. Configure the `SAVINGS_*` and relevant `LENDING_*` variables in `.env`, then start the workspace with `pnpm dev`. The agent runtime is available at `http://localhost:3001?product=savings` and `http://localhost:3001?product=lending`. The Aether landing page links to those URLs using `AETHER_AGENT_RUNTIME_ORIGIN`.
-
-Its normal path never replays or fabricates execution. When `SAVINGS_LIVE_EXECUTION_ENABLED=false`, it stops before mission creation. A connected wallet signs an ownership challenge only; the signature is not transaction authority and no private key reaches either application server.
-
-The lending integration targets a configured Sepolia pool. Its closed-cycle mission supplies collateral, opens variable-rate debt, repays the full debt, withdraws collateral, revokes both approvals, and independently verifies the terminal balances and allowances. The local Sepolia configuration uses uncapped LINK collateral and borrows USDC because the Aave Sepolia USDC supply cap may already be full. The executor must hold enough USDC to cover interest accrued before repayment. Known failures use only the frozen repayment, withdrawal, and revocation actions; uncertain writes remain retry-locked until reconciled.
-
-Deploy the fixed-purpose savings vault only with the explicit live command:
+## Validation
 
 ```bash
-SAVINGS_KEEPERHUB_EXECUTOR_ADDRESS=0x... \
-SEPOLIA_RPC_PRIMARY_URL=https://... \
-PRIVATE_KEY=0x... \
-pnpm savings:deploy:live
-```
-
-Set the deployed address as `SAVINGS_VAULT_ADDRESS`. The configured KeeperHub executor must hold the supported token and enough Sepolia ETH, and the Aether workspace must have valid KeeperHub credentials.
-
-## Development and validation
-
-### Render API deployment
-
-Render must build the API's workspace dependencies before starting Nest. Use these commands for the API web service:
-
-```text
-Build Command: pnpm install --frozen-lockfile && pnpm build:api
-Start Command: pnpm --filter @aether/api start
-```
-
-`build:api` includes `@aether/backend` and `@aether/shared`; without those packages' compiled `dist` files, Node cannot resolve the API's runtime imports on a clean Render deploy.
-
-```bash
-pnpm format
+pnpm format:check
 pnpm lint
 pnpm check-types
 pnpm test
@@ -101,24 +127,16 @@ pnpm build
 pnpm audit --prod
 ```
 
-Ordinary tests and builds cannot broadcast transactions. Live Sepolia acceptance is separate and requires credentials plus the explicit flag:
+Ordinary tests, builds, and doctor commands cannot broadcast transactions. Live Sepolia acceptance is explicitly opt-in:
 
 ```bash
 LIVE_SEPOLIA_TESTS=true pnpm test:live:sepolia
 ```
 
-The public demo accepts only `HAPPY_PATH`, `PARTIAL_FAILURE`, or `UNKNOWN_OUTCOME`, fixed server-side addresses and amounts, and bounded request rates. If live execution is disabled, it shows only hash-validated receipts imported from previously verified Sepolia runs.
+Live deployment commands also require `LIVE_SEPOLIA_TESTS=true` and are intentionally separate from normal development.
 
-## Security boundaries
+## Documentation
 
-- Ethereum Sepolia (`11155111`) is the only write network.
-- Every write is planned and simulated before KeeperHub submission.
-- The execution attempt and audit evidence commit before the potentially broadcasting call.
-- Unknown outcomes set a durable resubmission lock; they are never blindly retried.
-- Critical terminal invariants and all unknown attempts must resolve before a final receipt.
-- Browser tenant identity comes from the authenticated server session.
-- Browser mutations require CSRF protection and an `Idempotency-Key`.
-- Agent API keys are scoped, shown once, and stored as Argon2id hashes.
-- Integration secrets use workspace/provider/version-bound AES-GCM encryption.
-
-See [PRD.MD](./PRD.MD) for product and safety requirements and [docs/DESIGN.MD](./docs/DESIGN.MD) for the visual system.
+- [Product requirements](./PRD.MD)
+- [Engineering rules](./AGENTS.MD)
+- [Visual design system](./docs/DESIGN.MD)

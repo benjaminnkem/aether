@@ -85,6 +85,9 @@ describe("mission domain", () => {
     expect(() =>
       assertMissionTransition("EXECUTING", "NEEDS_ATTENTION"),
     ).not.toThrow();
+    expect(() =>
+      assertMissionTransition("NEEDS_ATTENTION", "RECONCILING"),
+    ).not.toThrow();
   });
 
   it("binds execution to the exact simulated request", () => {
