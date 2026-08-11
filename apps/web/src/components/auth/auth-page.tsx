@@ -1,11 +1,28 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AetherClient, getAetherErrorMessage } from "@aether/sdk";
 
 const api = new AetherClient(process.env.NEXT_PUBLIC_AETHER_API_URL ?? "/v1");
 export function AuthPage({ kind }: { kind: "login" | "signup" }) {
   const [message, setMessage] = useState("");
+  const session = useQuery({
+    queryKey: ["session"],
+    queryFn: () => api.session(),
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (session.data?.authenticated !== true) return;
+    window.location.replace(
+      session.data.destination === "onboarding"
+        ? "/onboarding"
+        : "/app/overview",
+    );
+  }, [session.data]);
+
   return (
     <main id="main-content" className="auth-page">
       <section>
@@ -43,7 +60,13 @@ export function AuthPage({ kind }: { kind: "login" | "signup" }) {
         <h2>{kind === "login" ? "Welcome back" : "Create account"}</h2>
         <label>
           Email
-          <input name="email" type="email" autoComplete="email" required />
+          <input
+            name="email"
+            type="email"
+            autoComplete="username email"
+            required
+            defaultValue={"adejaredaniel12@gmail.com"}
+          />
         </label>
         <label>
           Password
@@ -55,6 +78,7 @@ export function AuthPage({ kind }: { kind: "login" | "signup" }) {
               kind === "login" ? "current-password" : "new-password"
             }
             required
+            defaultValue={"brainiac12?."}
           />
         </label>
         <button className="pill pill-primary" type="submit">

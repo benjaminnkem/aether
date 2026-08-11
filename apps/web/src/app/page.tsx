@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { HeroParticles } from "@/components/marketing/hero-particles";
 import { LandingMotion } from "@/components/marketing/landing-motion";
+import { LandingSessionLink } from "@/components/auth/landing-session-link";
 
 const agentsRuntime =
   process.env.AETHER_AGENT_RUNTIME_ORIGIN ?? "http://localhost:3001";
@@ -50,7 +51,7 @@ export default function HomePage() {
           <a href="#system">System</a>
           <a href="#agents">Agents</a>
           <Link href="/demo">Demo</Link>
-          <Link href="/login">Sign in</Link>
+          <LandingSessionLink />
           <Link className="pill pill-primary" href="/signup">
             Start building
           </Link>
@@ -294,7 +295,7 @@ export default function HomePage() {
         <p>Mission control for autonomous onchain agents.</p>
         <nav aria-label="Footer navigation">
           <Link href="/demo">Demo</Link>
-          <Link href="/login">Sign in</Link>
+          <LandingSessionLink />
           <Link href="/signup">Create account</Link>
         </nav>
         <small>

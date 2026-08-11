@@ -6,8 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowRight,
+  ChevronDown,
   Clock3,
   Copy,
+  FileJson,
   GitBranch,
   Play,
   Plus,
@@ -15,6 +17,7 @@ import {
   Target,
 } from "lucide-react";
 import { AetherClient, getAetherErrorMessage } from "@aether/sdk";
+import { Drawer } from "@aether/ui";
 import {
   ConsoleShell,
   CopyValue,
@@ -52,8 +55,439 @@ function boxButton(primary = false) {
     : "box-btn box-btn-secondary inline-flex min-h-11 items-center gap-2 border border-black bg-white px-5 text-[13px] font-semibold !text-black no-underline transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:!text-black";
 }
 
+function SchemaSection({
+  title,
+  summary,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  summary: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details
+      className="group border-b border-[#e5e5e5] last:border-b-0"
+      open={defaultOpen}
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left marker:hidden [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <strong className="block text-[13px] font-semibold text-black">
+            {title}
+          </strong>
+          <span className="mt-1 block text-[12px] leading-relaxed text-[#707072]">
+            {summary}
+          </span>
+        </span>
+        <ChevronDown
+          size={16}
+          strokeWidth={1.75}
+          className="shrink-0 text-[#707072] transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="px-5 pb-5 text-[12px] leading-relaxed text-[#39393b]">
+        {children}
+      </div>
+    </details>
+  );
+}
+
+function PropertyList({ items }: { items: Array<[string, string]> }) {
+  return (
+    <dl className="m-0 divide-y divide-[#e5e5e5] border border-[#e5e5e5]">
+      {items.map(([name, description]) => (
+        <div
+          key={name}
+          className="grid gap-1 px-3 py-2.5 sm:grid-cols-[150px_1fr] sm:gap-4"
+        >
+          <dt className="font-mono text-[11px] font-semibold text-black">
+            {name}
+          </dt>
+          <dd className="m-0 text-[#525252]">{description}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function MissionSchemaDrawer({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Drawer
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Mission schema"
+      description="The frozen instruction book Aether validates before any run can begin."
+    >
+      <div className="space-y-5 pt-5">
+        <div className="border border-black bg-[#f5f5f5] px-4 py-4">
+          <div className="flex items-start gap-3">
+            <FileJson size={18} strokeWidth={1.75} aria-hidden="true" />
+            <div>
+              <p className="m-0 text-[13px] font-semibold text-black">
+                Definition is intent, not execution
+              </p>
+              <p className="m-0 mt-1 text-[12px] leading-relaxed text-[#525252]">
+                Creating or saving this document does not broadcast anything.
+                The transaction process starts only when you press Run mission.
+                Aether then validates, freezes, simulates, executes through
+                KeeperHub, and independently proves each effect.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <section aria-labelledby="schema-example-title">
+          <p className="m-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[#707072]">
+            Read it once, then inspect the parts
+          </p>
+          <h2
+            id="schema-example-title"
+            className="m-0 mt-1 text-[18px] font-medium tracking-[-0.02em] text-black"
+          >
+            A mission in context
+          </h2>
+          <p className="m-0 mt-2 text-[12px] leading-relaxed text-[#525252]">
+            Think of a mission as written instructions for a careful delivery
+            worker: the objective explains the result, steps describe the
+            writes, proofs check reality, and recovery rules define a safe way
+            home.
+          </p>
+          <pre className="mt-3 max-h-72 overflow-auto border border-black bg-[#111111] p-4 font-mono text-[11px] leading-relaxed text-black">
+            {`{
+  "name": "Borrow 1 USDC against 1 LINK",
+  "description": "Open and close a small Sepolia loan safely.",
+  "definition": {
+    "schemaVersion": 1,
+    "objective": "Supply 1 LINK, borrow 1 USDC, then close everything.",
+    "steps": [
+      {
+        "id": "supply-collateral",
+        "dependsOn": ["approve-collateral"],
+        "retryClass": "PROVABLE_EFFECT",
+        "action": { "chainId": 11155111, "functionName": "supply" },
+        "proof": { "kind": "ERC20_BALANCE", "operator": "GTE" },
+        "compensation": { "id": "withdraw-collateral" }
+      }
+    ],
+    "invariants": [{ "id": "sepolia-only", "kind": "CHAIN_ID" }],
+    "recoveryPolicy": { "onUnknownOutcome": "RECONCILE" },
+    "authorityPolicy": { "autoApproveForward": false }
+  }
+}`}
+          </pre>
+        </section>
+
+        <div className="border border-black">
+          <SchemaSection
+            title="Top level"
+            summary="The label, human context, and frozen instruction book."
+            defaultOpen
+          >
+            <PropertyList
+              items={[
+                [
+                  "name",
+                  "The short label shown in the interface. It answers: what are we calling this job?",
+                ],
+                [
+                  "description",
+                  "A longer human explanation. It is descriptive only and never authorizes a transaction.",
+                ],
+                [
+                  "definition",
+                  "The actual instruction book. Once saved as a mission version, Aether does not modify it.",
+                ],
+              ]}
+            />
+          </SchemaSection>
+
+          <SchemaSection
+            title="Definition"
+            summary="The mission’s format, outcome, work, and safety policies."
+          >
+            <PropertyList
+              items={[
+                [
+                  "schemaVersion",
+                  "The format version of the instruction book. Launch missions use version 1.",
+                ],
+                [
+                  "objective",
+                  "A plain-language statement of the complete result. It helps operators; transactions come from steps.",
+                ],
+                [
+                  "steps",
+                  "The ordered list of onchain writes and the proofs that show what each write actually did.",
+                ],
+                [
+                  "invariants",
+                  "Final checklist rules. Critical failures prevent a COMPLETED or RECOVERED receipt.",
+                ],
+                [
+                  "recoveryPolicy",
+                  "What Aether may do after a known failure, unknown outcome, or still-indeterminate result.",
+                ],
+                [
+                  "authorityPolicy",
+                  "The exact targets, functions, values, and approval behavior the runtime is authorized to use.",
+                ],
+              ]}
+            />
+          </SchemaSection>
+
+          <SchemaSection
+            title="Steps and dependencies"
+            summary="Each step is one write, its retry risk, and its checkpoint."
+          >
+            <PropertyList
+              items={[
+                [
+                  "id",
+                  "Permanent machine-readable name. Other steps reference it in dependsOn.",
+                ],
+                ["name", "Human-readable name displayed to operators."],
+                [
+                  "dependsOn",
+                  "Steps that must be independently verified first. An empty array means this step can start first.",
+                ],
+                [
+                  "retryClass",
+                  "How dangerous repeating the action would be: SEMANTICALLY_IDEMPOTENT, PROVABLE_EFFECT, or NON_REPLAYABLE.",
+                ],
+                ["action", "The exact contract call sent to KeeperHub."],
+                [
+                  "proof",
+                  "The independent rule Aether checks after KeeperHub returns.",
+                ],
+                [
+                  "compensation",
+                  "The predeclared recovery action for that step. It creates a new transaction; it never erases history.",
+                ],
+                [
+                  "executionGate",
+                  "Optional fixed gate that can block simulation or broadcast, such as a deliberate demo failure.",
+                ],
+              ]}
+            />
+            <p className="m-0 mt-3 border-l-2 border-black pl-3 text-[#525252]">
+              Borrowing is NON_REPLAYABLE because an uncertain retry could
+              create twice the intended debt. Aether reconciles first and fails
+              closed when it cannot prove safety.
+            </p>
+          </SchemaSection>
+
+          <SchemaSection
+            title="Action"
+            summary="The contract call and all of the data needed to encode it."
+          >
+            <PropertyList
+              items={[
+                [
+                  "chainId",
+                  "The network. Launch writes must be Ethereum Sepolia: 11155111.",
+                ],
+                [
+                  "contractAddress",
+                  "The contract receiving the call, such as LINK or the Aave Pool.",
+                ],
+                [
+                  "functionName",
+                  "The exact contract function, such as approve, supply, borrow, repay, or withdraw.",
+                ],
+                [
+                  "functionArgs",
+                  "Ordered values passed to the function. Their order must match the ABI.",
+                ],
+                [
+                  "abi",
+                  "The function shape: name, input names and types, outputs, and whether it changes state.",
+                ],
+                [
+                  "valueWei",
+                  'Native SepoliaETH sent as call value. Token actions normally use "0"; gas is separate.',
+                ],
+              ]}
+            />
+            <p className="m-0 mt-3 text-[#525252]">
+              Token amounts and wei are strings, never JavaScript numbers,
+              because large integers cannot be represented safely as numbers.
+            </p>
+          </SchemaSection>
+
+          <SchemaSection
+            title="Proofs"
+            summary="Independent checks that establish what happened onchain."
+          >
+            <PropertyList
+              items={[
+                [
+                  "kind",
+                  "The fact to check, such as ERC20_ALLOWANCE or ERC20_BALANCE.",
+                ],
+                [
+                  "token / owner / account",
+                  "The token and address whose balance or allowance is being observed.",
+                ],
+                [
+                  "spender",
+                  "The contract allowed to spend tokens in an ERC20_ALLOWANCE proof.",
+                ],
+                [
+                  "operator",
+                  "Comparison rule: EQ, GTE, LTE, or NEQ for supported contract-read proofs.",
+                ],
+                [
+                  "amount",
+                  "Expected token quantity, represented as an integer string.",
+                ],
+              ]}
+            />
+            <p className="m-0 mt-3 text-[#525252]">
+              A KeeperHub success response is evidence, not reality. Aether
+              checks the chain before marking a step verified.
+            </p>
+          </SchemaSection>
+
+          <SchemaSection
+            title="Compensation"
+            summary="Predeclared recovery actions that return the system to an authorized safe state."
+          >
+            <PropertyList
+              items={[
+                ["id", "Permanent name for the recovery action."],
+                [
+                  "action",
+                  "The exact contract call used to compensate a verified forward effect.",
+                ],
+                [
+                  "proof",
+                  "How Aether independently proves that compensation reached its required state.",
+                ],
+              ]}
+            />
+            <p className="m-0 mt-3 text-[#525252]">
+              Example: a verified supply of LINK can declare a withdraw-all
+              compensation with a proof that the aLINK balance is zero. Aether
+              compensates only effects that reached VERIFIED.
+            </p>
+          </SchemaSection>
+
+          <SchemaSection
+            title="Invariants"
+            summary="The terminal checklist before Aether issues a final receipt."
+          >
+            <PropertyList
+              items={[
+                ["id", "Permanent name for the checklist item."],
+                [
+                  "kind",
+                  "What to check: CHAIN_ID, TARGET_ALLOWLIST, FUNCTION_ALLOWLIST, ERC20_BALANCE, ERC20_ALLOWANCE, CONTRACT_READ, MAX_WRITES, DEADLINE, or NO_UNKNOWN_ATTEMPTS.",
+                ],
+                [
+                  "severity",
+                  "CRITICAL blocks COMPLETED or RECOVERED; WARNING records important information without necessarily blocking.",
+                ],
+                [
+                  "parameters",
+                  "Values required by the invariant, such as token, account, operator, and expected amount.",
+                ],
+              ]}
+            />
+          </SchemaSection>
+
+          <SchemaSection
+            title="Recovery and authority policies"
+            summary="The boundaries that determine what Aether is allowed to do next."
+          >
+            <PropertyList
+              items={[
+                [
+                  "maxRecoverySpendWei",
+                  "Maximum native ETH call value authorized for recovery. It does not include KeeperHub gas.",
+                ],
+                [
+                  "terminalSafeStates",
+                  "Human-readable names for safe final conditions; actual proofs and critical invariants remain authoritative.",
+                ],
+                [
+                  "onKnownFailure",
+                  "Usually COMPENSATE to run declared compensations, or ESCALATE.",
+                ],
+                [
+                  "onUnknownOutcome",
+                  "RECONCILE to lock retry and investigate the original write; never blindly replay an economic action.",
+                ],
+                [
+                  "onIndeterminateOutcome",
+                  "ESCALATE when evidence is still insufficient, leaving the mission in NEEDS_ATTENTION.",
+                ],
+                [
+                  "autoApproveForward / autoApproveRecovery",
+                  "Whether a frozen, policy-compliant plan can proceed without a human approval.",
+                ],
+                [
+                  "maximumValueWei",
+                  "Maximum native ETH sent as contract call value for one action.",
+                ],
+                [
+                  "allowedTargets / allowedFunctions",
+                  "The only contracts and function names steps or compensations may call.",
+                ],
+              ]}
+            />
+          </SchemaSection>
+
+          <SchemaSection
+            title="Who generates a mission?"
+            summary="Three roles keep intent, composition, and authority separate."
+          >
+            <ol className="m-0 list-decimal space-y-3 pl-5">
+              <li>
+                <strong className="text-black">User states the goal.</strong>{" "}
+                For example: “Use 1 LINK as collateral, borrow 1 USDC, then
+                close everything.”
+              </li>
+              <li>
+                <strong className="text-black">
+                  The Lending application creates the document.
+                </strong>{" "}
+                It selects an audited template, inserts trusted addresses and
+                integer strings, then adds proofs and recovery actions.
+              </li>
+              <li>
+                <strong className="text-black">
+                  Aether validates and executes.
+                </strong>{" "}
+                It freezes the version, hashes exact plans, simulates writes,
+                uses KeeperHub, verifies chain reality, and reconciles unknown
+                outcomes.
+              </li>
+            </ol>
+          </SchemaSection>
+        </div>
+
+        <p className="m-0 border-t border-black pt-4 text-[12px] leading-relaxed text-[#525252]">
+          Before a live run, the KeeperHub executor needs at least 1 LINK on
+          Sepolia, enough USDC for small accrued interest, SepoliaETH for gas,
+          and an integration configured to control the executor address in the
+          mission.
+        </p>
+      </div>
+    </Drawer>
+  );
+}
+
 export function MissionsView() {
   const [queryText, setQueryText] = useState("");
+  const [schemaOpen, setSchemaOpen] = useState(false);
   const query = useQuery({
     queryKey: ["missions"],
     queryFn: () => api.listMissions(),
@@ -84,12 +518,25 @@ export function MissionsView() {
         title="Missions"
         description="Versioned multi-step objectives with declared proofs, retry classes, and recovery actions."
         action={
-          <Link href="/app/missions/new" className={boxButton(true)}>
-            <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
-            New mission
-          </Link>
+          <>
+            {" "}
+            <Link href="/app/missions/new" className={boxButton(true)}>
+              <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
+              New mission
+            </Link>
+            <button
+              type="button"
+              className={boxButton(false)}
+              onClick={() => setSchemaOpen(true)}
+            >
+              <FileJson size={15} strokeWidth={1.75} aria-hidden="true" />
+              View mission schema
+            </button>
+          </>
         }
       />
+
+      <MissionSchemaDrawer open={schemaOpen} onOpenChange={setSchemaOpen} />
 
       <section className="mt-0 border border-t-0 border-black bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black px-5 py-4">
@@ -365,6 +812,7 @@ export function MissionView({ missionId }: { missionId: string }) {
             <Link href="/app/missions" className={boxButton(false)}>
               All missions
             </Link>
+
             <button
               type="button"
               className={boxButton(true)}

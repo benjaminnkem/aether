@@ -12,6 +12,7 @@ import type { AuthenticatedRequest } from "../auth/auth";
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
+    console.log(error);
     const context = host.switchToHttp();
     const request = context.getRequest<Request>();
     const response = context.getResponse<Response>();

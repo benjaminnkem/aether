@@ -299,11 +299,14 @@ export class AetherClient {
     if (
       response.status === 401 &&
       options.refresh !== false &&
-      !options.allowUnauthenticated &&
       !this.authorization
     ) {
-      await this.refresh();
-      return this.request<T>(path, { ...options, refresh: false });
+      try {
+        await this.refresh();
+        return this.request<T>(path, { ...options, refresh: false });
+      } catch (error) {
+        if (!options.allowUnauthenticated) throw error;
+      }
     }
     if (response.status === 401 && options.allowUnauthenticated)
       return null as T;

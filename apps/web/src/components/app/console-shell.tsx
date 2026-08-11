@@ -139,9 +139,7 @@ function NavLink({
         <strong
           className={[
             "block text-[13px] font-semibold tracking-[-0.01em]",
-            active
-              ? "text-black"
-              : "text-[#c8c8c8] group-hover:text-white",
+            active ? "text-black" : "text-[#c8c8c8] group-hover:text-white",
           ].join(" ")}
         >
           {label}
@@ -149,7 +147,9 @@ function NavLink({
         <small
           className={[
             "mt-0.5 block text-[10px] font-medium uppercase tracking-[0.08em]",
-            active ? "text-[#525252]" : "text-[#707072] group-hover:text-[#9e9ea0]",
+            active
+              ? "text-[#525252]"
+              : "text-[#707072] group-hover:text-[#9e9ea0]",
           ].join(" ")}
         >
           {detail}
@@ -263,7 +263,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
                 </strong>
               </div>
               <p className="m-0 mt-1 text-[11px] leading-snug text-[#707072]">
-                Only live write network. Mainnet is prohibited.
+                Only live write network.
               </p>
             </div>
           </div>
