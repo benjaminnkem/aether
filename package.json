@@ -4,7 +4,7 @@
   "scripts": {
     "build": "turbo run build",
     "build:api": "pnpm --filter @aether/api... build",
-    "dev": "turbo run dev",
+    "dev": "node api.js && turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,md,yml,yaml}\" && pnpm --filter @aether/contracts format",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,md,yml,yaml}\" && pnpm --filter @aether/contracts format:check",

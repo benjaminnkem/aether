@@ -5,8 +5,8 @@
   "type": "commonjs",
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
-    "start": "node dist/main.js",
+    "dev": "node api.js && nest start --watch",
+    "start": "node api.js && node dist/main.js",
     "lint": "eslint src test --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run --exclude test/api.integration.test.ts",
