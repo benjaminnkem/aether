@@ -28,13 +28,3 @@ const nextConfig = {
 };
 
 export default nextConfig;
-
-function requiredPublicUrl(name) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required by the frontend build.`);
-  const parsed = new URL(value);
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error(`${name} must use http or https.`);
-  }
-  return value.replace(/\/$/, "");
-}

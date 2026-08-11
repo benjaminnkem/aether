@@ -4,9 +4,9 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "build": "nest build",
-    "dev": "nest start --watch",
-    "start": "node dist/main.js",
+    "build": "node init && nest build",
+    "dev": "node init && nest start --watch",
+    "start": "node init && node dist/main.js",
     "lint": "eslint src test --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run --exclude test/api.integration.test.ts",

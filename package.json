@@ -2,9 +2,9 @@
   "name": "aether",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "build:api": "pnpm --filter @aether/api... build",
-    "dev": "turbo run dev",
+    "build": "node init && turbo run build",
+    "build:api": "node init && pnpm --filter @aether/api... build",
+    "dev": "node init && turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,md,yml,yaml}\" && pnpm --filter @aether/contracts format",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,md,yml,yaml}\" && pnpm --filter @aether/contracts format:check",
